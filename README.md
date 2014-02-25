@@ -1,0 +1,3 @@
+## Machine
+
+Social configuration.

@@ -1,0 +1,26 @@
+{
+	"name": "machine",
+	"version": "0.1.0",
+	"author": "Paul Frazee <pfrazee@gmail.com>",
+	"dependencies": {
+		"express": "3.0.x",
+		"node-uuid": "1.4.x",
+		"bcrypt": "0.7.x",
+		"winston": "0.7.x",
+		"optimist": "0.6.x",
+		"nodemailer": "0.5.x",
+		"pg": "2.11.x",
+		"toobusy": "0.2.x",
+		"connect-ratelimit": "0.0.6",
+		"mongo-sql": "2.3.1",
+		"measured": "0.1.x"
+	},
+	"devDependencies": {
+	},
+	"repository": {
+		"type": "git",
+		"url": "git@github.com:pfraze/machine.git"
+	},
+	"scripts": {
+	}
+}

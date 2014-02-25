@@ -1,0 +1,15 @@
+body { padding: 10px; font-size: 15px; }
+#content, #editor { display: none; }
+#content.active, #editor.active { display: block; }
+#content-nav-btn.active, #editor-nav-btn.active { font-weight: bold; }
+
+.editing-program { background: #DADADA; padding: 5px; color: #333; border: 1px solid #aaa; border-bottom: 0;}
+#ace { border-top: 1px solid #aaa; }
+#ace-instance { height: 100%; }
+#editor-right-sidebar { padding-right: 50px; }
+#editor-anonlink { cursor: text; }
+#editor-editcapslink { cursor: text; }
+
+.menu li { margin-bottom: 5px; }
+.col-title { border-bottom: 1px solid #ddd; color: #aaa }
+iframe { width: 100%; }

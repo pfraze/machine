@@ -1,0 +1,3 @@
+{
+	"pgconnection": "postgres://postgres:1234@localhost/postgres"
+}

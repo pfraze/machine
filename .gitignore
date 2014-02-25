@@ -1,0 +1,6 @@
+npm-debug.log
+node_modules
+server.log
+/config.json
+/motd.html
+static/tmp

@@ -1,0 +1,72 @@
+#!/usr/bin/env node
+var fs = require('fs');
+var pid;
+try {
+	pid = fs.readFileSync('./pid');
+} catch (e) {
+	pid = null;
+}
+
+switch (process.argv[2]) {
+	case 'start':
+		if (pid) {
+			if (isAlive(pid)) {
+				console.log('Machine is already running (pid '+pid+')');
+				return;
+			} else {
+				console.log('Cleaning stale pidfile...');
+				fs.unlinkSync('./pid');
+			}
+		}
+		require('./main.js');
+		break;
+
+	case 'stop':
+		if (pid) {
+			if (isAlive(pid)) {
+				console.log('Stopping...');
+				process.kill(pid, 'SIGINT');
+			} else {
+				console.log('Cleaning stale pidfile...');
+				fs.unlinkSync('./pid');
+			}
+		}
+		break;
+
+	case 'reload':
+		if (pid) {
+			process.kill(pid, 'SIGHUP');
+		}
+		break;
+
+	case 'setup':
+		console.log('>> Creating ./config.json.');//, ./motd.html.');
+		console.log('(Edit these files to admin the server.)');
+		mkDefaultFile('config.json');
+		// mkDefaultFile('motd.html');
+		console.log('>> Installing .js dependencies.');
+		require('child_process').spawn('npm', ['install', '-d'], { stdio: 'inherit' });
+		break;
+
+	default:
+		console.log('Unknown command, "'+process.argv[2]+'"');
+		console.log('  Usage: machine [start|stop|reload|setup]');
+		console.log('  Flags:');
+		console.log('   -p/--port [port] (default 8000)');
+		console.log('   -h/--hostname [hostname] (defaults to system value)');
+		console.log('   -u/--is_upstream [port] (default off, should specify the downstream port in use)');
+		console.log('   --ssl (default off)');
+		break;
+}
+
+function mkDefaultFile(name) {
+	try { fs.statSync('./'+name); }
+	catch (e) {
+		fs.createReadStream('./default/'+name).pipe(fs.createWriteStream('./'+name));
+	}
+}
+
+function isAlive(pid) {
+	try { return process.kill(pid, 0); }
+	catch (e) { return e.code == 'EPERM'; }
+}
