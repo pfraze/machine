@@ -111,24 +111,23 @@ server.get('/status', function(req, res) {
 	stats.uptime_days = uptime/(24*60*60*1000);
 	res.json(stats);
 });
-// Other routes
-require('./routes/auth')(server);
-server.all('/', function(req, res, next) {
-	res.setHeader('Link', [
-		'</>; rel="up via service"; title="'+config.hostname+'"',
-		'</auth>; rel="service"; id="auth"; title="Authentication Service"',
-		'</status>; rel="self service"; id="status"; title="Network Host Stats"'
-	].join(', '));
-	next();
-});
-server.head('/', function(req, res) { res.send(204); });
-server.get('/', function(req, res) {
-	var page = html.index
-		.replace('{{USER}}', req.session.email||'');
+// Tests
+server.get('/test/dirs', express.basicAuth('asdfasdf', 'asdfasdf'), function(req, res) {
+	res.removeHeader('Content-Security-Policy');
+	var page = html.render('test_directories', { user: req.session.email||'' });
 	res.send(page);
 });
+// Other routes
+require('./routes/home')(server);
+require('./routes/auth')(server);
+require('./routes/directories')(server);
+// require('./routes/links')(server);
 // Static content
-server.use('/', express.static(__dirname + '/static', { maxAge: 1000*60*60*24 }));
+server.use('/js', express.static(__dirname + '/static/js', { maxAge: 1000*60*60*24 }));
+server.use('/css', express.static(__dirname + '/static/css', { maxAge: 1000*60*60*24 }));
+server.use('/img', express.static(__dirname + '/static/img', { maxAge: 1000*60*60*24 }));
+server.use('/test/js', express.static(__dirname + '/static/test/js', { maxAge: 1000*60*60*24 }));
+server.use('/test/doctest', express.static(__dirname + '/static/test/doctest', { maxAge: 1000*60*60*24 }));
 
 // Reload signal
 // =============

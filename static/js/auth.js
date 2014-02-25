@@ -17,12 +17,13 @@ navigator.id.watch({
 });
 
 if (currentUser) {
-	$('.profile-btn').text(currentUser).show();
+	$('.profile-btn').text(currentUser).css('display', 'inline-block');
+	$('.show-on-authed').show();
 	$('.auth-btn').text('Logout').on('click', function() {
 		navigator.id.logout();
 	});
 } else {
-	$('.auth-btn').on('click', function() {
+	$('.auth-btn').removeClass('btn-default').addClass('btn-success').on('click', function() {
 		navigator.id.request();
 	});
 }
