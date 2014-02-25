@@ -10,6 +10,7 @@
     <title>Machine</title>
 
     <link href="/css/bootstrap.css" rel="stylesheet">
+    <link href="/css/sitewide.css" rel="stylesheet">
 
     <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
     <!--[if lt IE 9]>
@@ -18,20 +19,35 @@
     <![endif]-->
   </head>
 
-  <body>
+  <body data-user="{{USER}}">
 
     <div class="container">
-      <div id="content">
-        <div class="row">
+      <div class="row">
+        <div class="col-sm-8 col-sm-offset-2">
+          <h1>Machine
+            <a class="btn btn-primary profile-btn" href="/user.html"></a>
+            <a class="btn btn-default auth-btn" href="#">Login</a>
+          </h1>
+          <h3><a href="/user.html">pfraze</a> <small>Machine User</small></h3>
+          <hr>
+          <h3><a href="/user.html">pfraze</a> <small>Machine User</small></h3>
+          <hr>
+          <h3><a href="/user.html">pfraze</a> <small>Machine User</small></h3>
+          <hr>
+          <h3><a href="/user.html">pfraze</a> <small>Machine User</small></h3>
+          <hr>
+          <h3><a href="/user.html">pfraze</a> <small>Machine User</small></h3>
         </div>
       </div>
     </div>
 
+    <script src="https://login.persona.org/include.js"></script>
     <script src="/js/jquery-2.0.3.min.js"></script>
     <script src="/js/bootstrap.min.js"></script>
     <script src="/js/local.js"></script>
     <script src="/js/servware.js"></script>
 
+    <script src="/js/auth.js"></script>
     <!--<script src="/js/pagent.js"></script>-->
     <!--<script src="/js/worker_proxy.js"></script>-->
     <!--<script src="/js/guipage.js"></script>-->

@@ -77,6 +77,7 @@ server.use(function(req, res, next) {
 server.use(express.bodyParser());
 server.use(express.cookieParser());
 server.use(express.compress());
+server.use(express.session({ secret: "mozillapersona" }));
 if (config.ssl) {
 	server.use(function(req, res, next) {
 		res.setHeader('Strict-Transport-Security', 'max-age=8640000; includeSubDomains');
@@ -96,7 +97,7 @@ server.options('*', function(req, res) {
 // Status page
 server.all('/status', function(req, res, next) {
 	res.setHeader('Link', [
-		'</>; rel="up via service gwr.io/grimwire"; title="'+config.hostname+'"',
+		'</>; rel="up via service"; title="'+config.hostname+'"',
 		'</status>; rel="self service"; id="status"; title="Network Host Stats"'
 	].join(', '));
 	next();
@@ -111,8 +112,21 @@ server.get('/status', function(req, res) {
 	res.json(stats);
 });
 // Other routes
-// require('./routes/guis')(server);
-// require('./routes/gui_db')(server);
+require('./routes/auth')(server);
+server.all('/', function(req, res, next) {
+	res.setHeader('Link', [
+		'</>; rel="up via service"; title="'+config.hostname+'"',
+		'</auth>; rel="service"; id="auth"; title="Authentication Service"',
+		'</status>; rel="self service"; id="status"; title="Network Host Stats"'
+	].join(', '));
+	next();
+});
+server.head('/', function(req, res) { res.send(204); });
+server.get('/', function(req, res) {
+	var page = html.index
+		.replace('{{USER}}', req.session.email||'');
+	res.send(page);
+});
 // Static content
 server.use('/', express.static(__dirname + '/static', { maxAge: 1000*60*60*24 }));
 
