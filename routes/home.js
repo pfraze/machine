@@ -13,6 +13,7 @@ module.exports = function(server) {
 		res.setHeader('Link', [
 			'</>; rel="self via service"; title="'+config.hostname+'"',
 			'</auth>; rel="service"; id="auth"; title="Authentication Service"',
+			'</.me>; rel="item"; id=".me"; title="Your Profile"',
 			'</status>; rel="service"; id="status"; title="Network Host Stats"',
 			'</{id}>; rel="collection"',
 		].join(', '));

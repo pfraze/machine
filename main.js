@@ -120,6 +120,7 @@ server.get('/test/dirs', express.basicAuth('asdfasdf', 'asdfasdf'), function(req
 // Other routes
 require('./routes/home')(server);
 require('./routes/auth')(server);
+require('./routes/me')(server);
 require('./routes/directories')(server);
 require('./routes/links')(server);
 // Static content

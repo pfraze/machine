@@ -60,7 +60,6 @@ done = false;
 startTime = Date.now();
 $dir.GET()
 	.then(function(res) {
-		console.debug('---', res);
 		print(res.status);
 		print(res.parsedHeaders.link);
 		print(res.body);
@@ -98,6 +97,43 @@ wait(function () { return done; });
   ],
   name: "Test Dir 1"
 }
+*/
+
+// fetch my directories
+
+done = false;
+startTime = Date.now();
+$host.follow({ rel: 'item', id: '.me' }).GET()
+	.then(function(res) {
+		print(res.status);
+		print(res.parsedHeaders.link);
+		print(res.body);
+	}, printError)
+	.always(finishTest);
+wait(function () { return done; });
+
+/* =>
+200
+[
+  {
+    href: "http://grimwire.com:8001/",
+    rel: "up via service",
+    title: "grimwire.com"
+  },
+  {
+    href: "http://grimwire.com:8001/.me",
+    id: ".me",
+    rel: "self item",
+    title: "Your Profile"
+  },
+  {
+    href: "http://grimwire.com:8001/test-dir-1",
+    id: "test-dir-1",
+    rel: "collection",
+    title: "Test Dir 1"
+  }
+]
+{directories: [{id: "test-dir-1", name: "Test Dir 1"}]}
 */
 
 // delete a link

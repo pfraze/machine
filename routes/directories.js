@@ -81,6 +81,10 @@ module.exports = function(server) {
 		}
 		var errors = {};
 		if (!req.body.name) { errors.name = 'Required.'; }
+		else {
+			if (req.body.name.length <= 3) { errors.name = 'Must be more than 3 characters long (we need those first three chars!).'; }
+			req.body.name = util.makeSafe(req.body.name, { noQuotes: true });
+		}
 		if (Object.keys(errors).length !== 0) {
 			res.send(422, errors);
 		}
