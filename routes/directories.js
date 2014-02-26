@@ -59,13 +59,20 @@ module.exports = function(server) {
 			html: function() {
 				// Render HTML
 				var dir = res.locals.dir;
+				var linksHtml = (dir.links.length > 0) ?
+					(dir.links.map(function(link) {
+						return tmpl.render('directory_link_list_partial', {
+							href: link.href,
+							rel: link.rel,
+							title: link.title || link.id || link.href
+						});
+					}).join('<hr>'))
+					: '<p class="text-muted">Directory is empty.</p>';
 				var page = tmpl.render('directory', {
 					user: req.session.email||'',
-					is_owner: dir.owner && (req.session.email == dir.owner),
+					user_is_admin: dir.owner && (req.session.email == dir.owner),
 					dirname: dir.name,
-					links_html: dir.links.map(function(link) {
-						return tmpl.render('directory_link_list_partial', link);
-					}).join('<hr>')
+					links_html: linksHtml
 				});
 				res.send(page);
 			}

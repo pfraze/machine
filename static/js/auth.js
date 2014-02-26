@@ -1,5 +1,5 @@
 navigator.id.watch({
-	loggedInUser: currentUser,
+	loggedInUser: _session.user,
 	onlogin: function(assertion) {
 		$auth.POST({ assertion: assertion })
 			.then(function() { window.location.reload(); })
@@ -12,8 +12,8 @@ navigator.id.watch({
 	}
 });
 
-if (currentUser) {
-	$('.profile-btn').text(currentUser).css('display', 'inline-block');
+if (_session.user) {
+	$('.profile-btn').text(_session.user).css('display', 'inline-block');
 	$('.show-on-authed').show();
 	$('.auth-btn').text('Logout').on('click', function() {
 		navigator.id.logout();
@@ -22,4 +22,8 @@ if (currentUser) {
 	$('.auth-btn').removeClass('btn-default').addClass('btn-success').on('click', function() {
 		navigator.id.request();
 	});
+}
+
+if (_session.isPageAdmin) {
+	$('.show-on-admin').show();
 }

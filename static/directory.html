@@ -19,7 +19,7 @@
     <![endif]-->
   </head>
 
-  <body data-user="{{USER}}">
+  <body data-user="{{USER}}" data-user-is-admin="{{USER_IS_ADMIN}}">
 
     <div class="container">
       <div class="row">
@@ -29,18 +29,19 @@
         </div>
         <div class="col-sm-8">
           <h1>{{DIRNAME}}</h1>
-          <div class="panel panel-default">
+          <div class="addlink-panel panel panel-default">
             <div class="panel-body">
-              <form class="form" role="form">
+              <form class="show-on-admin form" role="form">
                 <div class="form-group">
-                  <label class="sr-only" for="exampleInputEmail2">URL</label>
-                  <input type="email" class="form-control" id="exampleInputEmail2" placeholder="Enter URL">
+                  <input type="url" class="form-control" id="url-input" placeholder="Enter URL">
                 </div>
-                <button type="submit" class="btn btn-default">Post</button>
+                <button type="submit" class="btn btn-default" disabled>Post</button> <span class="fetch-result text-muted"></span>
               </form>
             </div>
           </div>
-          {{LINKS_HTML}}
+          <div class="dir-active-links">
+            {{LINKS_HTML}}
+          </div>
         </div>
         <div class="col-sm-2">
           <h3><span class="label label-default profile-btn"></span></h3>
@@ -63,6 +64,7 @@
     <script src="/js/globals.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/user-directories-panel.js"></script>
+    <script src="/js/addlink-panel.js"></script>
     <!--<script src="/js/pagent.js"></script>-->
     <!--<script src="/js/worker_proxy.js"></script>-->
     <!--<script src="/js/guipage.js"></script>-->

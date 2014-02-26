@@ -1,4 +1,4 @@
-if (currentUser) {
+if (_session.user) {
 	// Populate "my dirs"
 	$me.GET().then(function(res) {
 		var html = res.body.directories.map(function(dir) {

@@ -34,8 +34,10 @@ module.exports = function(server) {
 		var errors = {};
 		if (!req.body.href) { errors.href = 'Required.'; }
 		if (Object.keys(errors).length !== 0) {
-			res.send(422, errors);
+			return res.send(422, errors);
 		}
+
+		// :TODO: sanitize rel
 
 		// Create
 		var relArray = (req.body.rel) ? req.body.rel.split() : null;
