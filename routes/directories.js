@@ -19,7 +19,7 @@ module.exports = function(server) {
 	}
 
 	function loadDirFromDB(req, res, next) {
-		var q = 'SELECT d.name, d.owner, json_agg(l.meta) as links FROM directories d LEFT JOIN links l ON l.dir_id=$1 WHERE d.id=$1 GROUP BY d.id LIMIT 1';
+		var q = 'SELECT d.name, d.owner, array_agg(l.id) as link_internal_ids, json_agg(l.meta) as links FROM directories d LEFT JOIN links l ON l.dir_id=$1 WHERE d.id=$1 GROUP BY d.id LIMIT 1';
 		var values = [req.param('dir')];
 		req.pg.query(q, values, function(err, dbres) {
 			if (err) {
@@ -41,6 +41,7 @@ module.exports = function(server) {
 		var links = [
 			'</>; rel="up via service"; title="'+config.hostname+'"',
 			'</'+req.param('dir')+'>; rel="self collection"; id="'+req.param('dir')+'"',
+			'</'+req.param('dir')+'/{id}>; rel="item"',
 		].concat(res.locals.dir.links.map(util.serializeLinkObject));
 		res.setHeader('Link', links.join(', '));
 		next();
@@ -60,8 +61,9 @@ module.exports = function(server) {
 				// Render HTML
 				var dir = res.locals.dir;
 				var linksHtml = (dir.links.length > 0) ?
-					(dir.links.map(function(link) {
+					(dir.links.map(function(link, i) {
 						return tmpl.render('directory_link_list_partial', {
+							internal_id: dir.link_internal_ids[i],
 							href: link.href,
 							rel: link.rel,
 							title: link.title || link.id || link.href
