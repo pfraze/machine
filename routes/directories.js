@@ -64,7 +64,7 @@ module.exports = function(server) {
 					is_owner: dir.owner && (req.session.email == dir.owner),
 					dirname: dir.name,
 					links_html: dir.links.map(function(link) {
-						return tmpl.render('directory_link_partial', link);
+						return tmpl.render('directory_link_list_partial', link);
 					}).join('<hr>')
 				});
 				res.send(page);
