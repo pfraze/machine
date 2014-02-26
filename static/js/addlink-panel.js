@@ -55,7 +55,13 @@
 
 				// Try to get the self link
 				curLink = local.queryLinks(res, { rel: 'self' })[0];
-				if (!curLink) {
+				if (curLink) {
+					// Sanitize reltype
+					curLink.rel = (curLink.rel||'')
+						.split(' ')
+						.filter(function(rel) { return rel.indexOf('.') !== -1; }) // filter out non-URI reltypes
+						.join(' ');
+				} else {
 					// Create a meta-less stand-in if the URL is good
 					if (res.status >= 200 && res.status < 300) {
 						curLink = { href: url };

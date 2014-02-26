@@ -37,10 +37,13 @@ module.exports = function(server) {
 			return res.send(422, errors);
 		}
 
-		// :TODO: sanitize rel
+		// Sanitize
+		var relArray = (req.body.rel) ? req.body.rel.split(' ') : null;
+		if (relArray) {
+			relArray = relArray.filter(function(rel) { return rel.indexOf('.') !== -1; }); // filter out non-URI reltypes
+		}
 
 		// Create
-		var relArray = (req.body.rel) ? req.body.rel.split() : null;
 		var q = [
 			'INSERT INTO links (dir_id, href, title, rel, meta)',
 				'SELECT $1, $2, $3, $4, $5',
