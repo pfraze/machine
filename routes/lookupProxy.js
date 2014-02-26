@@ -4,7 +4,14 @@ var request = require('request');
 var winston = require('winston');
 
 module.exports = function(server) {
-	server.head('/.lookup', lookup);
+	server.head('/.lookup', checkSession, lookup);
+
+	function checkSession(req, res, next) {
+		if (!req.session.email) {
+			return res.send(401);
+		}
+		next();
+	}
 
 	function lookup(req, res) {
 		if (!req.query.url) {
@@ -13,6 +20,13 @@ module.exports = function(server) {
 				'</.lookup>; rel="self service"; id=".lookup"; title="URL Lookup Proxy"'
 			].join(', '));
 			return res.send(204);
+		}
+
+		// Make sure we're not gonna get into an infinite loop (it will be tried)
+		var i = req.query.url.indexOf(config.hostname);
+		if (i != -1 && i <= 7) {
+			res.writeHead(403, 'dont be a dick');
+			return res.end();
 		}
 
 		request.head(req.query.url, function(err, res2) {
