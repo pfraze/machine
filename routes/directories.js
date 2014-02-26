@@ -30,9 +30,12 @@ module.exports = function(server) {
 			res.locals.dir = dbres.rows[0];
 			if (!res.locals.dir)
 				return res.send(404);
+			res.locals.dir.links = res.locals.dir.links.filter(noNulls);
 			next();
 		});
 	}
+
+	function noNulls(link) { return !!link; }
 
 	function linkDir(req, res, next) {
 		var links = [
@@ -82,7 +85,7 @@ module.exports = function(server) {
 		var errors = {};
 		if (!req.body.name) { errors.name = 'Required.'; }
 		else {
-			if (req.body.name.length <= 3) { errors.name = 'Must be more than 3 characters long (we need those first three chars!).'; }
+			if (req.body.name.length <= 2) { errors.name = 'Must be more than 2 characters long.'; }
 			req.body.name = util.makeSafe(req.body.name, { noQuotes: true });
 		}
 		if (Object.keys(errors).length !== 0) {

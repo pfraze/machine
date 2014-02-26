@@ -127,6 +127,7 @@ require('./routes/links')(server);
 server.use('/js', express.static(__dirname + '/static/js', { maxAge: 1000*60*60*24 }));
 server.use('/css', express.static(__dirname + '/static/css', { maxAge: 1000*60*60*24 }));
 server.use('/img', express.static(__dirname + '/static/img', { maxAge: 1000*60*60*24 }));
+server.use('/fonts', express.static(__dirname + '/static/fonts', { maxAge: 1000*60*60*24 }));
 server.use('/test/js', express.static(__dirname + '/static/test/js', { maxAge: 1000*60*60*24 }));
 server.use('/test/doctest', express.static(__dirname + '/static/test/doctest', { maxAge: 1000*60*60*24 }));
 

@@ -1,7 +1,3 @@
-var currentUser = $('body').data('user') || null;
-
-var $host = local.agent(window.location.protocol + '//' + window.location.host);
-var $auth = $host.follow({ rel: 'service', id: 'auth' });
 navigator.id.watch({
 	loggedInUser: currentUser,
 	onlogin: function(assertion) {
