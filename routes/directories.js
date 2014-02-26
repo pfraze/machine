@@ -95,6 +95,7 @@ module.exports = function(server) {
 		if (!req.body.name) { errors.name = 'Required.'; }
 		else {
 			if (req.body.name.length <= 2) { errors.name = 'Must be more than 2 characters long.'; }
+			else if (req.body.name.charAt(0) == '.') { errors.name = 'Can not start with a period.'; }
 			req.body.name = util.makeSafe(req.body.name, { noQuotes: true });
 		}
 		if (Object.keys(errors).length !== 0) {

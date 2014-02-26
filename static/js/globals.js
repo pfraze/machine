@@ -7,6 +7,7 @@ var $host = local.agent(window.location.protocol + '//' + window.location.host);
 var $page = local.agent(window.location.toString());
 var $auth = $host.follow({ rel: 'service', id: 'auth' });
 var $me = $host.follow({ rel: 'item', id: '.me' });
+var $lookupProxy = $host.follow({ rel: 'service', id: '.lookup' });
 
 // Environment Setup
 local.logAllExceptions = true;

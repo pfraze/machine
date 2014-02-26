@@ -94,6 +94,7 @@
 			return p;
 		}
 
+		var triedProxy = false;
 		var attempts = [new local.Request({ method: 'HEAD', url: url })]; // first attempt, as given
 		if (!urld.protocol) {
 			// No protocol? Two more attempts - 1 with https, then one with plain http
@@ -107,6 +108,13 @@
 			local.dispatch(lookupReq).always(function(res) {
 				if (res.status >= 200 && res.status < 300) {
 					p.fulfill(res); // Done!
+				} else if (res.status == 0 && !triedProxy) {
+					// CORS issue, try the proxy
+					triedProxy = true;
+					$lookupProxy.resolve().always(function(url) {
+						attempts = [new local.Request({ method: 'HEAD', url: url, query: { url: 'https://'+urld.authority+urld.relative } })];
+						makeAttempt();
+					});
 				} else {
 					// No dice, any attempts left?
 					if (attempts.length) {

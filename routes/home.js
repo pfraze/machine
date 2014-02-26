@@ -14,6 +14,7 @@ module.exports = function(server) {
 			'</>; rel="self via service"; title="'+config.hostname+'"',
 			'</auth>; rel="service"; id="auth"; title="Authentication Service"',
 			'</.me>; rel="item"; id=".me"; title="Your Profile"',
+			'</.lookup>; rel="service"; id=".lookup"; title="URL Lookup Proxy"',
 			'</status>; rel="service"; id="status"; title="Network Host Stats"',
 			'</{id}>; rel="collection"',
 		].join(', '));
