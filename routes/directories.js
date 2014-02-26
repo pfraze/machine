@@ -19,7 +19,7 @@ module.exports = function(server) {
 	}
 
 	function loadDirFromDB(req, res, next) {
-		var q = 'SELECT name, owner FROM directories WHERE id=$1 LIMIT 1';
+		var q = 'SELECT d.name, d.owner, json_agg(l.meta) as links FROM directories d LEFT JOIN links l ON l.dir_id=$1 WHERE d.id=$1 GROUP BY d.id LIMIT 1';
 		var values = [req.param('dir')];
 		req.pg.query(q, values, function(err, dbres) {
 			if (err) {
@@ -30,7 +30,6 @@ module.exports = function(server) {
 			res.locals.dir = dbres.rows[0];
 			if (!res.locals.dir)
 				return res.send(404);
-			res.locals.dir.links = []; // :TEMP:
 			next();
 		});
 	}
@@ -38,7 +37,7 @@ module.exports = function(server) {
 	function linkDir(req, res, next) {
 		var links = [
 			'</>; rel="up via service"; title="'+config.hostname+'"',
-			'</'+req.param('id')+'>; rel="self collection"; id="'+req.param('id')+'"',
+			'</'+req.param('dir')+'>; rel="self collection"; id="'+req.param('dir')+'"',
 		].concat(res.locals.dir.links.map(util.serializeLinkObject));
 		res.setHeader('Link', links.join(', '));
 		next();
@@ -46,6 +45,14 @@ module.exports = function(server) {
 
 	function getDir(req, res, next) {
 		res.format({
+			json: function() {
+				// Send data
+				res.send({
+					id: req.param('dir'),
+					name: res.locals.dir.name,
+					links: res.locals.dir.links
+				});
+			},
 			html: function() {
 				// Render HTML
 				var dir = res.locals.dir;

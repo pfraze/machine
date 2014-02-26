@@ -54,6 +54,52 @@ wait(function () { return done; });
 http://grimwire.com:8001/test-dir-1/1
 */
 
+// fetch links in a directory
+
+done = false;
+startTime = Date.now();
+$dir.GET()
+	.then(function(res) {
+		console.debug('---', res);
+		print(res.status);
+		print(res.parsedHeaders.link);
+		print(res.body);
+	}, printError)
+	.always(finishTest);
+wait(function () { return done; });
+
+/* =>
+200
+[
+  {
+    href: "http://grimwire.com:8001/",
+    rel: "up via service",
+    title: "grimwire.com"
+  },
+  {
+    href: "http://grimwire.com:8001/test-dir-1",
+    id: "test-dir-1",
+    rel: "self collection"
+  },
+  {
+    href: "https://www.google.com",
+    rel: "service google.com/rel/search",
+    title: "The Googs"
+  }
+]
+{
+  id: "test-dir-1",
+  links: [
+    {
+      href: "https://www.google.com",
+      rel: "service google.com/rel/search",
+      title: "The Googs"
+    }
+  ],
+  name: "Test Dir 1"
+}
+*/
+
 // delete a link
 
 done = false;
