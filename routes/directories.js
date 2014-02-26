@@ -28,7 +28,9 @@ module.exports = function(server) {
 				return res.send(500);
 			}
 			res.locals.dir = dbres.rows[0];
-			res.locals.dir.links = [];
+			if (!res.locals.dir)
+				return res.send(404);
+			res.locals.dir.links = []; // :TEMP:
 			next();
 		});
 	}

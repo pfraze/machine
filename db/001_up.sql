@@ -9,11 +9,11 @@ CREATE TABLE IF NOT EXISTS directories (
 );
 
 CREATE TABLE IF NOT EXISTS links (
-	id 			int PRIMARY KEY,
+	id 			serial PRIMARY KEY,
 	dir_id		varchar(64) REFERENCES directories (id) ON DELETE CASCADE,
-	url         varchar(255),
+	href        varchar(255),
 	title       varchar(255),
-	rel         hstore,
+	rel         text[],
 	meta        json,
 	created_at	timestamp WITH TIME ZONE DEFAULT NOW(),
 	updated_at	timestamp WITH TIME ZONE DEFAULT NOW()
@@ -21,3 +21,4 @@ CREATE TABLE IF NOT EXISTS links (
 
 GRANT ALL PRIVILEGES ON TABLE directories TO machine;
 GRANT ALL PRIVILEGES ON TABLE links TO machine;
+GRANT ALL PRIVILEGES ON SEQUENCE links_id_seq TO machine;
