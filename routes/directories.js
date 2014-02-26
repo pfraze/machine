@@ -19,7 +19,7 @@ module.exports = function(server) {
 	}
 
 	function loadDirFromDB(req, res, next) {
-		var q = 'SELECT d.name, d.owner, array_agg(l.id) as link_internal_ids, json_agg(l.meta) as links FROM directories d LEFT JOIN links l ON l.dir_id=$1 WHERE d.id=$1 GROUP BY d.id LIMIT 1';
+		var q = 'SELECT d.name, d.owner, d.created_at, array_agg(l.id) as link_internal_ids, json_agg(l.meta) as links FROM directories d LEFT JOIN links l ON l.dir_id=$1 WHERE d.id=$1 GROUP BY d.id LIMIT 1';
 		var values = [req.param('dir')];
 		req.pg.query(q, values, function(err, dbres) {
 			if (err) {
@@ -74,6 +74,7 @@ module.exports = function(server) {
 					user: req.session.email||'',
 					user_is_admin: dir.owner && (req.session.email == dir.owner),
 					dirname: dir.name,
+					dirage: util.timeago(dir.created_at),
 					links_html: linksHtml
 				});
 				res.send(page);
