@@ -46,9 +46,7 @@
 			$form.find('.fetch-result').text('');
 
 			// Fetch URL
-			if (lookupReq) lookupReq.close();
-			lookupReq = new local.Request({ method: 'HEAD', url: url });
-			local.dispatch(lookupReq).always(function(res) {
+			lookup(url).always(function(res) {
 				// Clear process vars
 				lookupReq = null;
 				changeTimeoutId = null;
@@ -85,7 +83,43 @@
 					$form.find('.fetch-result').text(res.status + ' ' + res.reason);
 				}
 			});
-			lookupReq.end();
 		};
+	}
+
+	function lookup(url) {
+		var p = local.promise();
+		var urld = local.parseUri(url);
+		if (!urld || !urld.authority) {
+			p.fulfill(false); // bad url, dont even try it!
+			return p;
+		}
+
+		var attempts = [new local.Request({ method: 'HEAD', url: url })]; // first attempt, as given
+		if (!urld.protocol) {
+			// No protocol? Two more attempts - 1 with https, then one with plain http
+			attempts.push(new local.Request({ method: 'HEAD', url: 'https://'+urld.authority+urld.relative }));
+			attempts.push(new local.Request({ method: 'HEAD', url: 'http://'+urld.authority+urld.relative }));
+		}
+
+		function makeAttempt() {
+			if (lookupReq) lookupReq.close();
+			lookupReq = attempts.shift();
+			local.dispatch(lookupReq).always(function(res) {
+				if (res.status >= 200 && res.status < 300) {
+					p.fulfill(res); // Done!
+				} else {
+					// No dice, any attempts left?
+					if (attempts.length) {
+						makeAttempt(); // try the next one
+					} else {
+						p.fulfill(res); // no dice
+					}
+				}
+			});
+			lookupReq.end();
+		}
+		makeAttempt();
+
+		return p;
 	}
 })();
