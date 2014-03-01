@@ -122,8 +122,9 @@ require('./routes/home')(server);
 require('./routes/auth')(server);
 require('./routes/me')(server);
 require('./routes/lookupProxy')(server);
-require('./routes/directories')(server);
-require('./routes/links')(server);
+require('./routes/rooms')(server);
+// require('./routes/directories')(server);
+// require('./routes/links')(server);
 // Static content
 server.use('/js', express.static(__dirname + '/static/js', { maxAge: 1000*60*60*24 }));
 server.use('/css', express.static(__dirname + '/static/css', { maxAge: 1000*60*60*24 }));
