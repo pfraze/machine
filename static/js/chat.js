@@ -182,12 +182,10 @@ function renderResponse(res) {
 
 var iframeCounter = 0;
 function createIframe(originHost) {
-	var time = (new Date()).toLocaleTimeString();
 	var html = [
 		'<div id="iframerow-'+iframeCounter+'" class="row row-spaced">',
 			'<div class="col-xs-2 align-right">',
-				'<a class="label label-primary iframe-toggle-btn" method="HIDE" href="httpl://chat.ui/iframe/'+iframeCounter+'">'+originHost+'</a><br>',
-				'<small class="text-muted">'+time+'</small>',
+				'<a class="label label-primary iframe-toggle-btn" method="HIDE" href="httpl://chat.ui/iframe/'+iframeCounter+'">'+originHost+'</a>',
 			'</div>',
 			'<div class="col-xs-8 chat-gui">',
 				'<div class="panel panel-default">',
