@@ -60,15 +60,21 @@ function clearInput(req, res) {
 var urlRegex = /(\S+:\/\/\S+)/g;
 function render(req, res) {
 	// Extract URLs, convert to links and add to our page index
-	var URLs = [];
+	var extractedURL = null;
 	var msg = util.escapeQuotes(util.escapeHTML(req.body.msg))
 		.replace(urlRegex, function(URL) {
-			URLs.push(URL);
-			return '<a href="'+URL+'" target="_child">'+URL+'</a>';
+			if (!extractedURL) {
+				extractedURL = URL;
+				return '<a class="autoloaded" href="'+URL+'" target="_blank">'+URL+'</a>';
+			}
+			return '<a href="'+URL+'" target="_blank">'+URL+'</a>';
 		});
 
-	// Send URLs to the session index
-	roomindexUA.post(URLs);
+	// Send extracted URL to the session index
+	if (extractedURL) {
+		roomindexUA.post(extractedURL);
+		pagent.dispatchRequest({ method: 'GET', url: extractedURL, target: '_child' });
+	}
 
 	// :TODO: username
 	var user = 'pfraze';
