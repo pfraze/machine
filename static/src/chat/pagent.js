@@ -20,11 +20,18 @@ function setup() {
 	});
 }
 
-function renderResponse(res) {
+function renderResponse(req, res) {
 	if (res.body !== '') {
 		if (typeof res.body == 'string') {
 			if (res.header('Content-Type').indexOf('text/html') !== -1)
 				return res.body;
+			if (res.header('Content-Type').indexOf('image/') === 0) {
+				return '<img src="'+req.url+'">';
+				// :HACK: it appears that base64 encoding cant occur without retrieving the data as a binary array buffer
+				// - this could be done by first doing a HEAD request, then deciding whether to use binary according to the reported content-type
+				// - but that relies on consistent HEAD support, which is unlikely
+				// return '<img src="data:'+res.header('Content-Type')+';base64,'+btoa(res.body)+'">';
+			}
 			if (res.header('Content-Type').indexOf('javascript') !== -1)
 				return '<link href="css/prism.css" rel="stylesheet"><pre><code class="language-javascript">'+util.makeSafe(res.body)+'</code></pre>';
 			return '<pre>'+util.makeSafe(res.body)+'</pre>';
@@ -146,14 +153,14 @@ function dispatchRequest(req, $iframe, $target) {
 		res_ = local.dispatch(req);
 		res_.always(function(res) {
 			$iframe.data('origin', newOrigin);
-			renderIframe($iframe, renderResponse(res));
+			renderIframe($iframe, renderResponse(req, res));
 		});
 	} else if (target == '_child') {
 		// New iframe
 		res_ = local.dispatch(req);
 		res_.always(function(res) {
 			var $newIframe = createIframe(newOrigin);
-			renderIframe($newIframe, renderResponse(res));
+			renderIframe($newIframe, renderResponse(req, res));
 			return res;
 		});
 	} else if ((!$iframe && !target) || target == '_null') {
