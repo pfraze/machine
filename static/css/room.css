@@ -1,6 +1,8 @@
 iframe { width: 100%; }
+#chat-in { margin-left: 10px; font-family: Monaco, Menlo, Consolas, "Courier New", monospace; }
+#chat-out { margin-left: 10px; }
 .chat-message { white-space: pre; word-spacing: normal; font-family: Monaco, Menlo, Consolas, "Courier New", monospace; }
 .row-spaced { padding: 8px 0; }
+.chat-gui { margin: 5px 0; }
 .chat-gui .panel { margin: 0; }
 .chat-gui .panel-body { padding: 0; }
-#chat-in { font-family: Monaco, Menlo, Consolas, "Courier New", monospace; }

@@ -63,7 +63,8 @@ function render(req, res) {
 		.replace(urlRegex, function(URL) {
 			if (!extractedURL) {
 				extractedURL = URL;
-				return '<a class="autoloaded" href="'+URL+'" target="_blank">'+URL+'</a>';
+				var id = pagent.getNextIframeId();
+				return '<a class="label label-primary iframe-toggle-btn" id="iframetoggle-'+id+'" method="HIDE" href="httpl://chat.ui/iframe/'+id+'">'+URL+'</a>';
 			}
 			return '<a href="'+URL+'" target="_blank">'+URL+'</a>';
 		});
@@ -84,12 +85,8 @@ function render(req, res) {
 
 	// :TODO: username
 	var user = 'pfraze';
-	var time = (new Date()).toLocaleTimeString();
 	$('#chat-out').append([
-		'<div class="row">',
-			'<div class="col-xs-2 align-right"><small class="text-muted">'+time+'</small></div>',
-			'<div class="col-xs-8 chat-message"><strong>'+user+'</strong>: '+msg+'</div>',
-		'</div>'
+		'<div class="chat-message"><strong>'+user+'</strong>: '+msg+'</div>',
 	].join(''));
 	return 204;
 }
@@ -98,7 +95,7 @@ function toggleIframeCB(show) {
 	return function (req, res) {
 		var $iframeRow = $('#iframerow-'+req.params.id);
 		if (!$iframeRow) throw 404;
-		var $btn = $iframeRow.find('.iframe-toggle-btn');
+		var $btn = $('#iframetoggle-'+req.params.id);
 		var $iframe = $iframeRow.find('iframe');
 
 		if (show) {

@@ -24,26 +24,22 @@
 
     <div class="container-fluid">
       <div class="row">
-        <div class="col-xs-2 align-right">
-          <h2><a href="/" title="Back to Home"><b class="glyphicon glyphicon-chevron-left"></b></a></h2>
-        </div>
-        <div class="col-xs-8">
-          <h1>{{ROOMNAME}}</h1>
-        </div>
-        <div class="col-xs-2">
-          <h3><span class="label label-default profile-btn"></span></h3>
-          <p><a class="btn btn-default auth-btn" href="#">Login</a></p>
-        </div>
-      </div>
-      <div id="chat-out"></div>
-      <br>
-      <div class="row">
-        <div class="col-xs-2"></div>
-        <div class="col-xs-8">
+        <div class="col-xs-4">
+          <div class="row">
+            <div class="col-xs-2 align-right">
+              <h2><a href="/" title="Back to Home"><b class="glyphicon glyphicon-chevron-left"></b></a></h2>
+            </div>
+            <div class="col-xs-10">
+              <h1>{{ROOMNAME}}</h1>
+            </div>
+          </div>
+          <div id="chat-out"></div>
+          <br>
           <form class="form" role="form" action="httpl://chat.ui" method="EMIT">
-            <div class="form-group"><input type="text" class="form-control" id="chat-in" name="msg" placeholder="Say something!"></div>
+            <div class="form-group"><input type="text" class="form-control" id="chat-in" name="msg" placeholder="Chat here"></div>
           </form>
         </div>
+        <div id="gui-out" class="col-xs-8"></div>
       </div>
     </div>
 

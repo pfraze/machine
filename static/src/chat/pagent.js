@@ -45,15 +45,10 @@ function renderResponse(req, res) {
 var iframeCounter = 0;
 function createIframe(originHost) {
 	var html = [
-		'<div id="iframerow-'+iframeCounter+'" class="row row-spaced">',
-			'<div class="col-xs-2 align-right">',
-				'<a class="label label-primary iframe-toggle-btn" method="HIDE" href="httpl://chat.ui/iframe/'+iframeCounter+'">'+originHost+'</a>',
-			'</div>',
-			'<div class="col-xs-8 chat-gui">',
-				'<div class="panel panel-default">',
-					'<div class="panel-body">',
-						'<iframe id="iframe-'+iframeCounter+'" seamless="seamless" sandbox="allow-popups allow-same-origin allow-scripts" data-origin="'+originHost+'"><html><body></body></html></iframe>',
-					'</div>',
+		'<div id="iframerow-'+iframeCounter+'" class="chat-gui">',
+			'<div class="panel panel-default">',
+				'<div class="panel-body">',
+					'<iframe id="iframe-'+iframeCounter+'" seamless="seamless" sandbox="allow-popups allow-same-origin allow-scripts" data-origin="'+originHost+'"><html><body></body></html></iframe>',
 				'</div>',
 			'</div>',
 		'</div>'
@@ -61,8 +56,12 @@ function createIframe(originHost) {
 	// ^ sandbox="allow-same-origin allow-scripts" allows the parent page to reach into the iframe
 	// CSP and script stripping occurs in renderIframe()
 	iframeCounter++;
-	$('#chat-out').append(html);
-	return $('#chat-out iframe').last();
+	$('#gui-out').append(html);
+	return $('#gui-out iframe').last();
+}
+
+function getNextIframeId() {
+	return iframeCounter;
 }
 
 var hostURL = window.location.protocol + '//' + window.location.host;
@@ -179,5 +178,6 @@ module.exports = {
 	setup: setup,
 	createIframe: createIframe,
 	renderIframe: renderIframe,
+	getNextIframeId: getNextIframeId,
 	dispatchRequest: dispatchRequest
 };
