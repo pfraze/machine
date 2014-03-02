@@ -64,7 +64,7 @@ function render(req, res) {
 			if (!extractedURL) {
 				extractedURL = URL;
 				var id = pagent.getNextIframeId();
-				return '<a class="label label-primary iframe-toggle-btn" id="iframetoggle-'+id+'" method="HIDE" href="httpl://chat.ui/iframe/'+id+'">'+URL+'</a>';
+				return '<a href="'+URL+'" target="_blank">'+URL+'</a> <a class="label label-primary iframe-toggle-btn" id="iframetoggle-'+id+'" method="HIDE" href="httpl://chat.ui/iframe/'+id+'"><b class="glyphicon glyphicon-off"></b></a>';
 			}
 			return '<a href="'+URL+'" target="_blank">'+URL+'</a>';
 		});
@@ -85,7 +85,7 @@ function render(req, res) {
 
 	// :TODO: username
 	var user = 'pfraze';
-	$('#chat-out').append([
+	$('#chat-out').prepend([
 		'<div class="chat-message"><strong>'+user+'</strong>: '+msg+'</div>',
 	].join(''));
 	return 204;
