@@ -2,12 +2,11 @@
 // ==============
 var util = require('../util');
 var pagent = require('./pagent');
+var roomindex = require('./roomindex');
+var roomhostUA = local.agent('httpl://appcfg').follow({ rel: 'todo.com/rel/roomhost' });
 
 var server = servware();
 module.exports = server;
-
-var roomhostUA = local.agent('httpl://appcfg').follow({ rel: 'todo.com/rel/roomhost' });
-var roomindexUA = local.agent('httpl://appcfg').follow({ rel: 'todo.com/rel/index', id: 'room' });
 
 server.route('/', function(link, method) {
 	link({ href: '/', rel: 'self service todo.com/rel/chatui', title: 'Local Chat UI' });
@@ -69,10 +68,18 @@ function render(req, res) {
 			return '<a href="'+URL+'" target="_blank">'+URL+'</a>';
 		});
 
-	// Send extracted URL to the session index
 	if (extractedURL) {
-		roomindexUA.post(extractedURL);
-		pagent.dispatchRequest({ method: 'GET', url: extractedURL, target: '_child' });
+		// Auto-fetch the extracted URI
+		pagent.dispatchRequest({ method: 'GET', url: extractedURL, target: '_child' })
+			.then(function(res2) {
+				// Index the received self links
+				var selfLinks = local.queryLinks(res2, { rel: 'self' });
+				if (!selfLinks.length) {
+					// :TODO: generate metadata by heuristics
+					selfLinks = [{ rel: 'todo.com/rel/unknown', href: extractedURL }];
+				}
+				selfLinks.forEach(roomindex.addLink);
+			});
 	}
 
 	// :TODO: username

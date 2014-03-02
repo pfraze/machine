@@ -1,6 +1,7 @@
 // Worker Bridge
 // =============
 // handles requests from the worker
+var roomindex = require('./roomindex');
 
 module.exports = function(req, res, worker) {
 	var fn = (req.path == '/') ? hostmap : proxy;
@@ -10,11 +11,11 @@ module.exports = function(req, res, worker) {
 function hostmap(req, res, worker) {
 	var via = [{proto: {version:'1.0', name:'HTTPL'}, hostname: req.header('Host')}];
 
+	// Generate index
 	var links = [];
-	links.unshift({ href: '/', rel: 'self service via', title: 'Host Page', noproxy: true });
+	links.push({ href: '/', rel: 'self service via', title: 'Host Page', noproxy: true });
+	links = links.concat(roomindex.getLinks());
 	links.push({ href: '/{uri}', rel: 'service', hidden: true });
-
-	// :TODO: add hosts
 
 	// Respond
 	res.setHeader('Link', links);
