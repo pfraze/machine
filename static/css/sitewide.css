@@ -1,5 +1,6 @@
 html, body { height: 100%; }
 iframe[seamless] { background-color: transparent; border: 0 none transparent; padding: 0; }
+.container-fluid { padding: 0 15px; }
 
 .profile-btn, .show-on-authed, .show-on-admin { display: none; }
 .align-right { text-align: right; }
