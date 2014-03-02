@@ -46,7 +46,7 @@ function proxy(req, res, worker) {
 	}
 
 	// Set headers
-	req2.header('From', 'httpl://'+worker.config.domain);
+	req2.header('Origin', 'httpl://'+worker.config.domain);
 	req2.header('Via', (req.parsedHeaders.via||[]).concat(via));
 
 	var res2_ = local.dispatch(req2);

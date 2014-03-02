@@ -26,15 +26,15 @@ server.route('/iframe/:id', function(link, method) {
 });
 
 function allowSelf(req, res) {
-	var from = req.header('From');
-	if (!from) return true; // allow from document
-	if (from == 'httpl://'+req.header('Host')) return true; // allow self
+	var origin = req.header('Origin');
+	if (!origin) return true; // allow from document
+	if (origin == 'httpl://'+req.header('Host')) return true; // allow self
 	throw 403;
 }
 
 function allowChatHost(req, res) {
 	return roomhostUA.resolve().then(function(url) {
-		if (req.header('From') == url) return true; // allow chathost
+		if (req.header('Origin') == url) return true; // allow chathost
 		throw 403;
 	});
 }
