@@ -11,8 +11,8 @@ module.exports = server;
 server.route('/', function(link, method) {
 	link({ href: '/', rel: 'self service todo.com/rel/chatui', title: 'Local Chat UI' });
 
-	method('HEAD', allowSelf, function() { return 204; });
-	method('EMIT', allowSelf, validate, sendToChathost, clearInput, render);
+	method('HEAD', allowDocument, function() { return 204; });
+	method('EMIT', allowDocument, validate, sendToChathost, clearInput, render);
 	method('RECV', allowChatHost, validate, render);
 });
 
@@ -20,21 +20,22 @@ server.route('/index/:id', function(link, method) {
 	link({ href: '/', rel: 'up via service todo.com/rel/chatui', title: 'Local Chat UI' });
 	link({ href: '/index/:id', rel: 'self item' });
 
-	method('HEAD', allowSelf, function() { return 204; });
-	method('ENABLE', allowSelf, toggleIndexEntryCB(true));
-	method('DISABLE', allowSelf, toggleIndexEntryCB(false));
+	method('HEAD', allowDocument, function() { return 204; });
+	method('ENABLE', allowDocument, toggleIndexEntryCB(true));
+	method('DISABLE', allowDocument, toggleIndexEntryCB(false));
 });
 
-function allowSelf(req, res) {
+function allowDocument(req, res) {
 	var origin = req.header('Origin');
 	if (!origin) return true; // allow from document
-	if (origin == 'httpl://'+req.header('Host')) return true; // allow self
 	throw 403;
 }
 
 function allowChatHost(req, res) {
+	var origin = req.header('Origin');
+	if (!origin) return true; // allow from document
 	return roomhostUA.resolve().then(function(url) {
-		if (req.header('Origin') == url) return true; // allow chathost
+		if (origin == url) return true; // allow chathost
 		throw 403;
 	});
 }

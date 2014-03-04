@@ -12,8 +12,8 @@ module.exports = server;
 server.route('/', function(link, method) {
 	link({ href: '/', rel: 'self service todo.com/rel/chatui', title: 'Local Chat UI' });
 
-	method('HEAD', allowSelf, function() { return 204; });
-	method('EMIT', allowSelf, validate, sendToChathost, clearInput, render);
+	method('HEAD', allowDocument, function() { return 204; });
+	method('EMIT', allowDocument, validate, sendToChathost, clearInput, render);
 	method('RECV', allowChatHost, validate, render);
 });
 
@@ -21,21 +21,22 @@ server.route('/index/:id', function(link, method) {
 	link({ href: '/', rel: 'up via service todo.com/rel/chatui', title: 'Local Chat UI' });
 	link({ href: '/index/:id', rel: 'self item' });
 
-	method('HEAD', allowSelf, function() { return 204; });
-	method('ENABLE', allowSelf, toggleIndexEntryCB(true));
-	method('DISABLE', allowSelf, toggleIndexEntryCB(false));
+	method('HEAD', allowDocument, function() { return 204; });
+	method('ENABLE', allowDocument, toggleIndexEntryCB(true));
+	method('DISABLE', allowDocument, toggleIndexEntryCB(false));
 });
 
-function allowSelf(req, res) {
+function allowDocument(req, res) {
 	var origin = req.header('Origin');
 	if (!origin) return true; // allow from document
-	if (origin == 'httpl://'+req.header('Host')) return true; // allow self
 	throw 403;
 }
 
 function allowChatHost(req, res) {
+	var origin = req.header('Origin');
+	if (!origin) return true; // allow from document
 	return roomhostUA.resolve().then(function(url) {
-		if (req.header('Origin') == url) return true; // allow chathost
+		if (origin == url) return true; // allow chathost
 		throw 403;
 	});
 }
@@ -84,7 +85,7 @@ function toggleIndexEntryCB(show) {
 		return 204;
 	};
 }
-},{"../util":6,"./linkregistry":2,"./pagent":4}],2:[function(require,module,exports){
+},{"../util":7,"./linkregistry":2,"./pagent":5}],2:[function(require,module,exports){
 /**
  * Link registry
  */
@@ -105,7 +106,7 @@ module.exports.loadUri = function(uri, autoEnable) {
 	linkRegistry.push(entry);
 
 	// Fetch the URI
-	local.GET(uri).always(function(res) {
+	local.HEAD(uri).always(function(res) {
 		// Index the received self links
 		var selfLinks = local.queryLinks(res, { rel: 'self' });
 		if (!selfLinks.length) {
@@ -140,7 +141,7 @@ module.exports.enableEntry = function(id) {
 	if (linkRegistry[id] && !linkRegistry[id].active) {
 		// Enable
 		linkRegistry[id].active = true;
-		module.exports.emit('added', linkRegistry[id]);
+		module.exports.emit('add', linkRegistry[id]);
 
 		// Update GUI
 		var $btn = $('#chat-out [href="httpl://chat.ui/index/'+id+'"]');
@@ -151,7 +152,7 @@ module.exports.disableEntry = function(id) {
 	if (linkRegistry[id] && linkRegistry[id].active) {
 		// Disable
 		linkRegistry[id].active = false;
-		module.exports.emit('removed', linkRegistry[id]);
+		module.exports.emit('remove', linkRegistry[id]);
 
 		// Update GUI
 		var $btn = $('#chat-out [href="httpl://chat.ui/index/'+id+'"]');
@@ -177,6 +178,7 @@ pagent.setup();
 // Servers
 local.addServer('worker-bridge', require('./worker-bridge.js'));
 local.addServer('chat.ui', require('./chat.ui'));
+local.addServer('mediastream.app', require('./mediastream.app'));
 
 // httpl://appcfg
 // - hosts an index for the application's dev-configged endpoints
@@ -198,10 +200,30 @@ local.addServer('chat.ui', require('./chat.ui'));
 		method('EMIT', function() { return 200; });
 	});
 })();
-},{"./chat.ui":1,"./pagent.js":4,"./worker-bridge.js":5}],4:[function(require,module,exports){
+
+// Configure via chat
+local.dispatch({ method: 'RECV', url: 'httpl://chat.ui', body: { msg: 'Welcome! Let\'s get you setup. httpl://mediastream.app' } });
+},{"./chat.ui":1,"./mediastream.app":4,"./pagent.js":5,"./worker-bridge.js":6}],4:[function(require,module,exports){
+// MediaStream.app Server
+// ======================
+var util = require('../util');
+var pagent = require('./pagent');
+var linkRegistry = require('./linkregistry');
+
+var server = servware();
+module.exports = server;
+
+server.route('/', function(link, method) {
+	link({ href: '/', rel: 'self service todo.com/rel/agent todo.com/rel/agent/app', title: 'Media-stream' });
+});
+},{"../util":7,"./linkregistry":2,"./pagent":5}],5:[function(require,module,exports){
 // Page Agent (PAgent)
 // ===================
-var util = require('../util.js');
+var util = require('../util');
+var linkRegistry = require('./linkregistry');
+
+var currentApp = false;
+var activeApps = {}; // linkRegistryEntryId -> link object
 
 function setup() {
 	// Traffic logging
@@ -219,6 +241,45 @@ function setup() {
 	document.body.addEventListener('request', function(e) {
 		dispatchRequest(e.detail, null, $(e.target));
 	});
+
+	// Link registry events
+	linkRegistry.on('add', onLinksAdded);
+	linkRegistry.on('remove', onLinksRemoved);
+
+	// :DEBUG:
+	// linkRegistry.loadUri('httpl://mediastream.app-agent', true);
+}
+
+function onLinksAdded(entry) {
+	// Check for applications
+	var appLink = local.queryLinks(entry.links, { rel: 'todo.com/rel/agent/app' })[0];
+	if (appLink) {
+		activeApps[entry.id] = appLink;
+		if (currentApp === false) {
+			currentApp = entry.id;
+		}
+		renderAppsNav();
+	}
+}
+
+function onLinksRemoved(entry) {
+	// Remove from our apps if present
+	if (activeApps[entry.id]) {
+		delete activeApps[entry.id];
+		if (currentApp === entry.id) {
+			currentApp = Object.keys(activeApps)[0] || false;
+		}
+		renderAppsNav();
+	}
+}
+
+function renderAppsNav() {
+	var html = [];
+	for (var entryId in activeApps) {
+		app = activeApps[entryId];
+		html.push('<li'+((currentApp == entryId)?' class="active"':'')+'><a href="#">'+(app.title||app.id||app.href)+'</a></li>');
+	}
+	$('#apps-nav').html(html.join(''));
 }
 
 function renderResponse(req, res) {
@@ -382,7 +443,7 @@ module.exports = {
 	getNextIframeId: getNextIframeId,
 	dispatchRequest: dispatchRequest
 };
-},{"../util.js":6}],5:[function(require,module,exports){
+},{"../util":7,"./linkregistry":2}],6:[function(require,module,exports){
 // Worker Bridge
 // =============
 // handles requests from the worker
@@ -395,11 +456,11 @@ module.exports = function(req, res, worker) {
 };
 
 // Hook up registry events to the hosted event-stream
-linkRegistry.on('added', function(entry) {
-	indexChangeEvents.emit('added', entry);
+linkRegistry.on('add', function(entry) {
+	indexChangeEvents.emit('add', { id: entry.id, links: entry.links });
 });
-linkRegistry.on('removed', function(entry) {
-	indexChangeEvents.emit('removed', { id: entry.id });
+linkRegistry.on('remove', function(entry) {
+	indexChangeEvents.emit('remove', { id: entry.id });
 });
 
 function hostmap(req, res, worker) {
@@ -466,7 +527,7 @@ function proxy(req, res, worker) {
 	req.on('data', function(chunk) { req2.write(chunk); });
 	req.on('end', function() { req2.end(); });
 }
-},{"./linkregistry":2}],6:[function(require,module,exports){
+},{"./linkregistry":2}],7:[function(require,module,exports){
 
 var lbracket_regex = /</g;
 var rbracket_regex = />/g;

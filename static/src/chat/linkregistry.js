@@ -18,7 +18,7 @@ module.exports.loadUri = function(uri, autoEnable) {
 	linkRegistry.push(entry);
 
 	// Fetch the URI
-	local.GET(uri).always(function(res) {
+	local.HEAD(uri).always(function(res) {
 		// Index the received self links
 		var selfLinks = local.queryLinks(res, { rel: 'self' });
 		if (!selfLinks.length) {
@@ -53,7 +53,7 @@ module.exports.enableEntry = function(id) {
 	if (linkRegistry[id] && !linkRegistry[id].active) {
 		// Enable
 		linkRegistry[id].active = true;
-		module.exports.emit('added', linkRegistry[id]);
+		module.exports.emit('add', linkRegistry[id]);
 
 		// Update GUI
 		var $btn = $('#chat-out [href="httpl://chat.ui/index/'+id+'"]');
@@ -64,7 +64,7 @@ module.exports.disableEntry = function(id) {
 	if (linkRegistry[id] && linkRegistry[id].active) {
 		// Disable
 		linkRegistry[id].active = false;
-		module.exports.emit('removed', linkRegistry[id]);
+		module.exports.emit('remove', linkRegistry[id]);
 
 		// Update GUI
 		var $btn = $('#chat-out [href="httpl://chat.ui/index/'+id+'"]');

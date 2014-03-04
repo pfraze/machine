@@ -10,11 +10,11 @@ module.exports = function(req, res, worker) {
 };
 
 // Hook up registry events to the hosted event-stream
-linkRegistry.on('added', function(entry) {
-	indexChangeEvents.emit('added', { id: entry.id, links: entry.links });
+linkRegistry.on('add', function(entry) {
+	indexChangeEvents.emit('add', { id: entry.id, links: entry.links });
 });
-linkRegistry.on('removed', function(entry) {
-	indexChangeEvents.emit('removed', { id: entry.id });
+linkRegistry.on('remove', function(entry) {
+	indexChangeEvents.emit('remove', { id: entry.id });
 });
 
 function hostmap(req, res, worker) {

@@ -7,6 +7,7 @@ pagent.setup();
 // Servers
 local.addServer('worker-bridge', require('./worker-bridge.js'));
 local.addServer('chat.ui', require('./chat.ui'));
+local.addServer('mediastream.app', require('./mediastream.app'));
 
 // httpl://appcfg
 // - hosts an index for the application's dev-configged endpoints
@@ -28,3 +29,6 @@ local.addServer('chat.ui', require('./chat.ui'));
 		method('EMIT', function() { return 200; });
 	});
 })();
+
+// Configure via chat
+local.dispatch({ method: 'RECV', url: 'httpl://chat.ui', body: { msg: 'Welcome! Let\'s get you setup. httpl://mediastream.app' } });

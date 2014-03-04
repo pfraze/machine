@@ -1,6 +1,10 @@
 // Page Agent (PAgent)
 // ===================
-var util = require('../util.js');
+var util = require('../util');
+var linkRegistry = require('./linkregistry');
+
+var currentApp = false;
+var activeApps = {}; // linkRegistryEntryId -> link object
 
 function setup() {
 	// Traffic logging
@@ -18,6 +22,45 @@ function setup() {
 	document.body.addEventListener('request', function(e) {
 		dispatchRequest(e.detail, null, $(e.target));
 	});
+
+	// Link registry events
+	linkRegistry.on('add', onLinksAdded);
+	linkRegistry.on('remove', onLinksRemoved);
+
+	// :DEBUG:
+	// linkRegistry.loadUri('httpl://mediastream.app-agent', true);
+}
+
+function onLinksAdded(entry) {
+	// Check for applications
+	var appLink = local.queryLinks(entry.links, { rel: 'todo.com/rel/agent/app' })[0];
+	if (appLink) {
+		activeApps[entry.id] = appLink;
+		if (currentApp === false) {
+			currentApp = entry.id;
+		}
+		renderAppsNav();
+	}
+}
+
+function onLinksRemoved(entry) {
+	// Remove from our apps if present
+	if (activeApps[entry.id]) {
+		delete activeApps[entry.id];
+		if (currentApp === entry.id) {
+			currentApp = Object.keys(activeApps)[0] || false;
+		}
+		renderAppsNav();
+	}
+}
+
+function renderAppsNav() {
+	var html = [];
+	for (var entryId in activeApps) {
+		app = activeApps[entryId];
+		html.push('<li'+((currentApp == entryId)?' class="active"':'')+'><a href="#">'+(app.title||app.id||app.href)+'</a></li>');
+	}
+	$('#apps-nav').html(html.join(''));
 }
 
 function renderResponse(req, res) {
