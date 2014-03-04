@@ -3,7 +3,7 @@
 // ==============
 var util = require('../util');
 var pagent = require('./pagent');
-var roomindex = require('./roomindex');
+var linkRegistry = require('./linkregistry');
 var roomhostUA = local.agent('httpl://appcfg').follow({ rel: 'todo.com/rel/roomhost' });
 
 var server = servware();
@@ -17,13 +17,13 @@ server.route('/', function(link, method) {
 	method('RECV', allowChatHost, validate, render);
 });
 
-server.route('/iframe/:id', function(link, method) {
+server.route('/index/:id', function(link, method) {
 	link({ href: '/', rel: 'up via service todo.com/rel/chatui', title: 'Local Chat UI' });
-	link({ href: '/iframe/:id', rel: 'self item' });
+	link({ href: '/index/:id', rel: 'self item' });
 
 	method('HEAD', allowSelf, function() { return 204; });
-	method('HIDE', allowSelf, toggleIframeCB(false));
-	method('SHOW', allowSelf, toggleIframeCB(true));
+	method('ENABLE', allowSelf, toggleIndexEntryCB(true));
+	method('DISABLE', allowSelf, toggleIndexEntryCB(false));
 });
 
 function allowSelf(req, res) {
@@ -59,30 +59,12 @@ function clearInput(req, res) {
 var urlRegex = /(\S+:\/\/\S+)/g;
 function render(req, res) {
 	// Extract URLs, convert to links and add to our page index
-	var extractedURL = null;
+	var autoEnable = true; // :TODO: only if added by current user
 	var msg = util.escapeQuotes(util.escapeHTML(req.body.msg))
 		.replace(urlRegex, function(URL) {
-			if (!extractedURL) {
-				extractedURL = URL;
-				var id = pagent.getNextIframeId();
-				return '<a href="'+URL+'" target="_blank">'+URL+'</a> <a class="label label-primary iframe-toggle-btn" id="iframetoggle-'+id+'" method="HIDE" href="httpl://chat.ui/iframe/'+id+'"><b class="glyphicon glyphicon-off"></b></a>';
-			}
-			return '<a href="'+URL+'" target="_blank">'+URL+'</a>';
+			var entry = linkRegistry.loadUri(URL, autoEnable);
+			return '<a href="'+URL+'" target="_blank">'+URL+'</a> <a class="label label-default" method="ENABLE" href="httpl://chat.ui/index/'+entry.id+'"><b class="glyphicon glyphicon-off"></b></a>';
 		});
-
-	if (extractedURL) {
-		// Auto-fetch the extracted URI
-		pagent.dispatchRequest({ method: 'GET', url: extractedURL, target: '_child' })
-			.then(function(res2) {
-				// Index the received self links
-				var selfLinks = local.queryLinks(res2, { rel: 'self' });
-				if (!selfLinks.length) {
-					// :TODO: generate metadata by heuristics
-					selfLinks = [{ rel: 'todo.com/rel/unknown', href: extractedURL }];
-				}
-				selfLinks.forEach(roomindex.addLink);
-			});
-	}
 
 	// :TODO: username
 	var user = 'pfraze';
@@ -92,23 +74,100 @@ function render(req, res) {
 	return 204;
 }
 
-function toggleIframeCB(show) {
+function toggleIndexEntryCB(show) {
 	return function (req, res) {
-		var $iframeRow = $('#iframerow-'+req.params.id);
-		if (!$iframeRow) throw 404;
-		var $btn = $('#iframetoggle-'+req.params.id);
-		var $iframe = $iframeRow.find('iframe');
-
 		if (show) {
-			$btn.removeClass('label-default').addClass('label-primary').attr('method', 'HIDE');
-			$iframe.show();
+			linkRegistry.enableEntry(req.params.id);
 		} else {
-			$btn.addClass('label-default').removeClass('label-primary').attr('method', 'SHOW');
-			$iframe.hide();
+			linkRegistry.disableEntry(req.params.id);
 		}
+		return 204;
 	};
 }
-},{"../util":6,"./pagent":3,"./roomindex":4}],2:[function(require,module,exports){
+},{"../util":6,"./linkregistry":2,"./pagent":4}],2:[function(require,module,exports){
+/**
+ * Link registry
+ */
+
+module.exports = {};
+var linkRegistry = [];
+local.util.mixinEventEmitter(module.exports);
+
+var naReltypesRegex = /(^|\b)(self|via|up)(\b|$)/g;
+module.exports.loadUri = function(uri, autoEnable) {
+	// Create the entry
+	var entry = {
+		id: linkRegistry.length,
+		uri: uri,
+		links: [],
+		active: false
+	};
+	linkRegistry.push(entry);
+
+	// Fetch the URI
+	local.GET(uri).always(function(res) {
+		// Index the received self links
+		var selfLinks = local.queryLinks(res, { rel: 'self' });
+		if (!selfLinks.length) {
+			// Default data
+			selfLinks = [{ rel: 'todo.com/rel/media', href: uri }];
+			if (res.header('Content-Type')) {
+				selfLinks[0].type = res.header('Content-Type');
+			}
+		} else if (selfLinks.length > 10) {
+			console.warn('Received '+selfLinks.length+' "self" links from '+uri+' - truncating to 10.');
+			selfLinks.length = 10;
+		}
+
+		// Prep links
+		selfLinks.forEach(function(link) {
+			link['index-entry'] = entry.id;
+			// Strip non-applicable reltypes
+			link.rel = link.rel.replace(naReltypesRegex, '');
+		});
+		entry.links = selfLinks;
+
+		// Autoenable
+		if (autoEnable) {
+			module.exports.enableEntry(entry.id);
+		}
+	});
+
+	return entry;
+};
+
+module.exports.enableEntry = function(id) {
+	if (linkRegistry[id] && !linkRegistry[id].active) {
+		// Enable
+		linkRegistry[id].active = true;
+		module.exports.emit('added', linkRegistry[id]);
+
+		// Update GUI
+		var $btn = $('#chat-out [href="httpl://chat.ui/index/'+id+'"]');
+		$btn.removeClass('label-default').addClass('label-primary').attr('method', 'DISABLE');
+	}
+};
+module.exports.disableEntry = function(id) {
+	if (linkRegistry[id] && linkRegistry[id].active) {
+		// Disable
+		linkRegistry[id].active = false;
+		module.exports.emit('removed', linkRegistry[id]);
+
+		// Update GUI
+		var $btn = $('#chat-out [href="httpl://chat.ui/index/'+id+'"]');
+		$btn.addClass('label-default').removeClass('label-primary').attr('method', 'ENABLE');
+	}
+};
+
+module.exports.populateLinks = function(arr) {
+	linkRegistry.forEach(function(entry) {
+		if (!entry.active) return;
+		entry.links.forEach(function(link) {
+			arr.push(link);
+		});
+	});
+};
+},{}],3:[function(require,module,exports){
 // Environment Setup
 // =================
 var pagent = require('./pagent.js');
@@ -139,7 +198,7 @@ local.addServer('chat.ui', require('./chat.ui'));
 		method('EMIT', function() { return 200; });
 	});
 })();
-},{"./chat.ui":1,"./pagent.js":3,"./worker-bridge.js":5}],3:[function(require,module,exports){
+},{"./chat.ui":1,"./pagent.js":4,"./worker-bridge.js":5}],4:[function(require,module,exports){
 // Page Agent (PAgent)
 // ===================
 var util = require('../util.js');
@@ -323,27 +382,11 @@ module.exports = {
 	getNextIframeId: getNextIframeId,
 	dispatchRequest: dispatchRequest
 };
-},{"../util.js":6}],4:[function(require,module,exports){
-var links = [];
-var naReltypesRegex = /(^|\b)(self|via|up)(\b|$)/g;
-
-function addLink(link) {
-	// Strip non-applicable reltypes
-	link.rel = link.rel.replace(naReltypesRegex, '');
-
-	// Add to the front of the registry
-	links.unshift(link);
-}
-
-module.exports = {
-	addLink: addLink,
-	getLinks: function() { return links; }
-};
-},{}],5:[function(require,module,exports){
+},{"../util.js":6}],5:[function(require,module,exports){
 // Worker Bridge
 // =============
 // handles requests from the worker
-var roomindex = require('./roomindex');
+var linkRegistry = require('./linkregistry');
 
 module.exports = function(req, res, worker) {
 	var fn = (req.path == '/') ? hostmap : proxy;
@@ -356,8 +399,7 @@ function hostmap(req, res, worker) {
 	// Generate index
 	var links = [];
 	links.push({ href: '/', rel: 'self service via', title: 'Host Page', noproxy: true });
-	links = links.concat(roomindex.getLinks());
-	links.push({ href: '/{uri}', rel: 'service', hidden: true });
+	linkRegistry.populateLinks(links);
 
 	// Respond
 	res.setHeader('Link', links);
@@ -407,7 +449,7 @@ function proxy(req, res, worker) {
 	req.on('data', function(chunk) { req2.write(chunk); });
 	req.on('end', function() { req2.end(); });
 }
-},{"./roomindex":4}],6:[function(require,module,exports){
+},{"./linkregistry":2}],6:[function(require,module,exports){
 
 var lbracket_regex = /</g;
 var rbracket_regex = />/g;
@@ -433,5 +475,5 @@ module.exports = {
 	escapeQuotes: escapeQuotes,
 	stripScripts: stripScripts
 };
-},{}]},{},[2])
+},{}]},{},[3])
 ;
