@@ -2,14 +2,26 @@
 // =============
 // handles requests from the worker
 var linkRegistry = require('./linkregistry');
+var indexChangeEvents = new local.EventHost();
 
 module.exports = function(req, res, worker) {
 	var fn = (req.path == '/') ? hostmap : proxy;
 	fn(req, res, worker);
 };
 
+// Hook up registry events to the hosted event-stream
+linkRegistry.on('added', function(entry) {
+	indexChangeEvents.emit('added', { id: entry.id, links: entry.links });
+});
+linkRegistry.on('removed', function(entry) {
+	indexChangeEvents.emit('removed', { id: entry.id });
+});
+
 function hostmap(req, res, worker) {
 	var via = [{proto: {version:'1.0', name:'HTTPL'}, hostname: req.header('Host')}];
+	if (req.method != 'HEAD' && req.method != 'GET' && req.method != 'SUBSCRIBE') {
+		return res.writeHead(405).end();
+	}
 
 	// Generate index
 	var links = [];
@@ -20,7 +32,12 @@ function hostmap(req, res, worker) {
 	res.setHeader('Link', links);
 	res.setHeader('Via', via);
 	res.header('Proxy-Tmpl', 'httpl://host.page/{uri}');
-	res.writeHead(204).end();
+	if (['GET', 'SUBSCRIBE'].indexOf(req.method) != -1 && local.preferredType(req, ['text/event-stream'])) {
+		res.writeHead(200, 'OK', {'Content-Type': 'text/event-stream'});
+		indexChangeEvents.addStream(res);
+	} else {
+		res.writeHead(204).end();
+	}
 }
 
 function proxy(req, res, worker) {
