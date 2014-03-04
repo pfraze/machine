@@ -1,10 +1,11 @@
 // Page Agent (PAgent)
 // ===================
+// Standard page behaviors
 var util = require('../util');
+var agents = require('../agents');
 var linkRegistry = require('./linkregistry');
 
-var currentApp = false;
-var activeApps = {}; // linkRegistryEntryId -> link object
+var n$Service = new nQuery.Server();
 
 function setup() {
 	// Traffic logging
@@ -22,89 +23,61 @@ function setup() {
 	document.body.addEventListener('request', function(e) {
 		dispatchRequest(e.detail, null, $(e.target));
 	});
-
-	// Link registry events
-	linkRegistry.on('add', onLinksAdded);
-	linkRegistry.on('remove', onLinksRemoved);
-
-	// :DEBUG:
-	// linkRegistry.loadUri('httpl://mediastream.app-agent', true);
 }
 
-function onLinksAdded(entry) {
-	// Check for applications
-	var appLink = local.queryLinks(entry.links, { rel: 'todo.com/rel/agent/app' })[0];
-	if (appLink) {
-		activeApps[entry.id] = appLink;
-		if (currentApp === false) {
-			currentApp = entry.id;
-		}
-		renderAppsNav();
-	}
-}
+function dispatchRequest(req, $iframe, $target) {
+	var target = req.target; // local.Request() will strip `target`
+	var body = req.body; delete req.body;
 
-function onLinksRemoved(entry) {
-	// Remove from our apps if present
-	if (activeApps[entry.id]) {
-		delete activeApps[entry.id];
-		if (currentApp === entry.id) {
-			currentApp = Object.keys(activeApps)[0] || false;
-		}
-		renderAppsNav();
-	}
-}
+	if (!req.headers) { req.headers = {}; }
+	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
+	req = (req instanceof local.Request) ? req : (new local.Request(req));
 
-function renderAppsNav() {
-	var html = [];
-	for (var entryId in activeApps) {
-		app = activeApps[entryId];
-		html.push('<li'+((currentApp == entryId)?' class="active"':'')+'><a href="#">'+(app.title||app.id||app.href)+'</a></li>');
+	// Relative link? Make absolute
+	if (!local.isAbsUri(req.url)) {
+		var baseurl = ($iframe.data('origin')) ? $iframe.data('origin') : (window.location.protocol + '//' + window.location.host);
+		req.url = local.joinUri(baseurl, req.url);
 	}
-	$('#apps-nav').html(html.join(''));
-}
 
-function renderResponse(req, res) {
-	if (res.body !== '') {
-		if (typeof res.body == 'string') {
-			if (res.header('Content-Type').indexOf('text/html') !== -1)
-				return res.body;
-			if (res.header('Content-Type').indexOf('image/') === 0) {
-				return '<img src="'+req.url+'">';
-				// :HACK: it appears that base64 encoding cant occur without retrieving the data as a binary array buffer
-				// - this could be done by first doing a HEAD request, then deciding whether to use binary according to the reported content-type
-				// - but that relies on consistent HEAD support, which is unlikely
-				// return '<img src="data:'+res.header('Content-Type')+';base64,'+btoa(res.body)+'">';
-			}
-			if (res.header('Content-Type').indexOf('javascript') !== -1)
-				return '<link href="css/prism.css" rel="stylesheet"><pre><code class="language-javascript">'+util.makeSafe(res.body)+'</code></pre>';
-			return '<pre>'+util.makeSafe(res.body)+'</pre>';
-		} else {
-			return '<link href="css/prism.css" rel="stylesheet"><pre><code class="language-javascript">'+util.makeSafe(JSON.stringify(res.body))+'</code></pre>';
-		}
+	// Handle request based on target and origin
+	var res_;
+	req.urld = req.urld || local.parseUri(req.url);
+	var newOrigin = (req.urld.protocol != 'data') ? (req.urld.protocol || 'httpl')+'://'+req.urld.authority : null;
+	if ($iframe && (!target || target == '_self')) {
+		// In-place update
+		res_ = local.dispatch(req);
+		res_.always(function(res) {
+			$iframe.data('origin', newOrigin);
+			renderIframe($iframe, util.renderResponse(req, res));
+		});
+	} else if (target == '_child') {
+		// New iframe
+		res_ = local.dispatch(req);
+		res_.always(function(res) {
+			var $newIframe = createIframe($('todo'), newOrigin); // :TODO: - container
+			renderIframe($newIframe, util.renderResponse(req, res));
+			return res;
+		});
+	} else if ((!$iframe && !target) || target == '_null') {
+		// Null target, simple dispatch
+		res_ = local.dispatch(req);
+	} else {
+		console.error('Invalid request target', target, req, origin);
+		return null;
 	}
-	return res.status + ' ' + res.reason;
+
+	req.end(body);
+	return res_;
 }
 
 var iframeCounter = 0;
-function createIframe(originHost) {
-	var html = [
-		'<div id="iframerow-'+iframeCounter+'" class="chat-gui">',
-			'<div class="panel panel-default">',
-				'<div class="panel-body">',
-					'<iframe id="iframe-'+iframeCounter+'" seamless="seamless" sandbox="allow-popups allow-same-origin allow-scripts" data-origin="'+originHost+'"><html><body></body></html></iframe>',
-				'</div>',
-			'</div>',
-		'</div>'
-	].join('');
+function createIframe($container, originHost) {
+	var html = '<iframe id="iframe-'+iframeCounter+'" seamless="seamless" sandbox="allow-popups allow-same-origin allow-scripts" data-origin="'+originHost+'"><html><body></body></html></iframe>';
 	// ^ sandbox="allow-same-origin allow-scripts" allows the parent page to reach into the iframe
 	// CSP and script stripping occurs in renderIframe()
 	iframeCounter++;
-	$('#gui-out').append(html);
-	return $('#gui-out iframe').last();
-}
-
-function getNextIframeId() {
-	return iframeCounter;
+	$container.append(html);
+	return $container.find('iframe').last();
 }
 
 var hostURL = window.location.protocol + '//' + window.location.host;
@@ -120,7 +93,7 @@ function renderIframe($iframe, html) {
 	// :HACK: everything below here in this function kinda blows
 
 	// Size the iframe to its content
-	function sizeIframe() {
+	/*function sizeIframe() {
 		this.height = null; // reset so we can get a fresh measurement
 
 		var oh = this.contentWindow.document.body.offsetHeight;
@@ -136,7 +109,7 @@ function renderIframe($iframe, html) {
 			self.height = ((sh == 150) ? oh : sh) + 'px';
 		}, 100);
 	}
-	$iframe.load(sizeIframe);
+	$iframe.load(sizeIframe);*/
 
 	// Bind request events
 	// :TODO: can this go in .load() ?
@@ -172,55 +145,10 @@ function prepIframeRequest(req, $iframe) {
 	}
 }
 
-function dispatchRequest(req, $iframe, $target) {
-	var target = req.target; // local.Request() will strip `target`
-	var body = req.body; delete req.body;
-
-	if (!req.headers) { req.headers = {}; }
-	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
-	req = (req instanceof local.Request) ? req : (new local.Request(req));
-
-	// Relative link? Make absolute
-	if (!local.isAbsUri(req.url)) {
-		var baseurl = ($iframe.data('origin')) ? $iframe.data('origin') : (window.location.protocol + '//' + window.location.host);
-		req.url = local.joinUri(baseurl, req.url);
-	}
-
-	// Handle request based on target and origin
-	var res_;
-	req.urld = req.urld || local.parseUri(req.url);
-	var newOrigin = (req.urld.protocol != 'data') ? (req.urld.protocol || 'httpl')+'://'+req.urld.authority : null;
-	if ($iframe && (!target || target == '_self')) {
-		// In-place update
-		res_ = local.dispatch(req);
-		res_.always(function(res) {
-			$iframe.data('origin', newOrigin);
-			renderIframe($iframe, renderResponse(req, res));
-		});
-	} else if (target == '_child') {
-		// New iframe
-		res_ = local.dispatch(req);
-		res_.always(function(res) {
-			var $newIframe = createIframe(newOrigin);
-			renderIframe($newIframe, renderResponse(req, res));
-			return res;
-		});
-	} else if ((!$iframe && !target) || target == '_null') {
-		// Null target, simple dispatch
-		res_ = local.dispatch(req);
-	} else {
-		console.error('Invalid request target', target, req, origin);
-		return null;
-	}
-
-	req.end(body);
-	return res_;
-}
-
 module.exports = {
 	setup: setup,
+	dispatchRequest: dispatchRequest,
 	createIframe: createIframe,
 	renderIframe: renderIframe,
-	getNextIframeId: getNextIframeId,
-	dispatchRequest: dispatchRequest
+	n$Service: n$Service
 };

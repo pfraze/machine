@@ -1,13 +1,16 @@
 // Environment Setup
 // =================
 var pagent = require('./pagent.js');
+var apps = require('./apps.js');
 local.logAllExceptions = true;
 pagent.setup();
+apps.setup();
 
 // Servers
 local.addServer('worker-bridge', require('./worker-bridge.js'));
 local.addServer('chat.ui', require('./chat.ui'));
 local.addServer('mediastream.app', require('./mediastream.app'));
+local.addServer('nquery', pagent.n$Service);
 
 // httpl://appcfg
 // - hosts an index for the application's dev-configged endpoints
@@ -16,7 +19,7 @@ local.addServer('mediastream.app', require('./mediastream.app'));
 	local.addServer('appcfg', appcfg);
 	appcfg.route('/', function(link) {
 		link({ href: 'httpl://roomhost.fixture', rel: 'todo.com/rel/roomhost', title: 'Chat Room Host' });
-		link({ href: 'httpl://chat.ui', rel: 'todo.com/rel/chatui', title: 'Local Chat UI' });
+		link({ href: 'httpl://chat.ui', rel: 'todo.com/rel/chatui', title: 'Chat UI' });
 	});
 })();
 

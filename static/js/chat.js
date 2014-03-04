@@ -1,4 +1,156 @@
 ;(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+module.exports = {
+	invoke: invoke
+};
+
+function invoke(link, depLoadFn, teardownFn) {
+	// Create a context for producing the final URI
+	var uriCtx = {};
+	var mixin = local.util.mixin.bind(uriCtx);
+
+	// Load dependencies and mix them into the context
+	if (link.uses) {
+		link.uses.split(' ').forEach(function(dep) {
+			// depLoadFn should return an object of `uri-token`->`value`
+			mixin(depLoadFn(dep));
+		});
+	}
+
+	// Produce URI
+	var url = local.UriTemplate.parse(link.href).expand(uriCtx);
+
+	// Invoke
+	var invokeTxn = new local.Request({ method: 'INVOKE', url: url, stream: true });
+	local.dispatch(invokeTxn).always(handleInvokeResponse);
+	if (teardownFn) { invokeTxn.on('close', teardownFn); }
+	return invokeTxn;
+}
+
+function handleInvokeResponse(res) {
+	// :TODO:
+	if (!(res.status >= 200 || res.status < 300)) {
+		console.error('Agent INVOKE failed with', res.status);
+	}
+}
+},{}],2:[function(require,module,exports){
+// Apps
+// ====
+// Manages apps that appear in the index
+
+var util = require('../util');
+var agents = require('../agents');
+var linkRegistry = require('./linkregistry');
+var pagent = require('./pagent');
+
+var currentAppId = false;
+var currentAppTxn = null;
+var activeApps = {}; // linkRegistryEntryId -> { link:, $iframe:, etc }
+
+function setup() {
+	// Link registry events
+	linkRegistry.on('add', onLinksAdded);
+	linkRegistry.on('remove', onLinksRemoved);
+	$(window).resize(onWindowResize);
+}
+
+function onLinksAdded(entry) {
+	// Check for applications
+	var appLink = local.queryLinks(entry.links, { rel: 'todo.com/rel/agent/app' })[0];
+	if (appLink) {
+		activeApps[entry.id] = { link: appLink };
+		if (currentAppId === false) {
+			setCurrentApp(entry.id);
+		}
+		renderAppsNav();
+	}
+}
+
+function onLinksRemoved(entry) {
+	// Remove from our apps if present
+	if (activeApps[entry.id]) {
+		delete activeApps[entry.id];
+		if (currentAppId === entry.id) {
+			setCurrentApp(Object.keys(activeApps)[0] || false);
+		}
+		renderAppsNav();
+	}
+}
+
+function onWindowResize() {
+	var app = activeApps[currentAppId];
+	if (app && app.$iframe) {
+		// Resize iframe
+		app.$iframe.height(calcIframeHeight());
+	}
+}
+
+function calcIframeHeight() {
+	return ($(window).height() - 100) + 'px';
+}
+
+function setCurrentApp(id) {
+	// Shut down current app
+	if (currentAppTxn) {
+		currentAppTxn.end();
+		currentAppTxn = null;
+	}
+	// Load new app if available
+	if (activeApps[id]) {
+		currentAppId = id;
+		var app = activeApps[id];
+		var urld = local.parseUri(app.link.href);
+		// Invoke app agent
+		currentAppTxn = agents.invoke(app.link,
+			function(dep) {
+				if (dep == 'todo.com/rel/nquery') {
+					// Create iframe
+					app.$iframe = pagent.createIframe($('#apps'), urld.protocol + '://' + urld.authority);
+					pagent.renderIframe(app.$iframe, '');
+					app.$iframe.height(calcIframeHeight());
+
+					// Add nquery region
+					app.n$path = pagent.n$Service.addRegion(null, { token: 1234 }); // :TODO: token!!
+					var n$url = 'httpl://' + pagent.n$Service.config.domain + app.n$path;
+
+					// Update nquery region when ready
+					app.$iframe.load(function() {
+						pagent.n$Service.setRegionEl(app.n$path, app.$iframe.contents().find('body'));
+					});
+
+					// Return URL
+					return { nquery: n$url };
+				}
+				return {};
+			},
+			function() {
+				if (app.n$path) {
+					pagent.n$Service.removeRegion(app.n$path);
+					delete app.n$path;
+				}
+				if (app.$iframe) {
+					app.$iframe.remove();
+					delete app.$iframe;
+				}
+			}
+		);
+	} else {
+		currentAppId = false;
+	}
+}
+
+function renderAppsNav() {
+	var html = [];
+	for (var entryId in activeApps) {
+		var link = activeApps[entryId].link;
+		html.push('<li'+((currentAppId == entryId)?' class="active"':'')+'><a href="#">'+(link.title||link.id||link.href)+'</a></li>');
+	}
+	$('#apps-nav').html(html.join(''));
+}
+
+module.exports = {
+	setup: setup
+};
+},{"../agents":1,"../util":9,"./linkregistry":4,"./pagent":7}],3:[function(require,module,exports){
 // Chat.ui Server
 // ==============
 var util = require('../util');
@@ -10,7 +162,7 @@ var server = servware();
 module.exports = server;
 
 server.route('/', function(link, method) {
-	link({ href: '/', rel: 'self service todo.com/rel/chatui', title: 'Local Chat UI' });
+	link({ href: '/', rel: 'self service todo.com/rel/chatui', title: 'Chat UI' });
 
 	method('HEAD', allowDocument, function() { return 204; });
 	method('EMIT', allowDocument, validate, sendToChathost, clearInput, render);
@@ -18,7 +170,7 @@ server.route('/', function(link, method) {
 });
 
 server.route('/index/:id', function(link, method) {
-	link({ href: '/', rel: 'up via service todo.com/rel/chatui', title: 'Local Chat UI' });
+	link({ href: '/', rel: 'up via service todo.com/rel/chatui', title: 'Chat UI' });
 	link({ href: '/index/:id', rel: 'self item' });
 
 	method('HEAD', allowDocument, function() { return 204; });
@@ -85,7 +237,7 @@ function toggleIndexEntryCB(show) {
 		return 204;
 	};
 }
-},{"../util":7,"./linkregistry":2,"./pagent":5}],2:[function(require,module,exports){
+},{"../util":9,"./linkregistry":4,"./pagent":7}],4:[function(require,module,exports){
 /**
  * Link registry
  */
@@ -168,17 +320,20 @@ module.exports.populateLinks = function(arr) {
 		});
 	});
 };
-},{}],3:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 // Environment Setup
 // =================
 var pagent = require('./pagent.js');
+var apps = require('./apps.js');
 local.logAllExceptions = true;
 pagent.setup();
+apps.setup();
 
 // Servers
 local.addServer('worker-bridge', require('./worker-bridge.js'));
 local.addServer('chat.ui', require('./chat.ui'));
 local.addServer('mediastream.app', require('./mediastream.app'));
+local.addServer('nquery', pagent.n$Service);
 
 // httpl://appcfg
 // - hosts an index for the application's dev-configged endpoints
@@ -187,7 +342,7 @@ local.addServer('mediastream.app', require('./mediastream.app'));
 	local.addServer('appcfg', appcfg);
 	appcfg.route('/', function(link) {
 		link({ href: 'httpl://roomhost.fixture', rel: 'todo.com/rel/roomhost', title: 'Chat Room Host' });
-		link({ href: 'httpl://chat.ui', rel: 'todo.com/rel/chatui', title: 'Local Chat UI' });
+		link({ href: 'httpl://chat.ui', rel: 'todo.com/rel/chatui', title: 'Chat UI' });
 	});
 })();
 
@@ -203,7 +358,7 @@ local.addServer('mediastream.app', require('./mediastream.app'));
 
 // Configure via chat
 local.dispatch({ method: 'RECV', url: 'httpl://chat.ui', body: { msg: 'Welcome! Let\'s get you setup. httpl://mediastream.app' } });
-},{"./chat.ui":1,"./mediastream.app":4,"./pagent.js":5,"./worker-bridge.js":6}],4:[function(require,module,exports){
+},{"./apps.js":2,"./chat.ui":3,"./mediastream.app":6,"./pagent.js":7,"./worker-bridge.js":8}],6:[function(require,module,exports){
 // MediaStream.app Server
 // ======================
 var util = require('../util');
@@ -214,16 +369,39 @@ var server = servware();
 module.exports = server;
 
 server.route('/', function(link, method) {
-	link({ href: '/', rel: 'self service todo.com/rel/agent todo.com/rel/agent/app', title: 'Media-stream' });
+	link({ href: '/{?nquery}', rel: 'self service todo.com/rel/agent todo.com/rel/agent/app', uses: 'todo.com/rel/nquery', title: 'Media-stream' });
+
+	method('INVOKE', { stream: true }, allowDocument, run);
 });
-},{"../util":7,"./linkregistry":2,"./pagent":5}],5:[function(require,module,exports){
+
+function allowDocument(req, res) {
+	if (!req.header('Origin')) return true; // allow from document
+	throw 403;
+}
+
+function run(req, res) {
+	console.log('mediastream app invoked with nquery=',req.query.nquery);
+	res.writeHead(204, 'No Content');
+
+	var n$ = nQuery.client(req.query.nquery);
+	n$('').html('<p>Hello, world! This was setup with nQuery! <strong>ISNT IT PRETTY</strong></p>');
+	n$('p').css('background', 'yellow');
+	n$('p').css('color', 'green');
+
+	req.on('end', function() {
+		console.log('mediastream app closed');
+		res.end();
+	});
+}
+},{"../util":9,"./linkregistry":4,"./pagent":7}],7:[function(require,module,exports){
 // Page Agent (PAgent)
 // ===================
+// Standard page behaviors
 var util = require('../util');
+var agents = require('../agents');
 var linkRegistry = require('./linkregistry');
 
-var currentApp = false;
-var activeApps = {}; // linkRegistryEntryId -> link object
+var n$Service = new nQuery.Server();
 
 function setup() {
 	// Traffic logging
@@ -241,89 +419,61 @@ function setup() {
 	document.body.addEventListener('request', function(e) {
 		dispatchRequest(e.detail, null, $(e.target));
 	});
-
-	// Link registry events
-	linkRegistry.on('add', onLinksAdded);
-	linkRegistry.on('remove', onLinksRemoved);
-
-	// :DEBUG:
-	// linkRegistry.loadUri('httpl://mediastream.app-agent', true);
 }
 
-function onLinksAdded(entry) {
-	// Check for applications
-	var appLink = local.queryLinks(entry.links, { rel: 'todo.com/rel/agent/app' })[0];
-	if (appLink) {
-		activeApps[entry.id] = appLink;
-		if (currentApp === false) {
-			currentApp = entry.id;
-		}
-		renderAppsNav();
-	}
-}
+function dispatchRequest(req, $iframe, $target) {
+	var target = req.target; // local.Request() will strip `target`
+	var body = req.body; delete req.body;
 
-function onLinksRemoved(entry) {
-	// Remove from our apps if present
-	if (activeApps[entry.id]) {
-		delete activeApps[entry.id];
-		if (currentApp === entry.id) {
-			currentApp = Object.keys(activeApps)[0] || false;
-		}
-		renderAppsNav();
-	}
-}
+	if (!req.headers) { req.headers = {}; }
+	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
+	req = (req instanceof local.Request) ? req : (new local.Request(req));
 
-function renderAppsNav() {
-	var html = [];
-	for (var entryId in activeApps) {
-		app = activeApps[entryId];
-		html.push('<li'+((currentApp == entryId)?' class="active"':'')+'><a href="#">'+(app.title||app.id||app.href)+'</a></li>');
+	// Relative link? Make absolute
+	if (!local.isAbsUri(req.url)) {
+		var baseurl = ($iframe.data('origin')) ? $iframe.data('origin') : (window.location.protocol + '//' + window.location.host);
+		req.url = local.joinUri(baseurl, req.url);
 	}
-	$('#apps-nav').html(html.join(''));
-}
 
-function renderResponse(req, res) {
-	if (res.body !== '') {
-		if (typeof res.body == 'string') {
-			if (res.header('Content-Type').indexOf('text/html') !== -1)
-				return res.body;
-			if (res.header('Content-Type').indexOf('image/') === 0) {
-				return '<img src="'+req.url+'">';
-				// :HACK: it appears that base64 encoding cant occur without retrieving the data as a binary array buffer
-				// - this could be done by first doing a HEAD request, then deciding whether to use binary according to the reported content-type
-				// - but that relies on consistent HEAD support, which is unlikely
-				// return '<img src="data:'+res.header('Content-Type')+';base64,'+btoa(res.body)+'">';
-			}
-			if (res.header('Content-Type').indexOf('javascript') !== -1)
-				return '<link href="css/prism.css" rel="stylesheet"><pre><code class="language-javascript">'+util.makeSafe(res.body)+'</code></pre>';
-			return '<pre>'+util.makeSafe(res.body)+'</pre>';
-		} else {
-			return '<link href="css/prism.css" rel="stylesheet"><pre><code class="language-javascript">'+util.makeSafe(JSON.stringify(res.body))+'</code></pre>';
-		}
+	// Handle request based on target and origin
+	var res_;
+	req.urld = req.urld || local.parseUri(req.url);
+	var newOrigin = (req.urld.protocol != 'data') ? (req.urld.protocol || 'httpl')+'://'+req.urld.authority : null;
+	if ($iframe && (!target || target == '_self')) {
+		// In-place update
+		res_ = local.dispatch(req);
+		res_.always(function(res) {
+			$iframe.data('origin', newOrigin);
+			renderIframe($iframe, util.renderResponse(req, res));
+		});
+	} else if (target == '_child') {
+		// New iframe
+		res_ = local.dispatch(req);
+		res_.always(function(res) {
+			var $newIframe = createIframe($('todo'), newOrigin); // :TODO: - container
+			renderIframe($newIframe, util.renderResponse(req, res));
+			return res;
+		});
+	} else if ((!$iframe && !target) || target == '_null') {
+		// Null target, simple dispatch
+		res_ = local.dispatch(req);
+	} else {
+		console.error('Invalid request target', target, req, origin);
+		return null;
 	}
-	return res.status + ' ' + res.reason;
+
+	req.end(body);
+	return res_;
 }
 
 var iframeCounter = 0;
-function createIframe(originHost) {
-	var html = [
-		'<div id="iframerow-'+iframeCounter+'" class="chat-gui">',
-			'<div class="panel panel-default">',
-				'<div class="panel-body">',
-					'<iframe id="iframe-'+iframeCounter+'" seamless="seamless" sandbox="allow-popups allow-same-origin allow-scripts" data-origin="'+originHost+'"><html><body></body></html></iframe>',
-				'</div>',
-			'</div>',
-		'</div>'
-	].join('');
+function createIframe($container, originHost) {
+	var html = '<iframe id="iframe-'+iframeCounter+'" seamless="seamless" sandbox="allow-popups allow-same-origin allow-scripts" data-origin="'+originHost+'"><html><body></body></html></iframe>';
 	// ^ sandbox="allow-same-origin allow-scripts" allows the parent page to reach into the iframe
 	// CSP and script stripping occurs in renderIframe()
 	iframeCounter++;
-	$('#gui-out').append(html);
-	return $('#gui-out iframe').last();
-}
-
-function getNextIframeId() {
-	return iframeCounter;
+	$container.append(html);
+	return $container.find('iframe').last();
 }
 
 var hostURL = window.location.protocol + '//' + window.location.host;
@@ -339,7 +489,7 @@ function renderIframe($iframe, html) {
 	// :HACK: everything below here in this function kinda blows
 
 	// Size the iframe to its content
-	function sizeIframe() {
+	/*function sizeIframe() {
 		this.height = null; // reset so we can get a fresh measurement
 
 		var oh = this.contentWindow.document.body.offsetHeight;
@@ -355,7 +505,7 @@ function renderIframe($iframe, html) {
 			self.height = ((sh == 150) ? oh : sh) + 'px';
 		}, 100);
 	}
-	$iframe.load(sizeIframe);
+	$iframe.load(sizeIframe);*/
 
 	// Bind request events
 	// :TODO: can this go in .load() ?
@@ -391,59 +541,14 @@ function prepIframeRequest(req, $iframe) {
 	}
 }
 
-function dispatchRequest(req, $iframe, $target) {
-	var target = req.target; // local.Request() will strip `target`
-	var body = req.body; delete req.body;
-
-	if (!req.headers) { req.headers = {}; }
-	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
-	req = (req instanceof local.Request) ? req : (new local.Request(req));
-
-	// Relative link? Make absolute
-	if (!local.isAbsUri(req.url)) {
-		var baseurl = ($iframe.data('origin')) ? $iframe.data('origin') : (window.location.protocol + '//' + window.location.host);
-		req.url = local.joinUri(baseurl, req.url);
-	}
-
-	// Handle request based on target and origin
-	var res_;
-	req.urld = req.urld || local.parseUri(req.url);
-	var newOrigin = (req.urld.protocol != 'data') ? (req.urld.protocol || 'httpl')+'://'+req.urld.authority : null;
-	if ($iframe && (!target || target == '_self')) {
-		// In-place update
-		res_ = local.dispatch(req);
-		res_.always(function(res) {
-			$iframe.data('origin', newOrigin);
-			renderIframe($iframe, renderResponse(req, res));
-		});
-	} else if (target == '_child') {
-		// New iframe
-		res_ = local.dispatch(req);
-		res_.always(function(res) {
-			var $newIframe = createIframe(newOrigin);
-			renderIframe($newIframe, renderResponse(req, res));
-			return res;
-		});
-	} else if ((!$iframe && !target) || target == '_null') {
-		// Null target, simple dispatch
-		res_ = local.dispatch(req);
-	} else {
-		console.error('Invalid request target', target, req, origin);
-		return null;
-	}
-
-	req.end(body);
-	return res_;
-}
-
 module.exports = {
 	setup: setup,
+	dispatchRequest: dispatchRequest,
 	createIframe: createIframe,
 	renderIframe: renderIframe,
-	getNextIframeId: getNextIframeId,
-	dispatchRequest: dispatchRequest
+	n$Service: n$Service
 };
-},{"../util":7,"./linkregistry":2}],6:[function(require,module,exports){
+},{"../agents":1,"../util":9,"./linkregistry":4}],8:[function(require,module,exports){
 // Worker Bridge
 // =============
 // handles requests from the worker
@@ -527,7 +632,7 @@ function proxy(req, res, worker) {
 	req.on('data', function(chunk) { req2.write(chunk); });
 	req.on('end', function() { req2.end(); });
 }
-},{"./linkregistry":2}],7:[function(require,module,exports){
+},{"./linkregistry":4}],9:[function(require,module,exports){
 
 var lbracket_regex = /</g;
 var rbracket_regex = />/g;
@@ -547,11 +652,33 @@ function stripScripts (html) {
 	return html.replace(sanitizeHtmlRegexp, '');
 }
 
+function renderResponse(req, res) {
+	if (res.body !== '') {
+		if (typeof res.body == 'string') {
+			if (res.header('Content-Type').indexOf('text/html') !== -1)
+				return res.body;
+			if (res.header('Content-Type').indexOf('image/') === 0) {
+				return '<img src="'+req.url+'">';
+				// :HACK: it appears that base64 encoding cant occur without retrieving the data as a binary array buffer
+				// - this could be done by first doing a HEAD request, then deciding whether to use binary according to the reported content-type
+				// - but that relies on consistent HEAD support, which is unlikely
+				// return '<img src="data:'+res.header('Content-Type')+';base64,'+btoa(res.body)+'">';
+			}
+			if (res.header('Content-Type').indexOf('javascript') !== -1)
+				return '<link href="css/prism.css" rel="stylesheet"><pre><code class="language-javascript">'+escapeHTML(res.body)+'</code></pre>';
+			return '<pre>'+escapeHTML(res.body)+'</pre>';
+		} else {
+			return '<link href="css/prism.css" rel="stylesheet"><pre><code class="language-javascript">'+escapeHTML(JSON.stringify(res.body))+'</code></pre>';
+		}
+	}
+	return res.status + ' ' + res.reason;
+}
+
 module.exports = {
 	escapeHTML: escapeHTML,
 	makeSafe: escapeHTML,
 	escapeQuotes: escapeQuotes,
 	stripScripts: stripScripts
 };
-},{}]},{},[3])
+},{}]},{},[5])
 ;

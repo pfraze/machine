@@ -8,3 +8,4 @@ iframe { width: 100%; }
 .chat-gui .panel-body { padding: 0; }
 
 #apps-nav { margin-top: 5px; }
+#apps-container .panel { border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }

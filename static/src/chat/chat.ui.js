@@ -9,7 +9,7 @@ var server = servware();
 module.exports = server;
 
 server.route('/', function(link, method) {
-	link({ href: '/', rel: 'self service todo.com/rel/chatui', title: 'Local Chat UI' });
+	link({ href: '/', rel: 'self service todo.com/rel/chatui', title: 'Chat UI' });
 
 	method('HEAD', allowDocument, function() { return 204; });
 	method('EMIT', allowDocument, validate, sendToChathost, clearInput, render);
@@ -17,7 +17,7 @@ server.route('/', function(link, method) {
 });
 
 server.route('/index/:id', function(link, method) {
-	link({ href: '/', rel: 'up via service todo.com/rel/chatui', title: 'Local Chat UI' });
+	link({ href: '/', rel: 'up via service todo.com/rel/chatui', title: 'Chat UI' });
 	link({ href: '/index/:id', rel: 'self item' });
 
 	method('HEAD', allowDocument, function() { return 204; });
