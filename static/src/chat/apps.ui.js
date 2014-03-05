@@ -46,7 +46,7 @@ function onLinksRemoved(entry) {
 	// Remove from our apps if present
 	if (activeApps[entry.id]) {
 		delete activeApps[entry.id];
-		if (currentAppId === entry.id) {
+		if (currentAppId !== false && currentAppId == entry.id) {
 			setCurrentApp(Object.keys(activeApps)[0] || false);
 		}
 		renderAppsNav();
