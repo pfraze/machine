@@ -19,16 +19,42 @@ function allowDocument(req, res) {
 }
 
 function run(req, res) {
-	console.log('mediastream app invoked with nquery=',req.query.nquery);
 	res.writeHead(204, 'No Content');
 
 	var n$ = nQuery.client(req.query.nquery);
-	n$('').html('<p>Hello, world! This was setup with nQuery! <strong>ISNT IT PRETTY</strong></p>');
-	n$('p').css('background', 'yellow');
-	n$('p').css('color', 'green');
+	n$('').html([
+		'<style>',
+			'#mediastream { display: flex; flex-wrap: wrap; }',
+			'#mediastream > div { margin-right: 5px }',
+		'</style>',
+		'<div id="mediastream"></div>'
+	].join(''));
+
+	var onLinkAdded = function(entry) {
+		local.queryLinks(entry.links, { rel: 'todo.com/rel/media' }).forEach(function(link) {
+			var uri = local.UriTemplate.parse(link.href).expand({});
+			if (link.type && link.type.indexOf('image/') === 0) {
+				n$('#mediastream').prepend('<div class="media-'+entry.id+'"><img src="'+uri+'"/></div>');
+			}
+			/*local.GET(uri).then(function(res) {
+				if (res.body) {
+					if (typeof res.body == 'object') {
+						res.body = JSON.stringify(res.body);
+					}
+					n$('#mediastream').append('<div class="media-'+entry.id+'">'+res.body+'</div>');
+				}
+			});*/
+		});
+	};
+	var onLinkRemoved = function(entry) {
+		n$('#mediastream').find('.media-'+entry.id).remove();
+	};
+	linkRegistry.on('add', onLinkAdded);
+	linkRegistry.on('remove', onLinkRemoved);
 
 	req.on('end', function() {
-		console.log('mediastream app closed');
+		linkRegistry.removeListener('add', onLinkAdded);
+		linkRegistry.removeListener('remove', onLinkRemoved);
 		res.end();
 	});
 }

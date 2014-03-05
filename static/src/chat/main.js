@@ -9,7 +9,7 @@ apps.setup();
 // Servers
 local.addServer('worker-bridge', require('./worker-bridge.js'));
 local.addServer('chat.ui', require('./chat.ui'));
-local.addServer('apps.ui', require('./apps.ui'));
+local.addServer('apps.ui', apps);
 local.addServer('mediastream.app', require('./mediastream.app'));
 local.addServer('nquery', pagent.n$Service);
 
