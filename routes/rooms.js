@@ -5,13 +5,13 @@ var util = require('../lib/util');
 var tmpl = require('../lib/html');
 
 module.exports = function(server) {
-	server.head('/r/:room', linkRoom, function(req, res) { res.send(204); });
-	server.get('/r/:room',  linkRoom, getRoom);
+	server.head('/:room', linkRoom, function(req, res) { res.send(204); });
+	server.get('/:room',  linkRoom, getRoom);
 
 	function linkRoom(req, res, next) {
 		var links = [
 			'</>; rel="up via service"; title="'+config.hostname+'"',
-			'</r/'+req.param('room')+'>; rel="self collection"; id="'+req.param('room')+'"',
+			'</'+req.param('room')+'>; rel="self collection"; id="'+req.param('room')+'"',
 		];
 		res.setHeader('Link', links.join(', '));
 		next();

@@ -4,8 +4,9 @@ module.exports = {
 		user: $('body').data('user') || null,
 		isPageAdmin: $('body').data('user-is-admin') == '1'
 	},
+	hostUA: hostUA,
 	pageUA: local.agent(window.location.toString()),
 	authUA: hostUA.follow({ rel: 'service', id: 'auth' }),
 	meUA: hostUA.follow({ rel: 'item', id: '.me' }),
-	lookupProxyUA: hostUA.follow({ rel: 'service', id: '.lookup' }),
+	fetchProxyUA: hostUA.follow({ rel: 'service', id: '.fetch' }),
 };

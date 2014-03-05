@@ -121,7 +121,7 @@ server.get('/test/dirs', express.basicAuth('asdfasdf', 'asdfasdf'), function(req
 require('./routes/home')(server);
 require('./routes/auth')(server);
 require('./routes/me')(server);
-require('./routes/lookupProxy')(server);
+require('./routes/fetchProxy')(server);
 require('./routes/rooms')(server);
 // require('./routes/directories')(server);
 // require('./routes/links')(server);
