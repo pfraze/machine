@@ -1,7 +1,7 @@
 // Environment Setup
 // =================
-var pagent = require('./pagent.js');
-var apps = require('./apps.js');
+var pagent = require('./pagent');
+var apps = require('./apps.ui');
 local.logAllExceptions = true;
 pagent.setup();
 apps.setup();
@@ -9,6 +9,7 @@ apps.setup();
 // Servers
 local.addServer('worker-bridge', require('./worker-bridge.js'));
 local.addServer('chat.ui', require('./chat.ui'));
+local.addServer('apps.ui', require('./apps.ui'));
 local.addServer('mediastream.app', require('./mediastream.app'));
 local.addServer('nquery', pagent.n$Service);
 

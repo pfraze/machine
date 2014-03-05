@@ -46,12 +46,24 @@ var currentAppId = false;
 var currentAppTxn = null;
 var activeApps = {}; // linkRegistryEntryId -> { link:, $iframe:, etc }
 
-function setup() {
+var server = servware();
+module.exports = server;
+
+server.setup = function() {
 	// Link registry events
 	linkRegistry.on('add', onLinksAdded);
 	linkRegistry.on('remove', onLinksRemoved);
 	$(window).resize(onWindowResize);
-}
+};
+
+server.route('/:app', function(link, method) {
+	method('SETCURRENT', function(req, res) {
+		if (req.header('Origin')) return 403;
+		setCurrentApp(req.params.app);
+		renderAppsNav();
+		return 204;
+	});
+});
 
 function onLinksAdded(entry) {
 	// Check for applications
@@ -142,14 +154,10 @@ function renderAppsNav() {
 	var html = [];
 	for (var entryId in activeApps) {
 		var link = activeApps[entryId].link;
-		html.push('<li'+((currentAppId == entryId)?' class="active"':'')+'><a href="#">'+(link.title||link.id||link.href)+'</a></li>');
+		html.push('<li'+((currentAppId == entryId)?' class="active"':'')+'><a method="SETCURRENT" href="httpl://apps.ui/'+entryId+'">'+(link.title||link.id||link.href)+'</a></li>');
 	}
 	$('#apps-nav').html(html.join(''));
 }
-
-module.exports = {
-	setup: setup
-};
 },{"../agents":1,"../util":9,"./linkregistry":4,"./pagent":7}],3:[function(require,module,exports){
 // Chat.ui Server
 // ==============
@@ -221,9 +229,7 @@ function render(req, res) {
 
 	// :TODO: username
 	var user = 'pfraze';
-	$('#chat-out').prepend([
-		'<div class="chat-message"><strong>'+user+'</strong>: '+msg+'</div>',
-	].join(''));
+	$('#chat-out').prepend('<div class="chat-message"><strong>'+user+'</strong>: '+msg+'</div>');
 	return 204;
 }
 
@@ -323,8 +329,8 @@ module.exports.populateLinks = function(arr) {
 },{}],5:[function(require,module,exports){
 // Environment Setup
 // =================
-var pagent = require('./pagent.js');
-var apps = require('./apps.js');
+var pagent = require('./pagent');
+var apps = require('./apps.ui');
 local.logAllExceptions = true;
 pagent.setup();
 apps.setup();
@@ -332,6 +338,7 @@ apps.setup();
 // Servers
 local.addServer('worker-bridge', require('./worker-bridge.js'));
 local.addServer('chat.ui', require('./chat.ui'));
+local.addServer('apps.ui', require('./apps.ui'));
 local.addServer('mediastream.app', require('./mediastream.app'));
 local.addServer('nquery', pagent.n$Service);
 
@@ -358,7 +365,7 @@ local.addServer('nquery', pagent.n$Service);
 
 // Configure via chat
 local.dispatch({ method: 'RECV', url: 'httpl://chat.ui', body: { msg: 'Welcome! Let\'s get you setup. httpl://mediastream.app' } });
-},{"./apps.js":2,"./chat.ui":3,"./mediastream.app":6,"./pagent.js":7,"./worker-bridge.js":8}],6:[function(require,module,exports){
+},{"./apps.ui":2,"./chat.ui":3,"./mediastream.app":6,"./pagent":7,"./worker-bridge.js":8}],6:[function(require,module,exports){
 // MediaStream.app Server
 // ======================
 var util = require('../util');

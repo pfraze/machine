@@ -68,9 +68,7 @@ function render(req, res) {
 
 	// :TODO: username
 	var user = 'pfraze';
-	$('#chat-out').prepend([
-		'<div class="chat-message"><strong>'+user+'</strong>: '+msg+'</div>',
-	].join(''));
+	$('#chat-out').prepend('<div class="chat-message"><strong>'+user+'</strong>: '+msg+'</div>');
 	return 204;
 }
 
