@@ -248,6 +248,7 @@ function toggleIndexEntryCB(show) {
  * Link registry
  */
 var globals = require('../globals');
+var util = require('../util');
 var mimetypes = require('../mimetypes');
 
 module.exports = {};
@@ -266,7 +267,7 @@ module.exports.loadUri = function(uri, autoEnable) {
 	linkRegistry.push(entry);
 
 	// Fetch the URI
-	lookup(uri).always(function(res) {
+	util.fetchMeta(uri).always(function(res) {
 		// Index the received self links
 		var selfLinks = local.queryLinks(res, { rel: 'self' });
 		if (!selfLinks.length) {
@@ -302,66 +303,6 @@ module.exports.loadUri = function(uri, autoEnable) {
 	return entry;
 };
 
-
-
-function lookup(url) {
-	var p = local.promise();
-	var urld = local.parseUri(url);
-	if (!urld || !urld.authority) {
-		p.fulfill(false); // bad url, dont even try it!
-		return p;
-	}
-
-	var triedProxy = false;
-	var attempts = [new local.Request({ method: 'HEAD', url: url })]; // first attempt, as given
-	if (!urld.protocol) {
-		// No protocol? Two more attempts - 1 with https, then one with plain http
-		attempts.push(new local.Request({ method: 'HEAD', url: 'https://'+urld.authority+urld.relative }));
-		attempts.push(new local.Request({ method: 'HEAD', url: 'http://'+urld.authority+urld.relative }));
-	}
-
-	var lookupReq;
-	function makeAttempt() {
-		if (lookupReq) lookupReq.close();
-		lookupReq = attempts.shift();
-		local.dispatch(lookupReq).always(function(res) {
-			if (res.status >= 200 && res.status < 300) {
-				p.fulfill(res); // Done!
-			} else if (res.status == 0 && !triedProxy) {
-				// CORS issue, try the proxy
-				triedProxy = true;
-				globals.fetchProxyUA.resolve({ nohead: true }).always(function(proxyUrl) {
-					if (!urld.protocol) {
-						attempts = [
-							new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }),
-							new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } }),
-							new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }),
-							new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } })
-						];
-					} else {
-						attempts = [
-							new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: url } }),
-							new local.Request({ method: 'GET', url: proxyUrl, query: { url: url } })
-						];
-					}
-					makeAttempt();
-				});
-			} else {
-				// No dice, any attempts left?
-				if (attempts.length) {
-					makeAttempt(); // try the next one
-				} else {
-					p.fulfill(res); // no dice
-				}
-			}
-		});
-		lookupReq.end();
-	}
-	makeAttempt();
-
-	return p;
-}
-
 module.exports.enableEntry = function(id) {
 	if (linkRegistry[id] && !linkRegistry[id].active) {
 		// Enable
@@ -393,7 +334,7 @@ module.exports.populateLinks = function(arr) {
 		});
 	});
 };
-},{"../globals":9,"../mimetypes":10}],5:[function(require,module,exports){
+},{"../globals":9,"../mimetypes":10,"../util":11}],5:[function(require,module,exports){
 // Environment Setup
 // =================
 var pagent = require('./pagent');
@@ -460,7 +401,8 @@ function run(req, res) {
 	n$('').html([
 		'<style>',
 			'#mediastream { display: flex; flex-wrap: wrap; }',
-			'#mediastream > div { margin-right: 5px }',
+			'#mediastream > div { margin: 5px }',
+			'.isiframe, .isiframe iframe { width: 100% }',
 		'</style>',
 		'<div id="mediastream"></div>'
 	].join(''));
@@ -471,14 +413,26 @@ function run(req, res) {
 			if (link.type && link.type.indexOf('image/') === 0) {
 				n$('#mediastream').prepend('<div class="media-'+entry.id+'"><img src="'+uri+'"/></div>');
 			}
-			/*local.GET(uri).then(function(res) {
-				if (res.body) {
-					if (typeof res.body == 'object') {
-						res.body = JSON.stringify(res.body);
+			else {
+				util.fetch(uri).then(function(res) {
+					if (res.body) {
+						if (typeof res.body == 'object') {
+							res.body = JSON.stringify(res.body);
+						}
+						// Create iframe
+						var iframeHtml = '<iframe seamless="seamless" sandbox="allow-popups" height="350"><html><body></body></html></iframe>';
+						n$('#mediastream').prepend('<div class="media-'+entry.id+' isiframe">'+iframeHtml+'</div>');
+						// Populate
+						var urld = local.parseUri(uri);
+						var html = [
+							'<meta http-equiv="Content-Security-Policy" content="default-src *; style-src * \'unsafe-inline\'; script-src \'self\'; object-src \'none\'; frame-src \'none\';" />',
+							'<base href="'+urld.protocol+'://'+urld.authority+urld.directory+'">',
+							res.body
+						].join('');
+						n$('.media-'+entry.id+' iframe').attr('srcdoc', html);
 					}
-					n$('#mediastream').append('<div class="media-'+entry.id+'">'+res.body+'</div>');
-				}
-			});*/
+				});
+			}
 		});
 	};
 	var onLinkRemoved = function(entry) {
@@ -1496,6 +1450,7 @@ module.exports = {
 	return self;
 }(this));
 },{"path":13}],11:[function(require,module,exports){
+var globals = require('./globals');
 
 var lbracket_regex = /</g;
 var rbracket_regex = />/g;
@@ -1537,13 +1492,88 @@ function renderResponse(req, res) {
 	return res.status + ' ' + res.reason;
 }
 
+function fetch(url, useHead) {
+	var method = (useHead) ? 'HEAD' : 'GET';
+	var p = local.promise();
+	var urld = local.parseUri(url);
+	if (!urld || !urld.authority) {
+		p.fulfill(false); // bad url, dont even try it!
+		return p;
+	}
+
+	var triedProxy = false;
+	var attempts = [new local.Request({ method: method, url: url })]; // first attempt, as given
+	if (!urld.protocol) {
+		// No protocol? Two more attempts - 1 with https, then one with plain http
+		attempts.push(new local.Request({ method: method, url: 'https://'+urld.authority+urld.relative }));
+		attempts.push(new local.Request({ method: method, url: 'http://'+urld.authority+urld.relative }));
+	}
+
+	var lookupReq;
+	function makeAttempt() {
+		if (lookupReq) lookupReq.close();
+		lookupReq = attempts.shift();
+		local.dispatch(lookupReq).always(function(res) {
+			if (res.status >= 200 && res.status < 300) {
+				p.fulfill(res); // Done!
+			} else if (res.status == 0 && !triedProxy) {
+				// CORS issue, try the proxy
+				triedProxy = true;
+				globals.fetchProxyUA.resolve({ nohead: true }).always(function(proxyUrl) {
+					if (!urld.protocol) {
+						if (useHead) {
+							attempts = [
+								new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }),
+								new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } }),
+								new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }),
+								new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } })
+							];
+						} else {
+							attempts = [
+								new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }),
+								new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } })
+							];
+						}
+					} else {
+						if (useHead) {
+							attempts = [
+								new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: url } }),
+								new local.Request({ method: 'GET', url: proxyUrl, query: { url: url } })
+							];
+						} else {
+							attempts = [
+								new local.Request({ method: 'GET', url: proxyUrl, query: { url: url } })
+							];
+						}
+					}
+					makeAttempt();
+				});
+			} else {
+				// No dice, any attempts left?
+				if (attempts.length) {
+					makeAttempt(); // try the next one
+				} else {
+					p.fulfill(res); // no dice
+				}
+			}
+		});
+		lookupReq.end();
+	}
+	makeAttempt();
+
+	return p;
+}
+
 module.exports = {
 	escapeHTML: escapeHTML,
 	makeSafe: escapeHTML,
 	escapeQuotes: escapeQuotes,
-	stripScripts: stripScripts
+	stripScripts: stripScripts,
+	renderResponse: renderResponse,
+	fetch: fetch,
+	fetchMeta: function(url) { return fetch(url, true); }
 };
-},{}],12:[function(require,module,exports){
+},{"./globals":9}],12:[function(require,module,exports){
 
 
 //

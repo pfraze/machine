@@ -25,7 +25,8 @@ function run(req, res) {
 	n$('').html([
 		'<style>',
 			'#mediastream { display: flex; flex-wrap: wrap; }',
-			'#mediastream > div { margin-right: 5px }',
+			'#mediastream > div { margin: 5px }',
+			'.isiframe, .isiframe iframe { width: 100% }',
 		'</style>',
 		'<div id="mediastream"></div>'
 	].join(''));
@@ -36,14 +37,26 @@ function run(req, res) {
 			if (link.type && link.type.indexOf('image/') === 0) {
 				n$('#mediastream').prepend('<div class="media-'+entry.id+'"><img src="'+uri+'"/></div>');
 			}
-			/*local.GET(uri).then(function(res) {
-				if (res.body) {
-					if (typeof res.body == 'object') {
-						res.body = JSON.stringify(res.body);
+			else {
+				util.fetch(uri).then(function(res) {
+					if (res.body) {
+						if (typeof res.body == 'object') {
+							res.body = JSON.stringify(res.body);
+						}
+						// Create iframe
+						var iframeHtml = '<iframe seamless="seamless" sandbox="allow-popups" height="350"><html><body></body></html></iframe>';
+						n$('#mediastream').prepend('<div class="media-'+entry.id+' isiframe">'+iframeHtml+'</div>');
+						// Populate
+						var urld = local.parseUri(uri);
+						var html = [
+							'<meta http-equiv="Content-Security-Policy" content="default-src *; style-src * \'unsafe-inline\'; script-src \'self\'; object-src \'none\'; frame-src \'none\';" />',
+							'<base href="'+urld.protocol+'://'+urld.authority+urld.directory+'">',
+							res.body
+						].join('');
+						n$('.media-'+entry.id+' iframe').attr('srcdoc', html);
 					}
-					n$('#mediastream').append('<div class="media-'+entry.id+'">'+res.body+'</div>');
-				}
-			});*/
+				});
+			}
 		});
 	};
 	var onLinkRemoved = function(entry) {

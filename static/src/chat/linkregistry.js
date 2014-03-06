@@ -2,6 +2,7 @@
  * Link registry
  */
 var globals = require('../globals');
+var util = require('../util');
 var mimetypes = require('../mimetypes');
 
 module.exports = {};
@@ -20,7 +21,7 @@ module.exports.loadUri = function(uri, autoEnable) {
 	linkRegistry.push(entry);
 
 	// Fetch the URI
-	lookup(uri).always(function(res) {
+	util.fetchMeta(uri).always(function(res) {
 		// Index the received self links
 		var selfLinks = local.queryLinks(res, { rel: 'self' });
 		if (!selfLinks.length) {
@@ -55,66 +56,6 @@ module.exports.loadUri = function(uri, autoEnable) {
 
 	return entry;
 };
-
-
-
-function lookup(url) {
-	var p = local.promise();
-	var urld = local.parseUri(url);
-	if (!urld || !urld.authority) {
-		p.fulfill(false); // bad url, dont even try it!
-		return p;
-	}
-
-	var triedProxy = false;
-	var attempts = [new local.Request({ method: 'HEAD', url: url })]; // first attempt, as given
-	if (!urld.protocol) {
-		// No protocol? Two more attempts - 1 with https, then one with plain http
-		attempts.push(new local.Request({ method: 'HEAD', url: 'https://'+urld.authority+urld.relative }));
-		attempts.push(new local.Request({ method: 'HEAD', url: 'http://'+urld.authority+urld.relative }));
-	}
-
-	var lookupReq;
-	function makeAttempt() {
-		if (lookupReq) lookupReq.close();
-		lookupReq = attempts.shift();
-		local.dispatch(lookupReq).always(function(res) {
-			if (res.status >= 200 && res.status < 300) {
-				p.fulfill(res); // Done!
-			} else if (res.status == 0 && !triedProxy) {
-				// CORS issue, try the proxy
-				triedProxy = true;
-				globals.fetchProxyUA.resolve({ nohead: true }).always(function(proxyUrl) {
-					if (!urld.protocol) {
-						attempts = [
-							new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }),
-							new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } }),
-							new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }),
-							new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } })
-						];
-					} else {
-						attempts = [
-							new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: url } }),
-							new local.Request({ method: 'GET', url: proxyUrl, query: { url: url } })
-						];
-					}
-					makeAttempt();
-				});
-			} else {
-				// No dice, any attempts left?
-				if (attempts.length) {
-					makeAttempt(); // try the next one
-				} else {
-					p.fulfill(res); // no dice
-				}
-			}
-		});
-		lookupReq.end();
-	}
-	makeAttempt();
-
-	return p;
-}
 
 module.exports.enableEntry = function(id) {
 	if (linkRegistry[id] && !linkRegistry[id].active) {
