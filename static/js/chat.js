@@ -411,21 +411,33 @@ function run(req, res) {
 		local.queryLinks(entry.links, { rel: 'todo.com/rel/media' }).forEach(function(link) {
 			var uri = local.UriTemplate.parse(link.href).expand({});
 			if (link.type && link.type.indexOf('image/') === 0) {
-				n$('#mediastream').prepend('<div class="media-'+entry.id+'"><img src="'+uri+'"/></div>');
-			}
-			else {
+				n$('#mediastream').prepend('<div class="media-'+entry.id+'"><img src="'+util.escapeHTML(uri)+'"></div>');
+			} else if (link.type && link.type.indexOf('video/') === 0) {
+				n$('#mediastream').prepend('<div class="media-'+entry.id+'"><video src="'+util.escapeHTML(uri)+'" controls>Your browser does not support the <code>video</code> element.</video></div>');
+			} else if (link.type && link.type.indexOf('audio/') === 0) {
+				n$('#mediastream').prepend('<div class="media-'+entry.id+'"><audio src="'+util.escapeHTML(uri)+'" controls>Your browser does not support the <code>audio</code> element.</audio></div>');
+			} else if (link.type && link.type.indexOf('text/') === 0 || link.type == 'application/javascript' || link.type == 'application/json' || link.type.indexOf('xml') !== -1) {
+				util.fetch(uri).then(function(res) {
+					if (res.body) {
+						if (typeof res.body == 'object') {
+							res.body = JSON.stringify(res.body);
+						}
+						n$('#mediastream').prepend('<div class="media-'+entry.id+'"><pre>'+util.escapeHTML(res.body)+'</pre></div>');
+					}
+				});
+			} else {
 				util.fetch(uri).then(function(res) {
 					if (res.body) {
 						if (typeof res.body == 'object') {
 							res.body = JSON.stringify(res.body);
 						}
 						// Create iframe
-						var iframeHtml = '<iframe seamless="seamless" sandbox="allow-popups" height="350"><html><body></body></html></iframe>';
+						var iframeHtml = '<iframe seamless="seamless" sandbox="allow-popups allow-scripts" height="350"><html><body></body></html></iframe>';
 						n$('#mediastream').prepend('<div class="media-'+entry.id+' isiframe">'+iframeHtml+'</div>');
 						// Populate
 						var urld = local.parseUri(uri);
 						var html = [
-							'<meta http-equiv="Content-Security-Policy" content="default-src *; style-src * \'unsafe-inline\'; script-src \'self\'; object-src \'none\'; frame-src \'none\';" />',
+							'<meta http-equiv="Content-Security-Policy" content="default-src *; style-src * \'unsafe-inline\'; script-src \'none\'; object-src \'none\'; frame-src \'none\';" />',
 							'<base href="'+urld.protocol+'://'+urld.authority+urld.directory+'">',
 							res.body
 						].join('');
@@ -1428,6 +1440,7 @@ module.exports = {
 	MimeType.set(".avi", "video/x-msvideo");
 	MimeType.set(".movie", "video/x-sgi-movie");
 	MimeType.set(".ice", "x-conference/x-cooltalk");
+	MimeType.set(".webm", "video/webm");
 
 	// Not really sure about these...
 	MimeType.set(".epub", "application/epub+zip");
