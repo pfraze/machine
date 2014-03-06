@@ -53,7 +53,7 @@ server.setup = function() {
 	// Link registry events
 	linkRegistry.on('add', onLinksAdded);
 	linkRegistry.on('remove', onLinksRemoved);
-	$(window).resize(onWindowResize);
+	// $(window).resize(onWindowResize);
 };
 
 server.route('/:app', function(link, method) {
@@ -118,7 +118,7 @@ function setCurrentApp(id) {
 					// Create iframe
 					app.$iframe = pagent.createIframe($('#apps'), urld.protocol + '://' + urld.authority);
 					pagent.renderIframe(app.$iframe, '');
-					app.$iframe.height(calcIframeHeight());
+					app.$iframe.height('5000px');//calcIframeHeight());
 
 					// Add nquery region
 					app.n$path = pagent.n$Service.addRegion(null, { token: 1234 }); // :TODO: token!!
