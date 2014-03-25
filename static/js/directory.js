@@ -253,6 +253,8 @@ function renderResponse(req, res) {
 	return res.status + ' ' + res.reason;
 }
 
+var lookupReq;
+var lookupAttempts;
 function fetch(url, useHead) {
 	var method = (useHead) ? 'HEAD' : 'GET';
 	var p = local.promise();
@@ -263,64 +265,61 @@ function fetch(url, useHead) {
 	}
 
 	var triedProxy = false;
-	var attempts = [new local.Request({ method: method, url: url })]; // first attempt, as given
+	var attempts = lookupAttempts = [new local.Request({ method: method, url: url })]; // first attempt, as given
 	if (!urld.protocol) {
 		// No protocol? Two more attempts - 1 with https, then one with plain http
 		attempts.push(new local.Request({ method: method, url: 'https://'+urld.authority+urld.relative }));
 		attempts.push(new local.Request({ method: method, url: 'http://'+urld.authority+urld.relative }));
 	}
 
-	var lookupReq;
 	function makeAttempt() {
 		if (lookupReq) lookupReq.close();
+		if (lookupAttempts != attempts) { // have we started a new set of attempts?
+			console.log('Aborting lookup attempts');
+			return;
+		}
 		lookupReq = attempts.shift();
-		local.dispatch(lookupReq).always(function(res) {
-			if (res.status >= 200 && res.status < 300) {
-				p.fulfill(res); // Done!
-			} else if (!attempts.length && res.status == 0 && !triedProxy) {
-				// May be a CORS issue, try the proxy
-				triedProxy = true;
-				globals.fetchProxyUA.resolve({ nohead: true }).always(function(proxyUrl) {
-					if (!urld.protocol) {
-						if (useHead) {
-							attempts = [
-								new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }),
-								new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } }),
-								new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }),
-								new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } })
-							];
-						} else {
-							attempts = [
-								new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }),
-								new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } })
-							];
-						}
-					} else {
-						if (useHead) {
-							attempts = [
-								new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: url } }),
-								new local.Request({ method: 'GET', url: proxyUrl, query: { url: url } })
-							];
-						} else {
-							attempts = [
-								new local.Request({ method: 'GET', url: proxyUrl, query: { url: url } })
-							];
-						}
-					}
-					makeAttempt();
-				});
-			} else {
-				// No dice, any attempts left?
-				if (attempts.length) {
-					makeAttempt(); // try the next one
-				} else {
-					p.fulfill(res); // no dice
-				}
-			}
-		});
+		local.dispatch(lookupReq).always(handleAttempt);
 		lookupReq.end();
 	}
 	makeAttempt();
+
+	function handleAttempt(res) {
+		if (res.status >= 200 && res.status < 300) {
+			p.fulfill(res); // Done!
+		} else if (!attempts.length && res.status === 0 && !triedProxy) {
+			// May be a CORS issue, try the proxy
+			triedProxy = true;
+			globals.fetchProxyUA.resolve({ nohead: true }).always(function(proxyUrl) {
+				if (!urld.protocol) {
+					if (useHead) {
+						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }));
+						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } }));
+					} else {
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } }));
+					}
+				} else {
+					if (useHead) {
+						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: url } }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: url } }));
+					} else {
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: url } }));
+					}
+				}
+				makeAttempt();
+			});
+		} else {
+			// No dice, any attempts left?
+			if (attempts.length) {
+				makeAttempt(); // try the next one
+			} else {
+				p.fulfill(res); // no dice
+			}
+		}
+	}
 
 	return p;
 }
@@ -338,85 +337,94 @@ module.exports = {
 var globals = require('../globals');
 var util    = require('../util');
 
-module.exports = {
-	setup: function() {
-		var changeTimeoutId;
-		var curLink;
+var changeTimeoutId;
+var curLink;
 
-		// Input change handler
-		$('.addlink-panel input[type=url]').on('keyup', function() {
-			// "Debounce"
-			if (changeTimeoutId) clearTimeout(changeTimeoutId);
+function reset() {
+	var $form = $('.addlink-panel form');
+	$form[0].reset();
+	// $form.find('button').attr('disabled', 'disabled').removeClass('btn-primary').text('Post');
+	$form.find('.fetch-result').addClass('hidden').text('');
+}
 
-			var url = $(this).val();
-			if (url) {
-				var $form = $(this).parents('form');
-				// Give a sec for the user to stop editing
-				changeTimeoutId = setTimeout(fetchLinkCB(url, $form), 500);
+function onURLInputChange() {
+	// "Debounce"
+	if (changeTimeoutId) clearTimeout(changeTimeoutId);
+
+	var url = $(this).val();
+	if (url) {
+		var $form = $(this).parents('form');
+		// Give a sec for the user to stop editing
+		changeTimeoutId = setTimeout(fetchLinkCB(url, $form), 500);
+	} else {
+		reset();
+	}
+}
+
+/*function onPostLink(e) {
+	e.preventDefault();
+	if (!curLink) return;
+
+	// Add to dir's links
+	globals.pageUA.POST(null, { query: curLink }).always(function(res) {
+		if (res.status == 201) {
+			window.location.reload();
+		} else if (res.status == 403) {
+			alert('Sorry! You must own the directory to add links to it.');
+		} else {
+			alert('Unexpected error: '+res.status+' '+res.reason);
+		}
+	});
+
+	// Clear form
+	reset();
+}*/
+
+function fetchLinkCB(url, $form) {
+	return function() {
+		curLink = null; // reset current link
+		changeTimeoutId = null;
+
+		// Tell user we're checking it out
+		// $form.find('button').attr('disabled', 'disabled').removeClass('btn-primary').text('Fetching...');
+		$form.find('.fetch-result').removeClass('hidden').text('Fetching...');
+
+		// Fetch URL
+		util.fetchMeta(url).always(function(res) {
+			// Try to get the self link
+			curLink = local.queryLinks(res, { rel: 'self' })[0];
+			if (!curLink) {
+				// Create a meta-less stand-in if the URL is good
+				if (res.status >= 200 && res.status < 300) {
+					curLink = { href: url };
+				}
+				// :TODO: follow redirects
+			}
+
+			if (curLink) {
+				// Success, build description
+				var desc = '';
+				if (curLink.title || curLink.id) { desc += '"'+(curLink.title || curLink.id)+'"'; }
+				if (curLink.rel) { desc = '{'+curLink.rel.replace(/(^|\b)self(\b|$)/g, '').trim()+'} '; }
+				if (!desc) desc = 'but no metadata provided';
+
+				// Update UI
+				// $form.find('button').attr('disabled', false).addClass('btn-primary').text('Post');
+				$form.find('.fetch-result').removeClass('hidden').text('URL Found: ' + desc);
+			} else {
+				// Failure
+				// $form.find('button').attr('disabled', 'disabled').text('Failure');
+				$form.find('.fetch-result').removeClass('hidden').text(res.status + ' ' + res.reason);
 			}
 		});
+	};
+}
 
-		// Link post click handler
-		$('.addlink-panel form').on('submit', function(e) {
-			e.preventDefault();
-			if (!curLink) return;
-
-			// Add to dir's links
-			globals.pageUA.POST(curLink).always(function(res) {
-				if (res.status == 201) {
-					window.location.reload();
-				} else if (res.status == 403) {
-					alert('Sorry! You must own the directory to add links to it.');
-				} else {
-					alert('Unexpected error: '+res.status+' '+res.reason);
-				}
-			});
-
-			// Clear form
-			this.reset();
-			$(this).find('button').attr('disabled', 'disabled').removeClass('btn-primary').text('Post');
-			$(this).find('.fetch-result').text('');
-		});
-
-		function fetchLinkCB(url, $form) {
-			return function() {
-				curLink = null; // reset current link
-				changeTimeoutId = null;
-
-				// Tell user we're checking it out
-				$form.find('button').attr('disabled', 'disabled').removeClass('btn-primary').text('Fetching...');
-				$form.find('.fetch-result').text('');
-
-				// Fetch URL
-				util.fetchMeta(url).always(function(res) {
-					// Try to get the self link
-					curLink = local.queryLinks(res, { rel: 'self' })[0];
-					if (!curLink) {
-						// Create a meta-less stand-in if the URL is good
-						if (res.status >= 200 && res.status < 300) {
-							curLink = { href: url };
-						}
-						// :TODO: follow redirects
-					}
-
-					if (curLink) {
-						// Success, build description
-						var desc = '';
-						if (curLink.title || curLink.id) { desc += '"'+(curLink.title || curLink.id)+'"'; }
-						if (curLink.rel) { desc = '{'+curLink.rel.replace(/(^|\b)self(\b|$)/g, '').trim()+'} '; }
-						if (!desc) desc = 'no metadata provided';
-
-						// Update UI
-						$form.find('button').attr('disabled', false).addClass('btn-primary').text('Post');
-						$form.find('.fetch-result').text('URL Found: ' + desc);
-					} else {
-						// Failure
-						$form.find('button').attr('disabled', 'disabled').text('Failure');
-						$form.find('.fetch-result').text(res.status + ' ' + res.reason);
-					}
-				});
-			};
-		}
+module.exports = {
+	setup: function() {
+		// Register event handlers
+		$('.addlink-panel input[type=url]').on('keyup', onURLInputChange);
+		// $('.addlink-panel form').on('submit', onPostLink);
 	}
 };
 },{"../globals":3,"../util":5}],7:[function(require,module,exports){
