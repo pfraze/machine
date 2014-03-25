@@ -9,12 +9,15 @@
 		"winston": "0.7.x",
 		"optimist": "0.6.x",
 		"nodemailer": "0.5.x",
-		"pg": "2.11.x",
 		"toobusy": "0.2.x",
 		"connect-ratelimit": "0.0.6",
 		"measured": "0.1.x",
 		"browserid-verify": "0.1.2",
-		"request": "2.34.x"
+		"request": "2.34.x",
+		"level": "0.18.0",
+		"level-sublevel": "5.2.0",
+		"level-search": "1.6.1",
+		"mocha": "1.18.2"
 	},
 	"devDependencies": {
 	},

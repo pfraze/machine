@@ -1,13 +1,14 @@
-var http = require('http');
-var https = require('https');
+var http    = require('http');
+var https   = require('https');
 var express = require('express');
 var winston = require('winston');
 var toobusy = require('toobusy');
 var limiter = require('connect-ratelimit');
-var fs = require('fs');
+var fs      = require('fs');
 
+var db         = require('./lib/db');
 var middleware = require('./lib/middleware.js');
-var html = require('./lib/html.js');
+var html       = require('./lib/html.js');
 
 // Config
 // ======
@@ -20,7 +21,8 @@ var configDefaults = {
 	ssl: false,
 	is_upstream: false,
 	downstream_port: false,
-	pgconnection: false
+	dbpath: false,
+	debug_auth: false
 };
 var configCLI = {
 	hostname: argv.h || argv.hostname,
@@ -28,7 +30,8 @@ var configCLI = {
 	ssl: argv.ssl,
 	is_upstream: (typeof (argv.u || argv.is_upstream) != 'undefined') ? !!(argv.u || argv.is_upstream) : undefined,
 	downstream_port: argv.u || argv.is_upstream,
-	pgconnection: argv.pg
+	dbpath: argv.dbpath,
+	debug_auth: argv.debug_auth
 };
 function refreshConfig() {
 	// Read config.json
@@ -61,6 +64,7 @@ html.load(config);
 // ===============
 var server = express();
 winston.add(winston.transports.File, { filename: 'server.log', handleExceptions: false });
+db.setup(config.dbpath);
 
 // Common Handlers
 // ===============
@@ -78,6 +82,12 @@ server.use(express.bodyParser());
 server.use(express.cookieParser());
 server.use(express.compress());
 server.use(express.session({ secret: "mozillapersona" }));
+if (config.debug_auth) {
+	server.all('*', function(req, res, next) {
+		req.session.email = config.debug_auth;
+		next();
+	});
+}
 if (config.ssl) {
 	server.use(function(req, res, next) {
 		res.setHeader('Strict-Transport-Security', 'max-age=8640000; includeSubDomains');
@@ -86,7 +96,6 @@ if (config.ssl) {
 }
 server.all('*', middleware.setCorsHeaders);
 server.all('*', middleware.setCspHeaders);
-server.all('*', middleware.getDbClient);
 server.options('*', function(req, res) {
 	res.writeHead(204);
 	res.end();
@@ -122,9 +131,8 @@ require('./routes/home')(server);
 require('./routes/auth')(server);
 require('./routes/me')(server);
 require('./routes/fetchProxy')(server);
-require('./routes/rooms')(server);
-// require('./routes/directories')(server);
-// require('./routes/links')(server);
+require('./routes/directories')(server);
+require('./routes/documents')(server);
 // Static content
 server.use('/js', express.static(__dirname + '/static/js', { maxAge: 1000*60*60*24 }));
 server.use('/css', express.static(__dirname + '/static/css', { maxAge: 1000*60*60*24 }));

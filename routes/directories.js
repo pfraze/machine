@@ -1,17 +1,17 @@
 var express = require('express');
 var winston = require('winston');
-var config = require('../lib/config');
-var util = require('../lib/util');
-var tmpl = require('../lib/html');
+var config  = require('../lib/config');
+var db      = require('../lib/db');
+var util    = require('../lib/util');
+var tmpl    = require('../lib/html');
 
 module.exports = function(server) {
-	server.post('/',        checkSession, createDir);
+	server.post('/',        requireSession, createDir);
 	server.head('/:dir',    loadDirFromDB, linkDir, function(req, res) { res.send(204); });
 	server.get('/:dir',     loadDirFromDB, linkDir, getDir);
-	server.get('/:dir/app', getDirAutoapp);
-	server.delete('/:dir',  checkSession, deleteDir);
+	server.delete('/:dir',  requireSession, deleteDir);
 
-	function checkSession(req, res, next) {
+	function requireSession(req, res, next) {
 		if (!req.session.email) {
 			return res.send(401);
 		}
@@ -19,30 +19,38 @@ module.exports = function(server) {
 	}
 
 	function loadDirFromDB(req, res, next) {
-		var q = 'SELECT d.name, d.owner, d.created_at, array_agg(l.id) as link_internal_ids, json_agg(l.meta) as links FROM directories d LEFT JOIN links l ON l.dir_id=$1 WHERE d.id=$1 GROUP BY d.id LIMIT 1';
-		var values = [req.param('dir')];
-		req.pg.query(q, values, function(err, dbres) {
+		// Lookup directory data
+		db.getDir(req.param('dir'), function(err, directory) {
 			if (err) {
+				if (err.notFound) { return res.send(404); }
 				console.error(err);
-				winston.error('Failed to load directory from DB', { error: err, inputs: [q, values], request: util.formatReqForLog(req) });
+				winston.error('Failed to load directory from DB', { error: err, inputs: [req.param('dir')], request: util.formatReqForLog(req) });
 				return res.send(500);
 			}
-			res.locals.dir = dbres.rows[0];
-			if (!res.locals.dir)
-				return res.send(404);
-			res.locals.dir.links = res.locals.dir.links.filter(noNulls);
-			next();
+			res.locals.directory = directory;
+
+			// Fetch all metadata
+			// :TODO: add pagination query params
+			res.locals.items = [];
+			var dirMetaDb = db.getDirMetaDB(req.param('dir'));
+			dirMetaDb.createReadStream({ limit: -1 })
+				.on('data', res.locals.items.push.bind(res.locals.items))
+				.on('end', next);
 		});
 	}
 
-	function noNulls(link) { return !!link; }
-
 	function linkDir(req, res, next) {
+		var dirUrl = '/'+req.param('dir');
 		var links = [
 			'</>; rel="up via service"; title="'+config.hostname+'"',
-			'</'+req.param('dir')+'>; rel="self collection"; id="'+req.param('dir')+'"',
-			'</'+req.param('dir')+'/{id}>; rel="item"',
-		].concat(res.locals.dir.links.map(util.serializeLinkObject));
+			'<'+dirUrl+'>; rel="self collection"; id="'+req.param('dir')+'"' // :TODO: more specific reltype
+		];
+		res.locals.items.forEach(function(item) {
+			if (!item.value.href) { // No href? Then this is a document we host
+				item.value.href = dirUrl + '/' + item.key; // Link to the hosted document
+			}
+			links.push(util.serializeLinkObject(item.value));
+		});
 		res.setHeader('Link', links.join(', '));
 		next();
 	}
@@ -51,70 +59,59 @@ module.exports = function(server) {
 		res.format({
 			json: function() {
 				// Send data
-				res.send({
-					id: req.param('dir'),
-					name: res.locals.dir.name,
-					links: res.locals.dir.links
-				});
+				res.send(res.locals.directory);
 			},
 			html: function() {
-				// Render HTML
-				var dir = res.locals.dir;
-				var linksHtml = (dir.links.length > 0) ?
-					(dir.links.map(function(link, i) {
+				// Render link HTML :TEMP:
+				var linksHtml = (res.locals.items.length > 0) ?
+					(res.locals.items.map(function(item) {
 						return tmpl.render('directory_link_list_partial', {
-							internal_id: dir.link_internal_ids[i],
-							href: link.href,
-							rel: link.rel,
-							title: link.title || link.id || link.href
+							internal_id: item.key, // for items hosted elsewhere
+							href: item.value.href,
+							rel: item.value.rel,
+							title: item.value.title || item.value.id || item.value.href
 						});
 					}).join('<hr>'))
 					: '<p class="text-muted">Directory is empty.</p>';
+
+				// Render page HTML
+				var dir = res.locals.directory;
 				var page = tmpl.render('directory', {
-					user: req.session.email||'',
+					user:          req.session.email||'',
 					user_is_admin: dir.owner && (req.session.email == dir.owner),
-					dirname: dir.name,
-					dirage: util.timeago(dir.created_at),
-					links_html: linksHtml
+					dirname:       dir.id,
+					dirage:        util.timeago(dir.created_at),
+					links_html:    linksHtml
 				});
 				res.send(page);
 			}
 		});
 	}
 
-	function getDirAutoapp(req, res, next) {
-		// :TODO:
-		res.send(501);
-	}
-
 	function createDir(req, res, next) {
 		// Validate
 		if (!req.body) {
-			return res.send(422, 'Body required.');
+			return res.send(422, { error: 'Body required.' });
 		}
 		var errors = {};
-		if (!req.body.name) { errors.name = 'Required.'; }
+		if (!req.body.id) { errors.id = 'Required.'; }
 		else {
-			if (req.body.name.length <= 2) { errors.name = 'Must be more than 2 characters long.'; }
-			else if (req.body.name.charAt(0) == '.') { errors.name = 'Can not start with a period.'; }
-			req.body.name = util.makeSafe(req.body.name, { noQuotes: true });
+			if (req.body.id.length <= 2) { errors.id = 'Must be more than 2 characters long.'; }
+			else if (/[^A-z0-9-_]/.test(req.body.id)) { errors.id = 'Can only include characters, numbers, - and _.'; }
 		}
 		if (Object.keys(errors).length !== 0) {
-			res.send(422, errors);
+			return res.send(422, errors);
 		}
+		var id = req.body.id.toLowerCase();
+		if (db.isDirectoryIDTaken(id)) { return res.send(409); } // conflict
 
 		// Create
-		var id = util.dirify(req.body.name);
-		var q = 'INSERT INTO directories (id, name, owner) SELECT $1, $2, $3';
-		var values = [id, req.body.name, req.session.email];
-		req.pg.query(q, values, function(err, dbres) {
+		id = db.allocateDirID(id);
+		var value = { id: id, owner: req.session.email, created_at: Date.now() };
+		db.getMainDB().put(id, value, function(err) {
 			if (err) {
-				if (err.code == '23505') {
-					// ID already in use
-					return res.send(409);
-				}
 				console.error(err);
-				winston.error('Failed to create directory in DB', { error: err, inputs: [q, values], request: util.formatReqForLog(req) });
+				winston.error('Failed to create directory in DB', { error: err, inputs: [id, value], request: util.formatReqForLog(req) });
 				return res.send(500);
 			}
 			res.setHeader('location', config.url + '/' + id);
@@ -123,15 +120,31 @@ module.exports = function(server) {
 	}
 
 	function deleteDir(req, res, next) {
-		var q = 'DELETE FROM directories WHERE id=$1 AND owner=$2';
-		var values = [req.param('dir'), req.session.email];
-		req.pg.query(q, values, function(err, dbres) {
+		// Fetch directory
+		db.getMainDB().get(req.param('dir'), function(err, directory) {
 			if (err) {
+				if (err.notFound) { return res.send(404); }
 				console.error(err);
-				winston.error('Failed to delete directory from DB', { error: err, inputs: [q, values], request: util.formatReqForLog(req) });
+				winston.error('Failed to load directory from DB', { error: err, inputs: [req.param('dir')], request: util.formatReqForLog(req) });
 				return res.send(500);
 			}
-			res.send(204);
+
+			// Check ownership
+			if (directory.owner != req.session.email) {
+				return res.send(403);
+			}
+
+			// Delete
+			db.getMainDB().del(req.param('dir'), function(err) {
+				if (err) {
+					console.error(err);
+					winston.error('Failed to delete directory from DB', { error: err, inputs: [req.param('dir')], request: util.formatReqForLog(req) });
+					return res.send(500);
+				}
+				// Release directory ID
+				db.deallocateDirID(req.param('dir'));
+				res.send(204);
+			});
 		});
 	}
 };

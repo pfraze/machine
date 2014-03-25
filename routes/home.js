@@ -1,13 +1,14 @@
 var express = require('express');
 var winston = require('winston');
-var config = require('../lib/config');
-var util = require('../lib/util');
-var tmpl = require('../lib/html');
+var config  = require('../lib/config');
+var util    = require('../lib/util');
+var tmpl    = require('../lib/html');
+var db      = require('../lib/db');
 
 module.exports = function(server) {
 	server.all('/', linkHome);
 	server.head('/', function(req, res) { res.send(204); });
-	server.get('/', loadLatestDirsFromDB, getHome);
+	server.get('/', getHome);
 
 	function linkHome(req, res, next) {
 		res.setHeader('Link', [
@@ -21,26 +22,13 @@ module.exports = function(server) {
 		next();
 	}
 
-	function loadLatestDirsFromDB(req, res, next) {
-		var q = 'SELECT d.id, d.name FROM directories d ORDER BY id DESC LIMIT 10';
-		req.pg.query(q, function(err, dbres) {
-			if (err) {
-				console.error(err);
-				winston.error('Failed to load latest directories from DB', { error: err, inputs: [q], request: util.formatReqForLog(req) });
-				return res.send(500);
-			}
-			res.locals.dirs = dbres.rows;
-			next();
-		});
-	}
-
 	function getHome(req, res) {
 		var page = tmpl.render('index', {
 			user: req.session.email||'',
-			dirs_html: res.locals.dirs.map(function(dir) {
+			dirs_html: db.getDirList().map(function(dirId) {
 				return tmpl.render('directory_list_partial', {
-					url: '/'+dir.id,
-					title: dir.name,
+					url: '/'+dirId,
+					title: dirId,
 					rel: 'collection'
 				});
 			}).join('<hr>')

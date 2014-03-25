@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+var argv = require('optimist').argv;
 var fs = require('fs');
 var pid;
 try {
@@ -9,7 +10,7 @@ try {
 
 switch (process.argv[2]) {
 	case 'start':
-		if (pid) {
+		if (!argv.nopidfile && pid) {
 			if (isAlive(pid)) {
 				console.log('Machine is already running (pid '+pid+')');
 				return;
@@ -48,14 +49,50 @@ switch (process.argv[2]) {
 		require('child_process').spawn('npm', ['install', '-d'], { stdio: 'inherit' });
 		break;
 
+	case 'test':
+		var port = argv.p || argv.port || 9000; // tests are hard-coded to this, so probably not useful to change
+		var dbpath = argv.dbpath || './testdb';
+
+		// Clear test db
+		console.log('Running rm on', dbpath, 'enter "y" to clear data');
+		var rmProc = require('child_process').spawn('rm', ['-I', '-R', dbpath], { stdio: 'inherit' });
+		rmProc.on('close', function() {
+			// Start test server
+			var serverProc = require('child_process').spawn('./machine', [
+				'start',
+				'-h', 'localhost',
+				'-p', port,
+				'--dbpath', dbpath,
+				'--nopidfile',
+				'--debug_auth', 'test@test.com'
+			]);
+			serverProc.stderr.on('data', function(data) { console.error(data.toString().slice(0,-1)); });
+			serverProc.stdout.on('data', function(data) {
+				// Very hacky - watch for db initialization to decide it's ready for testing
+				if (data.toString() == 'DB Initialized\n') {
+					console.log('Test server ready');
+					// Run tests
+					var mochaProc = require('child_process').spawn('mocha', ['./tests'], { stdio: 'inherit' });
+					mochaProc.on('close', function() {
+						console.log('Killing test server');
+						serverProc.kill('SIGINT');
+					});
+				}
+			});
+		});
+		break;
+
 	default:
 		console.log('Unknown command, "'+process.argv[2]+'"');
-		console.log('  Usage: machine [start|stop|reload|setup]');
+		console.log('  Usage: machine [start|stop|reload|setup|test]');
 		console.log('  Flags:');
 		console.log('   -p/--port [port] (default 8000)');
 		console.log('   -h/--hostname [hostname] (defaults to system value)');
 		console.log('   -u/--is_upstream [port] (default off, should specify the downstream port in use)');
 		console.log('   --ssl (default off)');
+		console.log('   --dbpath (default ./db, path to where leveldb data is stored)');
+		console.log('   --nopidfile (default off, disables pidfile tracking)');
+		console.log('   --debug_auth [email_address] (default off, auths every request as if it came from the given email address)');
 		break;
 }
 

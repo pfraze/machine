@@ -9,15 +9,15 @@ if (_session.user) {
 
 	// Create new directory btn
 	$('.user-directories-panel .btn').on('click', function(req, res) {
-		var name = prompt('Enter the name of your new directory');
-		if (!name) return false;
-		$host.POST({ name: name })
+		var id = prompt('Enter the name of your new directory');
+		if (!id) return false;
+		$host.POST({ id: id })
 			.then(function(res) {
 				window.location = res.headers.location;
 			})
 			.fail(function(res) {
-				if (res.status == 422 && res.body && res.body.name) {
-					alert('Surry, '+res.body.name);
+				if (res.status == 422 && res.body && res.body.id) {
+					alert('Sorry, '+res.body.id);
 				} else if (res.status == 409) {
 					alert('Sorry, that name is taken.');
 				} else {

@@ -16,7 +16,11 @@ module.exports = function(server) {
 	}
 
 	function loadMedataFromDB(req, res, next) {
-		var q = 'SELECT d.id, d.name FROM directories d WHERE d.owner=$1';
+		// :TODO: not sure we'll need this entire .me route ~pfrazee
+		res.locals.dirs = [];
+		next();
+
+		/*var q = 'SELECT d.id, d.name FROM directories d WHERE d.owner=$1';
 		var values = [req.session.email];
 		req.pg.query(q, values, function(err, dbres) {
 			if (err) {
@@ -26,7 +30,7 @@ module.exports = function(server) {
 			}
 			res.locals.dirs = dbres.rows;
 			next();
-		});
+		});*/
 	}
 
 	function linkMe(req, res, next) {
