@@ -64,8 +64,8 @@ function fetch(url, useHead) {
 		local.dispatch(lookupReq).always(function(res) {
 			if (res.status >= 200 && res.status < 300) {
 				p.fulfill(res); // Done!
-			} else if (res.status == 0 && !triedProxy) {
-				// CORS issue, try the proxy
+			} else if (!attempts.length && res.status == 0 && !triedProxy) {
+				// May be a CORS issue, try the proxy
 				triedProxy = true;
 				globals.fetchProxyUA.resolve({ nohead: true }).always(function(proxyUrl) {
 					if (!urld.protocol) {

@@ -16,7 +16,7 @@ Here's how I went with it. `./lib/db.js` gives a good overview.
 
 #### About the frontend
 
-Frontend JS is a half-way between a transition to browserify, and includes some of the old chat code. Let me know if you don't like browserify. Otherwise, going to pull out the chat code, unify everything under browserify, add a script to simplify the browserify build (maybe `./machine build`) and implement the feed rendering.
+Frontend JS is compiled with browserify. Run `./machine build` to rebuild. Also, all templates are in `./static` as .html files, and they are loaded into memory at server load. If you make changes to them, you either restart the server, or run `./machine reload` to trigger a config and template reload. (Not ideal, I know. Maybe we can add a dev-flag to always load templates from disk each request.)
 
 #### v1 Checklist
 
