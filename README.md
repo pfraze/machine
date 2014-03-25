@@ -1,6 +1,8 @@
 ## Machine
 
-Run `./machine setup` to prep, then `./machine start`. Could probably have done both of those via npm scripts but hey.
+Run `./machine setup` to prep, `npm start` (or `./machine start`) to run server and `npm test` (or `./machine test`) to run tests.
+
+Config is stored in `./config.json`, which is created after setup and should be modified. Its values can be overriden with `./machine start` params, type `./machine` to see the full list of config/switches.
 
 #### LevelDB structure
 
