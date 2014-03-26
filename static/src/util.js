@@ -43,6 +43,12 @@ function renderResponse(req, res) {
 var lookupReq;
 var lookupAttempts;
 function fetch(url, useHead) {
+	if (url === null) {
+		if (lookupReq) lookupReq.close();
+		lookupAttempts = null;
+		return;
+	}
+
 	var method = (useHead) ? 'HEAD' : 'GET';
 	var p = local.promise();
 	var urld = local.parseUri(url);
@@ -52,11 +58,11 @@ function fetch(url, useHead) {
 	}
 
 	var triedProxy = false;
-	var attempts = lookupAttempts = [new local.Request({ method: method, url: url })]; // first attempt, as given
+	var attempts = lookupAttempts = [new local.Request({ method: method, url: url, binary: true })]; // first attempt, as given
 	if (!urld.protocol) {
 		// No protocol? Two more attempts - 1 with https, then one with plain http
-		attempts.push(new local.Request({ method: method, url: 'https://'+urld.authority+urld.relative }));
-		attempts.push(new local.Request({ method: method, url: 'http://'+urld.authority+urld.relative }));
+		attempts.push(new local.Request({ method: method, url: 'https://'+urld.authority+urld.relative, binary: true }));
+		attempts.push(new local.Request({ method: method, url: 'http://'+urld.authority+urld.relative, binary: true }));
 	}
 
 	function makeAttempt() {
@@ -82,18 +88,18 @@ function fetch(url, useHead) {
 					if (useHead) {
 						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }));
 						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
 					} else {
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
 					}
 				} else {
 					if (useHead) {
 						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: url } }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: url } }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: url }, binary: true }));
 					} else {
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: url } }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: url }, binary: true }));
 					}
 				}
 				makeAttempt();

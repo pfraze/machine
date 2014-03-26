@@ -78,7 +78,8 @@ server.use(function(req, res, next) {
 		next();
 	}
 });
-server.use(express.bodyParser());
+// server.use(express.bodyParser()); using middleware.bodyCollector instead
+server.use(middleware.bodyCollector);
 server.use(express.cookieParser());
 server.use(express.compress());
 server.use(express.session({ secret: "mozillapersona" }));
@@ -120,26 +121,24 @@ server.get('/status', function(req, res) {
 	stats.uptime_days = uptime/(24*60*60*1000);
 	res.json(stats);
 });
-// Tests
-server.get('/test/dirs', express.basicAuth('asdfasdf', 'asdfasdf'), function(req, res) {
-	res.removeHeader('Content-Security-Policy');
-	var page = html.render('test_directories', { user: req.session.email||'' });
-	res.send(page);
-});
-// Other routes
+// Fronted Tests
+// server.get('/test/dirs', express.basicAuth('asdfasdf', 'asdfasdf'), function(req, res) {
+	// res.removeHeader('Content-Security-Policy');
+	// var page = html.render('test_directories', { user: req.session.email||'' });
+	// res.send(page);
+// });
+// Static content
+server.use('/js', express.static(__dirname + '/static/js', { maxAge: 1000*60*60*24 }));
+server.use('/css', express.static(__dirname + '/static/css', { maxAge: 1000*60*60*24 }));
+server.use('/img', express.static(__dirname + '/static/img', { maxAge: 1000*60*60*24 }));
+server.use('/fonts', express.static(__dirname + '/static/fonts', { maxAge: 1000*60*60*24 }));
+// Program routes
 require('./routes/home')(server);
 require('./routes/auth')(server);
 require('./routes/me')(server);
 require('./routes/fetchProxy')(server);
 require('./routes/directories')(server);
 require('./routes/documents')(server);
-// Static content
-server.use('/js', express.static(__dirname + '/static/js', { maxAge: 1000*60*60*24 }));
-server.use('/css', express.static(__dirname + '/static/css', { maxAge: 1000*60*60*24 }));
-server.use('/img', express.static(__dirname + '/static/img', { maxAge: 1000*60*60*24 }));
-server.use('/fonts', express.static(__dirname + '/static/fonts', { maxAge: 1000*60*60*24 }));
-server.use('/test/js', express.static(__dirname + '/static/test/js', { maxAge: 1000*60*60*24 }));
-server.use('/test/doctest', express.static(__dirname + '/static/test/doctest', { maxAge: 1000*60*60*24 }));
 
 // Reload signal
 // =============

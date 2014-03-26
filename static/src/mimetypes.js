@@ -18,8 +18,12 @@
 	} else {
 		path = {
 			extname: function (filename) {
-				if (filename.lastIndexOf(".") > 0) {
-					return filename.substr(filename.lastIndexOf("."));
+				var start = filename.lastIndexOf(".");
+				if (start > 0) {
+					var end = filename.indexOf('?');
+					if (end == -1) end = filename.indexOf('#');
+					if (end == -1) end = undefined;
+					return filename.slice(start, end);
 				}
 			}
 		};

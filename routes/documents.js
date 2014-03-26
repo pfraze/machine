@@ -5,8 +5,34 @@ var express = require('express');
 var winston = require('winston');
 
 module.exports = function(server) {
+	// :TODO: head
+	server.get('/:dir/:doc', getDocument);
 	server.post('/:dir', checkPerms, addDocument);
 	server.delete('/:dir/:doc', checkPerms, deleteDocument);
+
+	function getDocument(req, res, next) {
+		db.getDirMetaDB(req.param('dir')).get(req.param('doc'), function(err, meta) {
+			if (err) {
+				if (err.notFound) { return next(); } // next instead of 404 so that the static handlers can look for files
+				console.error(err);
+				winston.error('Failed to load doc meta from DB', { error: err, inputs: [req.param('dir')], request: util.formatReqForLog(req) });
+				return res.send(500);
+			}
+			res.setHeader('Content-Type', meta.type);
+			// :TODO: link header
+
+			db.getDirDocsDB(req.param('dir')).get(req.param('doc'), { valueEncoding: 'binary' }, function(err, doc) {
+				if (err && !err.notFound) {
+					console.error(err);
+					winston.error('Failed to load doc meta from DB', { error: err, inputs: [req.param('dir')], request: util.formatReqForLog(req) });
+					return res.send(500);
+				}
+
+				if (doc) { res.end(doc); }
+				else { res.end(); }
+			});
+		});
+	}
 
 	function checkPerms(req, res, next) {
 		if (!req.session.email) {
@@ -33,36 +59,40 @@ module.exports = function(server) {
 
 	function addDocument(req, res) {
 		// Vaidate
-		var noBody = (!req.body || Object.keys(req.body).length === 0);
-		if (!req.query.href && noBody) {
+		if (!req.query.href && !req.body) {
 			return res.send(422, { error: 'Document body or ?href required.' });
 		}
-		if (req.query.href && !noBody) {
+		if (req.query.href && req.body) {
 			return res.send(422, { error: 'Can only accept a document body or an ?href.' });
 		}
 
 		// Sanitize
 		var meta = req.query, doc = req.body;
 		var hasItem = false;
-		meta.rel = meta.rel.split(' ')
-			.filter(function(rel) { // filter out non-URI reltypes
-				if (rel == 'item') {
-					hasItem = true;
-					return false; // keep
-				}
-				return rel.indexOf('.') !== -1;
-			})
+		meta.rel = (meta.rel||'').split(' ')
+			.filter(function(rel) { return rel.indexOf('.') !== -1; }) // filter out non-URI reltypes
 			.join(' ');
-		if (!hasItem) {
-			// Give all links an item reltype
-			meta.rel = 'item '+meta.rel;
+
+		// Make all doc links a media type
+		if (doc) {
+			if (!hasMediaReltype(meta.rel)) {
+				meta.rel = 'stdrel.com/media '+meta.rel;
+			}
+			if (!meta.type) {
+				var mimeType = req.headers['content-type'];
+				var semicolonIndex = mimeType.indexOf(';');
+				if (semicolonIndex !== -1) {
+					mimeType = mimeType.slice(0, semicolonIndex); // strip the charset
+				}
+				meta.type = mimeType;
+			}
 		}
 
 		// Create
 		var id = db.allocateSerialID();
 		var ops = [{ type: 'put', key: id, value: meta, prefix: db.getDirMetaDB(req.param('dir')) }];
 		if (doc) {
-			ops.push({ type: 'put', key: id, value: doc, prefix: db.getDirDocsDB(req.param('dir')) });
+			ops.push({ type: 'put', key: id, value: doc, prefix: db.getDirDocsDB(req.param('dir')), valueEncoding: 'binary' });
 		}
 		db.getMainDB().batch(ops, function(err) {
 			if (err) {
@@ -89,5 +119,11 @@ module.exports = function(server) {
 			}
 			res.send(204);
 		});
+	}
+
+	// helpers
+	var mediaReltypeRegex = /(^|\b)stdrel.com\/media(\b|$)/i;
+	function hasMediaReltype(rel) {
+		return mediaReltypeRegex.test(rel);
 	}
 };

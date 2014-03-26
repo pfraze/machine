@@ -18,7 +18,12 @@ module.exports = function(server) {
 	}
 
 	function authVerify(req, res, next) {
+		// Parse
 		if (!req.body) { return res.send(422, { error: 'Body required.' }); }
+		try { req.body = JSON.parse(req.body.toString()); }
+		catch (e) { return res.send(422, { error: 'Malformed JSON: '+e }); }
+
+		// Validate
 		if (!req.body.assertion) { return res.send(422, { errors: { assertion: 'Required.' }}); }
 
 		verify(req.body.assertion, config.url, function(err, email, response) {

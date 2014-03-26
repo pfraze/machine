@@ -44,7 +44,7 @@ module.exports = function(server) {
 		var links = [
 			'</>; rel="up via service"; title="'+config.hostname+'"',
 			'<'+dirUrl+'>; rel="self collection"; id="'+req.param('dir')+'"', // :TODO: more specific reltype
-			'<'+dirUrl+'/{id}>; rel="item"; _internal=1', // used to manage the links internally (:TODO: use a reltype instead of _interla)
+			'<'+dirUrl+'/{id}>; rel="item"; _internal=1', // used to manage the links internally (:TODO: use a reltype instead of _internal)
 		];
 		res.locals.items.forEach(function(item) {
 			if (!item.value.href) { // No href? Then this is a document we host
@@ -90,10 +90,12 @@ module.exports = function(server) {
 	}
 
 	function createDir(req, res, next) {
+		// Parse
+		if (!req.body) { return res.send(422, { error: 'Body required.' }); }
+		try { req.body = JSON.parse(req.body.toString()); }
+		catch (e) { return res.send(422, { error: 'Malformed JSON: '+e }); }
+
 		// Validate
-		if (!req.body) {
-			return res.send(422, { error: 'Body required.' });
-		}
 		var errors = {};
 		if (!req.body.id) { errors.id = 'Required.'; }
 		else {

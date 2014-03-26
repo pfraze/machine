@@ -1,13 +1,19 @@
-var globals = require('../globals');
-var util    = require('../util');
+var globals   = require('../globals');
+var util      = require('../util');
+var mimetypes = require('../mimetypes');
 
 var changeTimeoutId;
-var curLink;
+var curLink, curResponse;
 
 function reset() {
+	// Abort any fetch requests
+	util.fetch(null);
+	curLink = curResponse = null; // reset current link
+
+	// Reset the UI
 	var $form = $('.addlink-panel form');
 	$form[0].reset();
-	// $form.find('button').attr('disabled', 'disabled').removeClass('btn-primary').text('Post');
+	$form.find('#post-btns').attr('disabled', 'disabled').addClass('hidden');
 	$form.find('.fetch-result').addClass('hidden').text('');
 }
 
@@ -25,36 +31,49 @@ function onURLInputChange() {
 	}
 }
 
-/*function onPostLink(e) {
+function onPostDoc(e) {
+	e.preventDefault();
+	if (!curLink) return;
+
+	// Add to dir's docs
+	var link = local.util.deepClone(curLink);
+	delete link.href;
+	globals.pageUA.POST(curResponse.body, { query: link, Content_Type: curLink.type })
+		.always(handlePostResponse);
+}
+
+function onPostLink(e) {
 	e.preventDefault();
 	if (!curLink) return;
 
 	// Add to dir's links
-	globals.pageUA.POST(null, { query: curLink }).always(function(res) {
-		if (res.status == 201) {
-			window.location.reload();
-		} else if (res.status == 403) {
-			alert('Sorry! You must own the directory to add links to it.');
-		} else {
-			alert('Unexpected error: '+res.status+' '+res.reason);
-		}
-	});
+	globals.pageUA.POST(null, { query: curLink })
+		.always(handlePostResponse);
+}
 
-	// Clear form
-	reset();
-}*/
+function handlePostResponse(res) {
+	if (res.status == 201) {
+		window.location.reload();
+	} else if (res.status == 403) {
+		alert('Sorry! You must own the directory to add links to it.');
+	} else {
+		alert('Unexpected error: '+res.status+' '+res.reason);
+	}
+}
 
 function fetchLinkCB(url, $form) {
 	return function() {
-		curLink = null; // reset current link
+		curLink = curResponse = null; // reset current link
 		changeTimeoutId = null;
 
 		// Tell user we're checking it out
-		// $form.find('button').attr('disabled', 'disabled').removeClass('btn-primary').text('Fetching...');
 		$form.find('.fetch-result').removeClass('hidden').text('Fetching...');
 
 		// Fetch URL
-		util.fetchMeta(url).always(function(res) {
+		util.fetch(url).always(function(res) {
+			// :TODO: follow redirects?
+			curResponse = res;
+
 			// Try to get the self link
 			curLink = local.queryLinks(res, { rel: 'self' })[0];
 			if (!curLink) {
@@ -62,22 +81,38 @@ function fetchLinkCB(url, $form) {
 				if (res.status >= 200 && res.status < 300) {
 					curLink = { href: url };
 				}
-				// :TODO: follow redirects
+			}
+
+			// Try to establish the mimetype
+			var mimeType = res.header('Content-Type');
+			if (!mimeType) {
+				mimeType = mimetypes.lookup(url) || 'application/octet-stream';
+			}
+			var semicolonIndex = mimeType.indexOf(';');
+			if (semicolonIndex !== -1) {
+				mimeType = mimeType.slice(0, semicolonIndex); // strip the charset
+			}
+
+			// Do basic re-classification
+			if (!curLink.type) { curLink.type = mimeType; }
+			if (!curLink.rel) { curLink.rel = 'stdrel.com/media'; }
+			else if (!local.queryLink(curLink, { rel: 'stdrel.com/media' })) {
+				curLink.rel += ' stdrel.com/media';
 			}
 
 			if (curLink) {
 				// Success, build description
-				var desc = '';
-				if (curLink.title || curLink.id) { desc += '"'+(curLink.title || curLink.id)+'"'; }
-				if (curLink.rel) { desc = '{'+curLink.rel.replace(/(^|\b)self(\b|$)/g, '').trim()+'} '; }
-				if (!desc) desc = 'but no metadata provided';
+				var desc = local.util.deepClone(curLink);
+				delete desc.href;
+				desc.rel = desc.rel.split(' ').filter(function(v) { return v.indexOf('.') !== -1; }).join(' '); // strip non-extension rels
+				desc = JSON.stringify(desc);
 
 				// Update UI
-				// $form.find('button').attr('disabled', false).addClass('btn-primary').text('Post');
-				$form.find('.fetch-result').removeClass('hidden').text('URL Found: ' + desc);
+				$form.find('#post-btns').attr('disabled', false).removeClass('hidden');
+				$form.find('.fetch-result').removeClass('hidden').text('Meta: ' + desc);
 			} else {
 				// Failure
-				// $form.find('button').attr('disabled', 'disabled').text('Failure');
+				$form.find('#post-btns').attr('disabled', 'disabled').addClass('hidden');
 				$form.find('.fetch-result').removeClass('hidden').text(res.status + ' ' + res.reason);
 			}
 		});
@@ -88,6 +123,7 @@ module.exports = {
 	setup: function() {
 		// Register event handlers
 		$('.addlink-panel input[type=url]').on('keyup', onURLInputChange);
-		// $('.addlink-panel form').on('submit', onPostLink);
+		$('.addlink-panel #post-doc-btn').on('click', onPostDoc);
+		$('.addlink-panel #post-link-btn').on('click', onPostLink);
 	}
 };
