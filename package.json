@@ -17,7 +17,8 @@
 		"level": "0.18.0",
 		"level-sublevel": "5.2.0",
 		"level-search": "1.6.1",
-		"mocha": "1.18.2"
+		"mocha": "1.18.2",
+		"async": "0.2.10"
 	},
 	"devDependencies": {
 	},

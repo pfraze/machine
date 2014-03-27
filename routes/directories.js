@@ -1,5 +1,6 @@
 var express = require('express');
 var winston = require('winston');
+var async   = require('async');
 var config  = require('../lib/config');
 var db      = require('../lib/db');
 var util    = require('../lib/util');
@@ -8,7 +9,7 @@ var tmpl    = require('../lib/html');
 module.exports = function(server) {
 	server.post('/',        requireSession, createDir);
 	server.head('/:dir',    loadDirFromDB, linkDir, function(req, res) { res.send(204); });
-	server.get('/:dir',     loadDirFromDB, linkDir, getDir);
+	server.get('/:dir',     loadDirFromDB, loadJsonDocsFromDB, linkDir, getDir);
 	server.delete('/:dir',  requireSession, deleteDir);
 
 	function requireSession(req, res, next) {
@@ -39,6 +40,25 @@ module.exports = function(server) {
 		});
 	}
 
+	function loadJsonDocsFromDB(req, res, next) {
+		// Find all the json docs
+		var fetches = {};
+		var docDb = db.getDirDocsDB(req.param('dir'));
+		res.locals.items.forEach(function(item, i) {
+			if (item.value.type != 'application/json') { return; }
+			// Queue up a read function
+			fetches[item.key] = docDb.get.bind(docDb, item.key, { valueEncoding: 'binary' });
+		});
+		async.parallel(fetches, function(err, jsonDocs) {
+			if (err) {
+				// :TODO: if any fail, there is an err. Does that mean all abort?
+				console.error('Error loading directory document(s) from DB', err);
+			}
+			res.locals.jsonDocs = jsonDocs || {};
+			next();
+		});
+	}
+
 	function linkDir(req, res, next) {
 		var dirUrl = '/'+req.param('dir');
 		var links = [
@@ -46,12 +66,13 @@ module.exports = function(server) {
 			'<'+dirUrl+'>; rel="self collection"; id="'+req.param('dir')+'"', // :TODO: more specific reltype
 			'<'+dirUrl+'/{id}>; rel="item"; _internal=1', // used to manage the links internally (:TODO: use a reltype instead of _internal)
 		];
-		res.locals.items.forEach(function(item) {
+		// :TODO: put behind a flag
+		/*res.locals.items.forEach(function(item) {
 			if (!item.value.href) { // No href? Then this is a document we host
 				item.value.href = dirUrl + '/' + item.key; // Link to the hosted document
 			}
 			links.push(util.serializeLinkObject(item.value));
-		});
+		});*/
 		res.setHeader('Link', links.join(', '));
 		next();
 	}
@@ -63,17 +84,24 @@ module.exports = function(server) {
 				res.send(res.locals.directory);
 			},
 			html: function() {
-				// Render link HTML :TEMP:
-				var linksHtml = (res.locals.items.length > 0) ?
-					(res.locals.items.map(function(item) {
-						return tmpl.render('directory_link_list_partial', {
-							internal_id: item.key, // for items hosted elsewhere
-							href: item.value.href,
-							rel: item.value.rel,
-							title: item.value.title || item.value.id || item.value.href
-						});
-					}).join('<hr>'))
-					: '<p class="text-muted">Directory is empty.</p>';
+				// Render link and item slot HTMLs
+				var linksHTML = [];
+				var slotsHTML = [];
+				res.locals.items.forEach(function(item, i) {
+					// Render <link> el
+					linksHTML.push(util.renderLinkEl(item.value));
+
+					// Render slot, embedding json doc if present
+					var jsonDoc = res.locals.jsonDocs[item.key];
+					if (jsonDoc) {
+						var json = jsonDoc.toString().replace(/'/g, '&#39;'); // escape single quotes
+						slotsHTML.push('<div id="slot-'+i+'" class="feed-item-slot" data-doc=\''+json+'\'></div>');
+					} else {
+						slotsHTML.push('<div id="slot-'+i+'" class="feed-item-slot"></div>');
+					}
+				});
+				linksHTML = linksHTML.join('');
+				slotsHTML = slotsHTML.join('');
 
 				// Render page HTML
 				var dir = res.locals.directory;
@@ -82,7 +110,8 @@ module.exports = function(server) {
 					user_is_admin: dir.owner && (req.session.email == dir.owner),
 					dirname:       dir.id,
 					dirage:        util.timeago(dir.created_at),
-					links_html:    linksHtml
+					links_html:    linksHTML,
+					slots_html:    slotsHTML
 				});
 				res.send(page);
 			}
