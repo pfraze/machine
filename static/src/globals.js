@@ -1,5 +1,5 @@
 var hostUA = local.agent(window.location.protocol + '//' + window.location.host);
-module.exports = {
+window.globals = module.exports = {
 	session: {
 		user: $('body').data('user') || null,
 		isPageAdmin: $('body').data('user-is-admin') == '1'

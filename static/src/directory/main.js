@@ -3,6 +3,7 @@
 local.logAllExceptions = true;
 require('../pagent').setup();
 require('../auth').setup();
+var util = require('../util');
 
 // ui
 require('../widgets/user-directories-panel').setup();
@@ -13,18 +14,42 @@ require('../widgets/directory-delete-btn').setup();
 // Active renderers
 var rendererQueries = {
 	// :TODO: load from persistant storage
+	'httpl://thing-renderer': { rel: 'schema.org/Thing' },
 	'httpl://default-renderer': { rel: 'stdrel.com/media' }
 };
+
+// Thing renderer
+local.addServer('thing-renderer', function(req, res) {
+	req.on('end', function() {
+		res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
+		var desc = [];
+		if (req.body.description) { desc.push(util.escapeHTML(req.body.description)); }
+		if (req.body.url) { desc.push('<a href="'+util.escapeHTML(req.body.url)+'">Link</a>'); }
+		var html = [
+			'<div class="media">',
+				((req.body.image) ? '<a target="_top" href="'+util.escapeHTML(req.query.href)+'" class="pull-left"><img class="media-object" src="'+util.escapeHTML(req.body.image)+'" alt="'+util.escapeHTML(req.body.name)+'" height="64"></a>' : ''),
+				'<div class="media-body">',
+					'<h4 class="media-heading">'+util.escapeHTML(req.body.name)+'</h4>',
+					((desc.length) ? '<p>'+desc.join('<br>')+'</p>' : ''),
+				'</div>',
+			'</div>'
+		].join('');
+		res.end(html);
+	});
+});
 
 // Default renderer
 local.addServer('default-renderer', function(req, res) {
 	req.on('end', function() {
 		res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
-		var html = JSON.stringify(req.query);
+		var title = util.escapeHTML(req.query.title || req.query.id || 'Untitled');
+		if (req.query.type) { title += ' ('+util.escapeHTML(req.query.type)+')'; }
+		res.end('<p><a target="_top" href="'+util.escapeHTML(req.query.href)+'" title="'+title+'">'+title+'</a></p>');
+		/*var html = JSON.stringify(req.query);
 		if (req.body) {
 			html += '<br><strong>'+JSON.stringify(req.body)+'</strong>';
 		}
-		res.end(html);
+		res.end(html);*/
 	});
 });
 

@@ -89,6 +89,7 @@ module.exports = function(server) {
 				var slotsHTML = [];
 				res.locals.items.forEach(function(item, i) {
 					// Render <link> el
+					item.value.href = item.value.href || (config.url + '/' + req.param('dir') + '/' + item.key);
 					linksHTML.push(util.renderLinkEl(item.value));
 
 					// Render slot, embedding json doc if present
