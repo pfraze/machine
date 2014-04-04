@@ -8,6 +8,7 @@ module.exports = function(server) {
 	// :TODO: head
 	server.get('/:dir/:doc', getDocument);
 	server.post('/:dir', checkPerms, addDocument);
+	server.put('/:dir/:doc/meta', checkPerms, updateDocumentMeta);
 	server.delete('/:dir/:doc', checkPerms, deleteDocument);
 
 	function getDocument(req, res, next) {
@@ -24,7 +25,7 @@ module.exports = function(server) {
 			db.getDirDocsDB(req.param('dir')).get(req.param('doc'), { valueEncoding: 'binary' }, function(err, doc) {
 				if (err && !err.notFound) {
 					console.error(err);
-					winston.error('Failed to load doc meta from DB', { error: err, inputs: [req.param('dir')], request: util.formatReqForLog(req) });
+					winston.error('Failed to load doc from DB', { error: err, inputs: [req.param('dir')], request: util.formatReqForLog(req) });
 					return res.send(500);
 				}
 
@@ -68,7 +69,6 @@ module.exports = function(server) {
 
 		// Sanitize
 		var meta = req.query, doc = req.body;
-		var hasItem = false;
 		meta.rel = (meta.rel||'').split(' ')
 			.filter(function(rel) { return rel.indexOf('.') !== -1; }) // filter out non-URI reltypes
 			.join(' ');
@@ -102,6 +102,40 @@ module.exports = function(server) {
 			}
 			res.setHeader('location', config.url + '/' + req.param('dir') + '/' + id);
 			res.send(201);
+		});
+	}
+
+	function updateDocumentMeta(req, res) {
+		if (!req.is('json')) return res.send(415);
+
+		// fetch meta to make sure it exists
+		db.getDirMetaDB(req.param('dir')).get(req.param('doc'), function(err) {
+			if (err) {
+				if (err.notFound) { return res.send(404); }
+				console.error(err);
+				winston.error('Failed to load doc meta from DB', { error: err, inputs: [req.param('dir')], request: util.formatReqForLog(req) });
+				return res.send(500);
+			}
+
+			var meta = req.body;
+			try { meta = JSON.parse(meta.toString()); }
+			catch (e) { return res.send(400, { error: 'Unable to parse JSON body' }); }
+
+			meta.rel = (meta.rel||'').split(' ')
+				.filter(function(rel) { return rel.indexOf('.') !== -1; }) // filter out non-URI reltypes
+				.join(' ');
+			delete meta.href; // dont allow for now
+
+			// replace
+			db.getDirMetaDB(req.param('dir')).put(req.param('doc'), meta, function(err) {
+				if (err) {
+					console.error(err);
+					winston.error('Failed to update doc meta in DB', { error: err, inputs: [req.param('dir'), meta], request: util.formatReqForLog(req) });
+					return res.send(500);
+				}
+
+				res.send(204);
+			});
 		});
 	}
 

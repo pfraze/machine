@@ -90,20 +90,81 @@ local.addServer('default-renderer', function(req, res) {
 });
 
 // :TEMP:
-local.addServer('todo-alert', function(req, res) {
-	alert("Todo");
-	res.writeHead(204).end();
+local.addServer('meta', function(req, res) {
+	req.on('end', function() {
+		var id = req.path.slice(1);
+		if (!id || !mediaLinks[id]) { return res.writeHead(404).end(); }
+		if (req.method != 'PUT') { return res.writeHead(405).end(); }
+		$('#meta-msg-'+id).text('');
+
+		var meta;
+		try { meta = JSON.parse(req.body.link); }
+		catch (e) {
+			$('#meta-msg-'+id).text(e.toString());
+			return res.writeHead(422).end();
+		}
+
+		local.PUT(meta, { url: mediaLinks[id].href+'/meta' })
+			.then(function(res2) {
+				res.writeHead(204).end();
+
+				// update locally
+				mediaLinks[id] = meta;
+				classifyRenderers([mediaLinks[id]]);
+
+				// redraw
+				$('#slot-'+id+' .edit-meta').popover('destroy');
+				$('#meta-msg-'+id).text('Updated');
+				renderItem(id);
+				local.util.nextTick(function() {
+					$('#slot-'+id+' .edit-meta').popover({
+						html: true,
+						content: renderItemEditmeta,
+						container: 'body'
+					});
+				});
+			})
+			.fail(function(res2) {
+				switch (res2.status) {
+					case 422:
+						$('#meta-msg-'+id).text(res2.body.error);
+						return res.writeHead(422).end();
+					case 401:
+					case 403:
+						$('#meta-msg-'+id).text('You\'re not authorized to edit this feed.');
+						return res.writeHead(403).end();
+				}
+				res.writeHead(502).end();
+			});
+	});
 });
 
 // Do render
+var mediaLinks = local.queryLinks(document, { rel: 'stdrel.com/media' });
 renderFeed();
-
 
 function renderFeed() {
 	// Collect renderers for each link
-	var mediaLinks = local.queryLinks(document, { rel: 'stdrel.com/media' });
+	classifyRenderers(mediaLinks);
+
+	// Render the medias
+	var renderPromises = [];
+	for (var i = 0; i < mediaLinks.length; i++) {
+		renderPromises.push(renderItem(i));
+	}
+
+	local.promise.bundle(renderPromises).then(function() {
+		$('.edit-meta').popover({
+			html: true,
+			content: renderItemEditmeta,
+			container: 'body'
+		});
+	});
+}
+
+function classifyRenderers(links) {
 	for (var url in rendererQueries) {
-		var matches = local.queryLinks(mediaLinks, rendererQueries[url]);
+		var matches = local.queryLinks(links, rendererQueries[url]);
 		for (var i=0; i < matches.length; i++) {
 			if (!matches[i].__renderers) {
 				Object.defineProperty(matches[i], '__renderers', { enumerable: false, value: [] });
@@ -111,19 +172,15 @@ function renderFeed() {
 			matches[i].__renderers.push(url);
 		}
 	}
+}
 
-	// Render the medias
-	mediaLinks.forEach(function(link, i) {
-		var url = link.__renderers[0] || 'httpl://default-renderer';
-		var json = $('#slot-'+i).data('doc') || null;
-		var req = { url: url, query: link, Accept: 'text/html' };
-		if (json) req.Content_Type = 'application/json';
-		local.POST(json, req)
-			.then(
-				renderTemplateResponse(link, i),
-				handleTemplateFailure(link, i)
-			);
-	});
+function renderItem(i) {
+	var link = mediaLinks[i];
+	var url = link.__renderers[0] || 'httpl://default-renderer';
+	var json = $('#slot-'+i).data('doc') || null;
+	var req = { url: url, query: link, Accept: 'text/html' };
+	if (json) req.Content_Type = 'application/json';
+
 	function renderTemplateResponse(link, i) {
 		return function(res) {
 			$('#slot-'+i).html([
@@ -138,6 +195,11 @@ function renderFeed() {
 			$('#slot-'+i).html('Failed to render :( '+res.status+' '+res.reason);
 		};
 	}
+	return local.POST(json, req)
+		.then(
+			renderTemplateResponse(link, i),
+			handleTemplateFailure(link, i)
+		);
 }
 
 function renderItemHeader(link) {
@@ -146,7 +208,19 @@ function renderItemHeader(link) {
 
 	return [
 		title,
-		' &middot; <a href="'+util.escapeHTML(link.href)+'">url</a> &middot; <a href="httpl://todo-alert">edit metadata</a>'
+		' &middot; <a href="'+util.escapeHTML(link.href)+'">url</a> &middot; <a target="_top" class="edit-meta" href="javascript:void(0)">edit metadata</a>'
+	].join('');
+}
+
+function renderItemEditmeta() {
+	var $slot = $(this).parents('.feed-item-slot');
+	var id = $slot.attr('id').slice(5);
+	return [
+		'<form action="httpl://meta/'+id+'" method="PUT">',
+			'<textarea name="link" rows="10">'+util.escapeHTML(JSON.stringify(mediaLinks[id], false, 2))+'</textarea>',
+			'<input type="submit" class="btn btn-primary" value="Update">',
+			' &nbsp; <span id="meta-msg-'+id+'"></span>',
+		'</form>'
 	].join('');
 }
 },{"../auth":1,"../pagent":5,"../util":6,"../widgets/addlink-panel":7,"../widgets/directory-delete-btn":8,"../widgets/directory-links-list":9,"../widgets/user-directories-panel":10}],3:[function(require,module,exports){

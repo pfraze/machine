@@ -4,3 +4,5 @@
 .feed-item-header { background: #eee; font-size: 10px; padding: 2px 5px;  border-bottom: 1px solid #ddd }
 .feed-item-content { padding: 10px 15px; }
 .feed-item-content :last-child { margin-bottom: 0; }
+.popover { max-width: 600px; }
+.popover textarea { width: 570px; font-family: consolas; margin-bottom: 10px; }
