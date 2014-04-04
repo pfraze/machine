@@ -1,2 +1,6 @@
 .fetch-result { margin: 15px 0 0 0; }
 #post-btns { margin: 10px 0 0 0; }
+.feed-item-slot { border: 1px solid #ddd; margin-bottom: 15px; border-radius: 4px; box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05); }
+.feed-item-header { background: #eee; font-size: 10px; padding: 2px 5px;  border-bottom: 1px solid #ddd }
+.feed-item-content { padding: 10px 15px; }
+.feed-item-content :last-child { margin-bottom: 0; }

@@ -23,11 +23,12 @@ local.addServer('thing-renderer', function(req, res) {
 	req.on('end', function() {
 		res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
 		var desc = [];
+		var url = (req.body.url) ? util.escapeHTML(req.body.url) : '#';
 		if (req.body.description) { desc.push(util.escapeHTML(req.body.description)); }
-		if (req.body.url) { desc.push('<a href="'+util.escapeHTML(req.body.url)+'">Link</a>'); }
+		if (req.body.url) { desc.push('<a href="'+url+'">Link</a>'); }
 		var html = [
 			'<div class="media">',
-				((req.body.image) ? '<a target="_top" href="'+util.escapeHTML(req.query.href)+'" class="pull-left"><img class="media-object" src="'+util.escapeHTML(req.body.image)+'" alt="'+util.escapeHTML(req.body.name)+'" height="64"></a>' : ''),
+				((req.body.image) ? '<a target="_top" href="'+url+'" class="pull-left"><img class="media-object" src="'+util.escapeHTML(req.body.image)+'" alt="'+util.escapeHTML(req.body.name)+'" height="64"></a>' : ''),
 				'<div class="media-body">',
 					'<h4 class="media-heading">'+util.escapeHTML(req.body.name)+'</h4>',
 					((desc.length) ? '<p>'+desc.join('<br>')+'</p>' : ''),
@@ -42,15 +43,19 @@ local.addServer('thing-renderer', function(req, res) {
 local.addServer('default-renderer', function(req, res) {
 	req.on('end', function() {
 		res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
-		var title = util.escapeHTML(req.query.title || req.query.id || 'Untitled');
-		if (req.query.type) { title += ' ('+util.escapeHTML(req.query.type)+')'; }
-		res.end('<p><a target="_top" href="'+util.escapeHTML(req.query.href)+'" title="'+title+'">'+title+'</a></p>');
+		res.end('<p><a target="_top" href="'+util.escapeHTML(req.query.href)+'">Link</a></p>');
 		/*var html = JSON.stringify(req.query);
 		if (req.body) {
 			html += '<br><strong>'+JSON.stringify(req.body)+'</strong>';
 		}
 		res.end(html);*/
 	});
+});
+
+// :TEMP:
+local.addServer('todo-alert', function(req, res) {
+	alert("Todo");
+	res.writeHead(204).end();
 });
 
 // Do render
@@ -84,7 +89,10 @@ function renderFeed() {
 	});
 	function renderTemplateResponse(link, i) {
 		return function(res) {
-			$('#slot-'+i).html(res.body);
+			$('#slot-'+i).html([
+				'<div class="feed-item-header">'+renderItemHeader(link)+'</div>',
+				((res.body) ? ('<div class="feed-item-content">'+res.body+'</div>') : '')
+			].join(''));
 		};
 	}
 	function handleTemplateFailure(link, i) {
@@ -93,4 +101,14 @@ function renderFeed() {
 			$('#slot-'+i).html('Failed to render :( '+res.status+' '+res.reason);
 		};
 	}
+}
+
+function renderItemHeader(link) {
+	var title = util.escapeHTML(link.title || link.id || 'Untitled');
+	if (link.type) { title += ' ('+util.escapeHTML(link.type)+')'; }
+
+	return [
+		title,
+		' &middot; <a href="'+util.escapeHTML(link.href)+'">url</a> &middot; <a href="httpl://todo-alert">edit metadata</a>'
+	].join('');
 }
