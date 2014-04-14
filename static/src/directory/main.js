@@ -6,7 +6,6 @@ require('../auth').setup();
 var util = require('../util');
 
 // ui
-require('../widgets/user-directories-panel').setup();
 require('../widgets/addlink-panel').setup();
 require('../widgets/directory-links-list').setup();
 require('../widgets/directory-delete-btn').setup();
@@ -83,7 +82,8 @@ local.addServer('meta', function(req, res) {
 					$('#slot-'+id+' .edit-meta').popover({
 						html: true,
 						content: renderItemEditmeta,
-						container: 'body'
+						container: 'body',
+						placement: 'bottom'
 					});
 				});
 			})
@@ -120,7 +120,8 @@ function renderFeed() {
 		$('.edit-meta').popover({
 			html: true,
 			content: renderItemEditmeta,
-			container: 'body'
+			container: 'body',
+			placement: 'bottom'
 		});
 	});
 }
@@ -170,8 +171,8 @@ function renderItemHeader(link) {
 	if (link.type) { title += ' ('+util.escapeHTML(link.type)+')'; }
 
 	return [
-		title,
-		' &middot; <a href="'+util.escapeHTML(link.href)+'">url</a> &middot; <a target="_top" class="edit-meta" href="javascript:void(0)">edit metadata</a>'
+		'<a target="_top" href="'+util.escapeHTML(link.href)+'">'+title+'</a> &middot; ',
+		'<a target="_top" class="edit-meta" href="javascript:void(0)">meta</a>'
 	].join('');
 }
 

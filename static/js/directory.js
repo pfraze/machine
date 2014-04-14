@@ -43,7 +43,6 @@ require('../auth').setup();
 var util = require('../util');
 
 // ui
-require('../widgets/user-directories-panel').setup();
 require('../widgets/addlink-panel').setup();
 require('../widgets/directory-links-list').setup();
 require('../widgets/directory-delete-btn').setup();
@@ -120,7 +119,8 @@ local.addServer('meta', function(req, res) {
 					$('#slot-'+id+' .edit-meta').popover({
 						html: true,
 						content: renderItemEditmeta,
-						container: 'body'
+						container: 'body',
+						placement: 'bottom'
 					});
 				});
 			})
@@ -157,7 +157,8 @@ function renderFeed() {
 		$('.edit-meta').popover({
 			html: true,
 			content: renderItemEditmeta,
-			container: 'body'
+			container: 'body',
+			placement: 'bottom'
 		});
 	});
 }
@@ -207,8 +208,8 @@ function renderItemHeader(link) {
 	if (link.type) { title += ' ('+util.escapeHTML(link.type)+')'; }
 
 	return [
-		title,
-		' &middot; <a href="'+util.escapeHTML(link.href)+'">url</a> &middot; <a target="_top" class="edit-meta" href="javascript:void(0)">edit metadata</a>'
+		'<a target="_top" href="'+util.escapeHTML(link.href)+'">'+title+'</a> &middot; ',
+		'<a target="_top" class="edit-meta" href="javascript:void(0)">meta</a>'
 	].join('');
 }
 
@@ -223,7 +224,7 @@ function renderItemEditmeta() {
 		'</form>'
 	].join('');
 }
-},{"../auth":1,"../pagent":5,"../util":6,"../widgets/addlink-panel":7,"../widgets/directory-delete-btn":8,"../widgets/directory-links-list":9,"../widgets/user-directories-panel":10}],3:[function(require,module,exports){
+},{"../auth":1,"../pagent":5,"../util":6,"../widgets/addlink-panel":7,"../widgets/directory-delete-btn":8,"../widgets/directory-links-list":9}],3:[function(require,module,exports){
 var hostUA = local.agent(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
@@ -991,7 +992,7 @@ window.globals = module.exports = {
 	self.MimeType = MimeType;
 	return self;
 }(this));
-},{"path":12}],5:[function(require,module,exports){
+},{"path":11}],5:[function(require,module,exports){
 // Page Agent (PAgent)
 // ===================
 // Standard page behaviors
@@ -1446,42 +1447,6 @@ module.exports = {
 	}
 };
 },{"../globals":3}],10:[function(require,module,exports){
-var globals = require('../globals');
-
-module.exports = {
-	setup: function() {
-		if (globals.session.user) {
-			// Populate "my dirs"
-			globals.meUA.GET().then(function(res) {
-				var html = res.body.directories.map(function(dir) {
-					return '<a href="/'+dir.id+'" class="list-group-item"><h4 class="list-group-item-heading">'+dir.name+'</h4></a>';
-				}).join('');
-				$('.user-directories-panel .list-group').html(html);
-			});
-
-			// Create new directory btn
-			$('.user-directories-panel .btn').on('click', function(req, res) {
-				var id = prompt('Enter the name of your new directory');
-				if (!id) return false;
-				globals.hostUA.POST({ id: id })
-					.then(function(res) {
-						window.location = res.headers.location;
-					})
-					.fail(function(res) {
-						if (res.status == 422 && res.body && res.body.id) {
-							alert('Sorry, '+res.body.id);
-						} else if (res.status == 409) {
-							alert('Sorry, that name is taken.');
-						} else {
-							alert('Unexpected error: ' + res.status +' '+res.reason);
-						}
-					});
-				return false;
-			});
-		}
-	}
-};
-},{"../globals":3}],11:[function(require,module,exports){
 
 
 //
@@ -1699,7 +1664,7 @@ if (typeof Object.getOwnPropertyDescriptor === 'function') {
   exports.getOwnPropertyDescriptor = valueObject;
 }
 
-},{}],12:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 var process=require("__browserify_process");// Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -1910,7 +1875,7 @@ exports.extname = function(path) {
   return splitPath(path)[3];
 };
 
-},{"__browserify_process":14,"_shims":11,"util":13}],13:[function(require,module,exports){
+},{"__browserify_process":13,"_shims":10,"util":12}],12:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2455,7 +2420,7 @@ function hasOwnProperty(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
 
-},{"_shims":11}],14:[function(require,module,exports){
+},{"_shims":10}],13:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
