@@ -11,11 +11,11 @@ body { background: #eee; }
 .config-panel h3 { margin: 0; }
 .config-panel a { color: #555; }
 
-.feed-item-slot { margin: 5px; background: #fff; }
-.feed-item-header { font-size: 10px; padding: 2px 5px; border-bottom: 1px solid #ddd }
-.feed-item-header, .feed-item-header a { color: gray; }
-.feed-item-content { padding: 10px; }
-.feed-item-content :last-child { margin-bottom: 0; }
+.directory-item-slot { margin: 5px; background: #fff; }
+.directory-item-header { font-size: 10px; padding: 2px 5px; border-bottom: 1px solid #ddd }
+.directory-item-header, .directory-item-header a { color: gray; }
+.directory-item-content { padding: 10px; }
+.directory-item-content :last-child { margin-bottom: 0; }
 
 .popover { max-width: 600px; }
 .popover textarea { width: 570px; font-family: consolas; margin-bottom: 10px; }

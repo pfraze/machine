@@ -135,7 +135,7 @@ local.addServer('meta', function(req, res) {
 						return res.writeHead(422).end();
 					case 401:
 					case 403:
-						$('#meta-msg-'+id).text('You\'re not authorized to edit this feed.');
+						$('#meta-msg-'+id).text('You\'re not authorized to edit this directory.');
 						return res.writeHead(403).end();
 				}
 				res.writeHead(502).end();
@@ -189,8 +189,8 @@ function renderItem(i) {
 	function renderTemplateResponse(link, i) {
 		return function(res) {
 			$('#slot-'+i).html([
-				'<div class="feed-item-header">'+renderItemHeader(link)+'</div>',
-				((res.body) ? ('<div class="feed-item-content">'+res.body+'</div>') : '')
+				'<div class="directory-item-header">'+renderItemHeader(link)+'</div>',
+				((res.body) ? ('<div class="directory-item-content">'+res.body+'</div>') : '')
 			].join(''));
 		};
 	}
@@ -218,7 +218,7 @@ function renderItemHeader(link) {
 }
 
 function renderItemEditmeta() {
-	var $slot = $(this).parents('.feed-item-slot');
+	var $slot = $(this).parents('.directory-item-slot');
 	var id = $slot.attr('id').slice(5);
 	return [
 		'<form action="local://meta/'+id+'" method="PUT">',

@@ -96,9 +96,9 @@ module.exports = function(server) {
 					var jsonDoc = res.locals.jsonDocs[item.key];
 					if (jsonDoc) {
 						var json = jsonDoc.toString().replace(/'/g, '&#39;'); // escape single quotes
-						slotsHTML.push('<div id="slot-'+i+'" class="feed-item-slot" data-doc=\''+json+'\'></div>');
+						slotsHTML.push('<div id="slot-'+i+'" class="directory-item-slot" data-doc=\''+json+'\'></div>');
 					} else {
-						slotsHTML.push('<div id="slot-'+i+'" class="feed-item-slot"></div>');
+						slotsHTML.push('<div id="slot-'+i+'" class="directory-item-slot"></div>');
 					}
 				});
 				linksHTML = linksHTML.join('');
