@@ -7,7 +7,7 @@ body { background: #eee; }
 .fetch-result { margin: 15px 0 0 0; }
 #post-btns { margin: 10px 0 0 0; }
 
-.feed-item-slot { display: inline-block; vertical-align: top; float: left; margin: 5px; background: #fff; }
+.feed-item-slot { margin: 5px; background: #fff; }
 .feed-item-header { font-size: 10px; padding: 2px 5px; border-bottom: 1px solid #ddd }
 .feed-item-header, .feed-item-header a { color: gray; }
 .feed-item-content { padding: 10px; }
