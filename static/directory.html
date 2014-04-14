@@ -23,6 +23,31 @@
 
   <body data-user="{{USER}}" data-user-is-admin="{{USER_IS_ADMIN}}">
 
+    <div class="addlink-panel panel panel-default">
+      <div class="panel-body">
+        <form class="show-on-admin form" role="form">
+          <input type="url" class="form-control" id="url-input" placeholder="Enter URL">
+          <p class="fetch-result text-muted hidden"></p>
+          <div id="post-btns" class="btn-group hidden">
+            <button id="post-doc-btn" type="button" class="btn btn-primary">Post</button>
+            <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown">
+              <span class="caret"></span>
+              <span class="sr-only">Toggle Dropdown</span>
+            </button>
+            <ul class="dropdown-menu" role="menu">
+              <li><a id="post-link-btn" href="#">Post as Link</a></li>
+            </ul>
+          </div>
+          <!-- <button type="submit" class="btn btn-default" disabled>Post</button> -->
+        </form>
+      </div>
+    </div>
+    <div class="config-panel panel panel-default">
+      <div class="panel-body">
+        <h3><a href="local://todo"><b class="glyphicon glyphicon-cog"></b></a></h3>
+      </div>
+    </div>
+
     <div class="container">
       <div class="row">
         <div class="col-sm-2 align-right">
@@ -31,25 +56,6 @@
         </div>
         <div class="col-sm-8">
           <h1>{{DIRNAME}} <small>created {{DIRAGE}}</small></h1>
-          <div class="addlink-panel panel panel-default">
-            <div class="panel-body">
-              <form class="show-on-admin form" role="form">
-                <input type="url" class="form-control" id="url-input" placeholder="Enter URL">
-                <p class="fetch-result text-muted hidden"></p>
-                <div id="post-btns" class="btn-group hidden">
-                  <button id="post-doc-btn" type="button" class="btn btn-primary">Post</button>
-                  <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown">
-                    <span class="caret"></span>
-                    <span class="sr-only">Toggle Dropdown</span>
-                  </button>
-                  <ul class="dropdown-menu" role="menu">
-                    <li><a id="post-link-btn" href="#">Post as Link</a></li>
-                  </ul>
-                </div>
-                <!-- <button type="submit" class="btn btn-default" disabled>Post</button> -->
-              </form>
-            </div>
-          </div>
           <div class="directory-links-list">
             {{SLOTS_HTML}}
           </div>

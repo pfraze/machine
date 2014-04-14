@@ -3,9 +3,13 @@ body { background: #eee; }
 .container, .row, .row > div { height: 100%; }
 .col-sm-8 { background: #fff; border-left: 1px solid #ccc; border-right: 1px solid #ccc; }
 
-.addlink-panel { position: fixed; left: 10px; bottom: 0; box-shadow: none; }
+.addlink-panel { position: fixed; left: 10px; bottom: 0; z-index: 1; box-shadow: none; }
 .fetch-result { margin: 15px 0 0 0; }
 #post-btns { margin: 10px 0 0 0; }
+
+.config-panel { position: fixed; right: 10px; bottom: 0; z-index: 1; box-shadow: none; }
+.config-panel h3 { margin: 0; }
+.config-panel a { color: #555; }
 
 .feed-item-slot { margin: 5px; background: #fff; }
 .feed-item-header { font-size: 10px; padding: 2px 5px; border-bottom: 1px solid #ddd }

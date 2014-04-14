@@ -13,9 +13,12 @@ require('../widgets/directory-delete-btn').setup();
 // Active renderers
 var rendererQueries = {
 	// :TODO: load from persistant storage
-	'httpl://thing-renderer': { rel: 'schema.org/Thing' },
-	'httpl://default-renderer': { rel: 'stdrel.com/media' }
+	'local://thing-renderer': { rel: 'schema.org/Thing' },
+	'local://default-renderer': { rel: 'stdrel.com/media' }
 };
+
+// :TEMP:
+local.addServer('todo', function(req, res) { alert('Todo'); res.writeHead(204).end(); });
 
 // Thing renderer
 local.addServer('thing-renderer', function(req, res) {
@@ -141,7 +144,7 @@ function classifyRenderers(links) {
 
 function renderItem(i) {
 	var link = mediaLinks[i];
-	var url = link.__renderers[0] || 'httpl://default-renderer';
+	var url = link.__renderers[0] || 'local://default-renderer';
 	var json = $('#slot-'+i).data('doc') || null;
 	var req = { url: url, query: link, Accept: 'text/html' };
 	if (json) req.Content_Type = 'application/json';
@@ -181,7 +184,7 @@ function renderItemEditmeta() {
 	var $slot = $(this).parents('.feed-item-slot');
 	var id = $slot.attr('id').slice(5);
 	return [
-		'<form action="httpl://meta/'+id+'" method="PUT">',
+		'<form action="local://meta/'+id+'" method="PUT">',
 			'<textarea name="link" rows="10">'+util.escapeHTML(util.serializeRawMeta(mediaLinks[id]))+'</textarea>',
 			'<input type="submit" class="btn btn-primary" value="Update">',
 			' &nbsp; <span id="meta-msg-'+id+'"></span>',
