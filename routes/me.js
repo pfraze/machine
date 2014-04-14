@@ -9,7 +9,7 @@ module.exports = function(server) {
 	server.get('/.me', checkSession, loadMedataFromDB, linkMe, getMe);
 
 	function checkSession(req, res, next) {
-		if (!req.session.email) {
+		if (!req.session.user) {
 			return res.send(401);
 		}
 		next();
@@ -21,7 +21,7 @@ module.exports = function(server) {
 		next();
 
 		/*var q = 'SELECT d.id, d.name FROM directories d WHERE d.owner=$1';
-		var values = [req.session.email];
+		var values = [req.session.user];
 		req.pg.query(q, values, function(err, dbres) {
 			if (err) {
 				console.error(err);

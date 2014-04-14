@@ -82,10 +82,16 @@ server.use(function(req, res, next) {
 server.use(middleware.bodyCollector);
 server.use(express.cookieParser());
 server.use(express.compress());
-server.use(express.session({ secret: "mozillapersona" }));
+server.use(express.session({ secret: "TODO-- come up with secret" }));
 if (config.debug_auth) {
 	server.all('*', function(req, res, next) {
-		req.session.email = config.debug_auth;
+		req.session.user = config.debug_auth;
+		next();
+	});
+} else {
+	// :TODO: replace with real auth
+	server.all('*', function(req, res, next) {
+		req.session.user = 'user';
 		next();
 	});
 }
@@ -121,12 +127,6 @@ server.get('/status', function(req, res) {
 	stats.uptime_days = uptime/(24*60*60*1000);
 	res.json(stats);
 });
-// Fronted Tests
-// server.get('/test/dirs', express.basicAuth('asdfasdf', 'asdfasdf'), function(req, res) {
-	// res.removeHeader('Content-Security-Policy');
-	// var page = html.render('test_directories', { user: req.session.email||'' });
-	// res.send(page);
-// });
 // Static content
 server.use('/js', express.static(__dirname + '/static/js', { maxAge: 1000*60*60*24 }));
 server.use('/css', express.static(__dirname + '/static/css', { maxAge: 1000*60*60*24 }));

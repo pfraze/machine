@@ -36,7 +36,7 @@ module.exports = function(server) {
 	}
 
 	function checkPerms(req, res, next) {
-		if (!req.session.email) {
+		if (!req.session.user) {
 			return res.send(401);
 		}
 		// Lookup directory data
@@ -50,7 +50,7 @@ module.exports = function(server) {
 			res.locals.directory = directory;
 
 			// Check perms
-			if (req.session.email != directory.owner) {
+			if (req.session.user != directory.owner) {
 				return res.send(403);
 			}
 

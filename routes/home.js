@@ -24,7 +24,7 @@ module.exports = function(server) {
 
 	function getHome(req, res) {
 		var page = tmpl.render('index', {
-			user: req.session.email||'',
+			user: req.session.user||'',
 			dirs_html: db.getDirList().map(function(dirId) {
 				return tmpl.render('directory_list_partial', {
 					url: '/'+dirId,

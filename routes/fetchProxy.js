@@ -10,7 +10,7 @@ module.exports = function(server) {
 	function checkSession(req, res, next) {
 		console.warn('Session-check temporarily disabled -- don\'t forget to re-enable this!');
 		return next();
-		if (!req.session.email) {
+		if (!req.session.user) {
 			return res.send(401);
 		}
 		next();

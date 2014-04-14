@@ -1,3 +1,5 @@
+var util = require('../util');
+
 // Thing renderer
 local.addServer('thing-renderer', function(req, res) {
 	req.on('end', function() {

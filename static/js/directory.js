@@ -3,29 +3,15 @@ var globals = require('./globals');
 
 module.exports = {
 	setup: function() {
-		navigator.id.watch({
-			loggedInUser: globals.session.user,
-			onlogin: function(assertion) {
-				globals.authUA.POST({ assertion: assertion })
-					.then(function() { window.location.reload(); })
-					.fail(function(res) { navigator.id.logout(); console.error('Failed to log in', res); });
-			},
-			onlogout: function() {
-				globals.authUA.DELETE()
-					.then(function() { window.location.reload(); })
-					.fail(function(res) { console.error('Failed to log out', res); });
-			}
-		});
-
 		if (globals.session.user) {
 			$('.profile-btn').text(globals.session.user).css('display', 'inline-block');
 			$('.show-on-authed').show();
 			$('.auth-btn').text('Logout').on('click', function() {
-				navigator.id.logout();
+				// :TODO:
 			});
 		} else {
 			$('.auth-btn').removeClass('btn-default').addClass('btn-success').on('click', function() {
-				navigator.id.request();
+				// :TODO:
 			});
 		}
 
@@ -34,7 +20,7 @@ module.exports = {
 		}
 	}
 };
-},{"./globals":3}],2:[function(require,module,exports){
+},{"./globals":4}],2:[function(require,module,exports){
 // Environment Setup
 // =================
 local.logAllExceptions = true;
@@ -48,108 +34,85 @@ require('../widgets/directory-links-list').setup();
 require('../widgets/directory-delete-btn').setup();
 
 // Active renderers
+require('./renderers');
 var rendererQueries = {
 	// :TODO: load from persistant storage
 	'local://thing-renderer': { rel: 'schema.org/Thing' },
 	'local://default-renderer': { rel: 'stdrel.com/media' }
 };
 
-// :TEMP:
-local.addServer('todo', function(req, res) { alert('Todo'); res.writeHead(204).end(); });
-
-// Thing renderer
-local.addServer('thing-renderer', function(req, res) {
-	req.on('end', function() {
-		res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
-		var desc = [];
-		var url = (req.body.url) ? util.escapeHTML(req.body.url) : '#';
-		if (req.body.description) { desc.push(util.escapeHTML(req.body.description)); }
-		if (req.body.url) { desc.push('<a href="'+url+'">Link</a>'); }
-		var html = [
-			'<div class="media">',
-				((req.body.image) ? '<a target="_top" href="'+url+'" class="pull-left"><img class="media-object" src="'+util.escapeHTML(req.body.image)+'" alt="'+util.escapeHTML(req.body.name)+'" height="64"></a>' : ''),
-				'<div class="media-body">',
-					'<h4 class="media-heading">'+util.escapeHTML(req.body.name)+'</h4>',
-					((desc.length) ? '<p>'+desc.join('<br>')+'</p>' : ''),
-				'</div>',
-			'</div>'
-		].join('');
-		res.end(html);
-	});
-});
-
-// Default renderer
-local.addServer('default-renderer', function(req, res) {
-	req.on('end', function() {
-		res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
-		res.end('<p><a target="_top" href="'+util.escapeHTML(req.query.href)+'">Link</a></p>');
-		/*var html = JSON.stringify(req.query);
-		if (req.body) {
-			html += '<br><strong>'+JSON.stringify(req.body)+'</strong>';
-		}
-		res.end(html);*/
-	});
-});
-
-// :TEMP:
-local.addServer('meta', function(req, res) {
-	req.on('end', function() {
-		var id = req.path.slice(1);
-		if (!id || !mediaLinks[id]) { return res.writeHead(404).end(); }
-		if (req.method != 'PUT') { return res.writeHead(405).end(); }
-		$('#meta-msg-'+id).text('');
-
-		var meta;
-		try { meta = util.parseRawMeta(req.body.link); }
-		catch (e) {
-			$('#meta-msg-'+id).text(e.toString());
-			return res.writeHead(422).end();
-		}
-
-		local.PUT(meta, { url: mediaLinks[id].href+'/meta' })
-			.then(function(res2) {
-				res.writeHead(204).end();
-
-				// update locally
-				meta.href = mediaLinks[id].href; // preserve, since href was stripped earlier
-				mediaLinks[id] = meta;
-				classifyRenderers([mediaLinks[id]]);
-
-				// redraw
-				$('#slot-'+id+' .edit-meta').popover('toggle');
-				$('#meta-msg-'+id).text('Updated');
-				renderItem(id);
-				local.util.nextTick(function() {
-					$('#slot-'+id+' .edit-meta').popover({
-						html: true,
-						content: renderItemEditmeta,
-						container: 'body',
-						placement: 'bottom'
-					});
-				});
-			})
-			.fail(function(res2) {
-				switch (res2.status) {
-					case 422:
-						$('#meta-msg-'+id).text(res2.body.error);
-						return res.writeHead(422).end();
-					case 401:
-					case 403:
-						$('#meta-msg-'+id).text('You\'re not authorized to edit this directory.');
-						return res.writeHead(403).end();
-				}
-				res.writeHead(502).end();
-			});
-	});
-});
-
 // Do render
 var mediaLinks = local.queryLinks(document, { rel: 'stdrel.com/media' });
 renderFeed();
 
+// :TEMP:
+local.addServer('todo', function(req, res) { alert('Todo'); res.writeHead(204).end(); });
+
+// Item meta-update handler
+local.addServer('meta', function(req, res) { req.on('end', function() {
+	var id = req.path.slice(1);
+	if (!id || !mediaLinks[id]) { return res.writeHead(404).end(); }
+	if (req.method != 'PUT') { return res.writeHead(405).end(); }
+	$('#meta-msg-'+id).text('');
+
+	var meta;
+	try { meta = util.parseRawMeta(req.body.link); }
+	catch (e) {
+		$('#meta-msg-'+id).text(e.toString());
+		return res.writeHead(422).end();
+	}
+
+	local.PUT(meta, { url: mediaLinks[id].href+'/meta' })
+		.then(function(res2) {
+			res.writeHead(204).end();
+
+			// update locally
+			meta.href = mediaLinks[id].href; // preserve, since href was stripped earlier
+			mediaLinks[id] = meta;
+			findRenderersForLinks([mediaLinks[id]]);
+
+			// redraw
+			$('#slot-'+id+' .edit-meta').popover('toggle');
+			$('#meta-msg-'+id).text('Updated');
+			renderItem(id);
+			local.util.nextTick(function() {
+				$('#slot-'+id+' .edit-meta').popover({
+					html: true,
+					content: renderItemEditmeta,
+					container: 'body',
+					placement: 'bottom'
+				});
+			});
+		})
+		.fail(function(res2) {
+			switch (res2.status) {
+				case 422:
+					$('#meta-msg-'+id).text(res2.body.error);
+					return res.writeHead(422).end();
+				case 401:
+				case 403:
+					$('#meta-msg-'+id).text('You\'re not authorized to edit this directory.');
+					return res.writeHead(403).end();
+			}
+			res.writeHead(502).end();
+		});
+}); });
+
+function findRenderersForLinks(links) {
+	for (var url in rendererQueries) {
+		var matches = local.queryLinks(links, rendererQueries[url]);
+		for (var i=0; i < matches.length; i++) {
+			if (!matches[i].__renderers) {
+				Object.defineProperty(matches[i], '__renderers', { enumerable: false, value: [] });
+			}
+			matches[i].__renderers.push(url);
+		}
+	}
+}
+
 function renderFeed() {
 	// Collect renderers for each link
-	classifyRenderers(mediaLinks);
+	findRenderersForLinks(mediaLinks);
 
 	// Render the medias
 	var renderPromises = [];
@@ -165,18 +128,6 @@ function renderFeed() {
 			placement: 'bottom'
 		});
 	});
-}
-
-function classifyRenderers(links) {
-	for (var url in rendererQueries) {
-		var matches = local.queryLinks(links, rendererQueries[url]);
-		for (var i=0; i < matches.length; i++) {
-			if (!matches[i].__renderers) {
-				Object.defineProperty(matches[i], '__renderers', { enumerable: false, value: [] });
-			}
-			matches[i].__renderers.push(url);
-		}
-	}
 }
 
 function renderItem(i) {
@@ -228,7 +179,43 @@ function renderItemEditmeta() {
 		'</form>'
 	].join('');
 }
-},{"../auth":1,"../pagent":5,"../util":6,"../widgets/addlink-panel":7,"../widgets/directory-delete-btn":8,"../widgets/directory-links-list":9}],3:[function(require,module,exports){
+},{"../auth":1,"../pagent":6,"../util":7,"../widgets/addlink-panel":8,"../widgets/directory-delete-btn":9,"../widgets/directory-links-list":10,"./renderers":3}],3:[function(require,module,exports){
+var util = require('../util');
+
+// Thing renderer
+local.addServer('thing-renderer', function(req, res) {
+	req.on('end', function() {
+		res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
+		var desc = [];
+		var url = (req.body.url) ? util.escapeHTML(req.body.url) : '#';
+		if (req.body.description) { desc.push(util.escapeHTML(req.body.description)); }
+		if (req.body.url) { desc.push('<a href="'+url+'">Link</a>'); }
+		var html = [
+			'<div class="media">',
+				((req.body.image) ? '<a target="_top" href="'+url+'" class="pull-left"><img class="media-object" src="'+util.escapeHTML(req.body.image)+'" alt="'+util.escapeHTML(req.body.name)+'" height="64"></a>' : ''),
+				'<div class="media-body">',
+					'<h4 class="media-heading">'+util.escapeHTML(req.body.name)+'</h4>',
+					((desc.length) ? '<p>'+desc.join('<br>')+'</p>' : ''),
+				'</div>',
+			'</div>'
+		].join('');
+		res.end(html);
+	});
+});
+
+// Default renderer
+local.addServer('default-renderer', function(req, res) {
+	req.on('end', function() {
+		res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
+		res.end('<p><a target="_top" href="'+util.escapeHTML(req.query.href)+'">Link</a></p>');
+		/*var html = JSON.stringify(req.query);
+		if (req.body) {
+			html += '<br><strong>'+JSON.stringify(req.body)+'</strong>';
+		}
+		res.end(html);*/
+	});
+});
+},{"../util":7}],4:[function(require,module,exports){
 var hostUA = local.agent(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
@@ -241,7 +228,7 @@ window.globals = module.exports = {
 	meUA: hostUA.follow({ rel: 'item', id: '.me' }),
 	fetchProxyUA: hostUA.follow({ rel: 'service', id: '.fetch' }),
 };
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 //
 // mimetype.js - A catalog object of mime types based on file extensions
 //
@@ -996,7 +983,7 @@ window.globals = module.exports = {
 	self.MimeType = MimeType;
 	return self;
 }(this));
-},{"path":11}],5:[function(require,module,exports){
+},{"path":12}],6:[function(require,module,exports){
 // Page Agent (PAgent)
 // ===================
 // Standard page behaviors
@@ -1147,7 +1134,7 @@ module.exports = {
 	createIframe: createIframe,
 	renderIframe: renderIframe
 };
-},{"./util":6}],6:[function(require,module,exports){
+},{"./util":7}],7:[function(require,module,exports){
 var globals = require('./globals');
 
 var lbracket_regex = /</g;
@@ -1300,7 +1287,7 @@ module.exports = {
 	fetch: fetch,
 	fetchMeta: function(url) { return fetch(url, true); }
 };
-},{"./globals":3}],7:[function(require,module,exports){
+},{"./globals":4}],8:[function(require,module,exports){
 var globals   = require('../globals');
 var util      = require('../util');
 var mimetypes = require('../mimetypes');
@@ -1430,7 +1417,7 @@ module.exports = {
 		$('.addlink-panel #post-link-btn').on('click', onPostLink);
 	}
 };
-},{"../globals":3,"../mimetypes":4,"../util":6}],8:[function(require,module,exports){
+},{"../globals":4,"../mimetypes":5,"../util":7}],9:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -1450,7 +1437,7 @@ module.exports = {
 		}
 	}
 };
-},{"../globals":3}],9:[function(require,module,exports){
+},{"../globals":4}],10:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -1474,7 +1461,7 @@ module.exports = {
 		}
 	}
 };
-},{"../globals":3}],10:[function(require,module,exports){
+},{"../globals":4}],11:[function(require,module,exports){
 
 
 //
@@ -1692,7 +1679,7 @@ if (typeof Object.getOwnPropertyDescriptor === 'function') {
   exports.getOwnPropertyDescriptor = valueObject;
 }
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 var process=require("__browserify_process");// Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -1903,7 +1890,7 @@ exports.extname = function(path) {
   return splitPath(path)[3];
 };
 
-},{"__browserify_process":13,"_shims":10,"util":12}],12:[function(require,module,exports){
+},{"__browserify_process":14,"_shims":11,"util":13}],13:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2448,7 +2435,7 @@ function hasOwnProperty(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
 
-},{"_shims":10}],13:[function(require,module,exports){
+},{"_shims":11}],14:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};

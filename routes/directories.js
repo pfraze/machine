@@ -13,7 +13,7 @@ module.exports = function(server) {
 	server.delete('/:dir',  requireSession, deleteDir);
 
 	function requireSession(req, res, next) {
-		if (!req.session.email) {
+		if (!req.session.user) {
 			return res.send(401);
 		}
 		next();
@@ -107,8 +107,8 @@ module.exports = function(server) {
 				// Render page HTML
 				var dir = res.locals.directory;
 				var page = tmpl.render('directory', {
-					user:          req.session.email||'',
-					user_is_admin: dir.owner && (req.session.email == dir.owner),
+					user:          'user', //:TODO: req.session.user||'',
+					user_is_admin: true, //:TODO: dir.owner && (req.session.user == dir.owner),
 					dirname:       dir.id,
 					dirage:        util.timeago(dir.created_at),
 					links_html:    linksHTML,
@@ -140,7 +140,7 @@ module.exports = function(server) {
 
 		// Create
 		id = db.allocateDirID(id);
-		var value = { id: id, owner: req.session.email, created_at: Date.now() };
+		var value = { id: id, owner: req.session.user, created_at: Date.now() };
 		db.getMainDB().put(id, value, function(err) {
 			if (err) {
 				console.error(err);
@@ -163,7 +163,7 @@ module.exports = function(server) {
 			}
 
 			// Check ownership
-			if (directory.owner != req.session.email) {
+			if (directory.owner != req.session.user) {
 				return res.send(403);
 			}
 
