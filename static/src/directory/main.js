@@ -60,7 +60,7 @@ local.addServer('meta', function(req, res) {
 		$('#meta-msg-'+id).text('');
 
 		var meta;
-		try { meta = JSON.parse(req.body.link); }
+		try { meta = util.parseRawMeta(req.body.link); }
 		catch (e) {
 			$('#meta-msg-'+id).text(e.toString());
 			return res.writeHead(422).end();
@@ -71,11 +71,12 @@ local.addServer('meta', function(req, res) {
 				res.writeHead(204).end();
 
 				// update locally
+				meta.href = mediaLinks[id].href; // preserve, since href was stripped earlier
 				mediaLinks[id] = meta;
 				classifyRenderers([mediaLinks[id]]);
 
 				// redraw
-				$('#slot-'+id+' .edit-meta').popover('destroy');
+				$('#slot-'+id+' .edit-meta').popover('toggle');
 				$('#meta-msg-'+id).text('Updated');
 				renderItem(id);
 				local.util.nextTick(function() {
@@ -181,7 +182,7 @@ function renderItemEditmeta() {
 	var id = $slot.attr('id').slice(5);
 	return [
 		'<form action="httpl://meta/'+id+'" method="PUT">',
-			'<textarea name="link" rows="10">'+util.escapeHTML(JSON.stringify(mediaLinks[id], false, 2))+'</textarea>',
+			'<textarea name="link" rows="10">'+util.escapeHTML(util.serializeRawMeta(mediaLinks[id]))+'</textarea>',
 			'<input type="submit" class="btn btn-primary" value="Update">',
 			' &nbsp; <span id="meta-msg-'+id+'"></span>',
 		'</form>'

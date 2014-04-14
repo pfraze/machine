@@ -40,6 +40,26 @@ function renderResponse(req, res) {
 	return res.status + ' ' + res.reason;
 }
 
+function serializeRawMeta(obj) {
+	var parts = [];
+	for (var k in obj) {
+		if (k == 'href') continue;
+		parts.push(k+': '+obj[k]);
+	}
+	return parts.join('\n');
+}
+
+function parseRawMeta(str) {
+	var obj = {};
+	var re = /^([^:]*): ?(.*)/;
+	str.split('\n').forEach(function(line, i) {
+		var parse = re.exec(line);
+		if (!parse) throw {line: 5, error: 'Bad line'};
+		obj[parse[1]] = parse[2];
+	});
+	return obj;
+}
+
 var lookupReq;
 var lookupAttempts;
 function fetch(url, useHead) {
@@ -123,6 +143,10 @@ module.exports = {
 	escapeQuotes: escapeQuotes,
 	stripScripts: stripScripts,
 	renderResponse: renderResponse,
+
+	serializeRawMeta: serializeRawMeta,
+	parseRawMeta: parseRawMeta,
+
 	fetch: fetch,
 	fetchMeta: function(url) { return fetch(url, true); }
 };
