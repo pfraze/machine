@@ -95,12 +95,12 @@ if (config.debug_auth) {
 		next();
 	});
 }
-if (config.ssl) {
+/*if (config.ssl) {
 	server.use(function(req, res, next) {
 		res.setHeader('Strict-Transport-Security', 'max-age=8640000; includeSubDomains');
 		next();
 	});
-}
+}*/
 server.all('*', middleware.setCorsHeaders);
 server.all('*', middleware.setCspHeaders);
 server.options('*', function(req, res) {
