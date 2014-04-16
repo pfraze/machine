@@ -132,6 +132,9 @@ server.use('/js', express.static(__dirname + '/static/js', { maxAge: 1000*60*60*
 server.use('/css', express.static(__dirname + '/static/css', { maxAge: 1000*60*60*24 }));
 server.use('/img', express.static(__dirname + '/static/img', { maxAge: 1000*60*60*24 }));
 server.use('/fonts', express.static(__dirname + '/static/fonts', { maxAge: 1000*60*60*24 }));
+server.get('/popup_test.html', function(req, res) {
+	res.send(require('fs').readFileSync('./static/popup_test.html').toString());
+});
 // Program routes
 require('./routes/home')(server);
 require('./routes/auth')(server);

@@ -27,6 +27,7 @@ local.logAllExceptions = true;
 require('../pagent').setup();
 require('../auth').setup();
 var util = require('../util');
+var popups = require('../popup-bridge/parent-page');
 
 // ui
 require('../widgets/addlink-panel').setup();
@@ -44,6 +45,15 @@ var rendererQueries = {
 // Do render
 var mediaLinks = local.queryLinks(document, { rel: 'stdrel.com/media' });
 renderFeed();
+
+// :DEBUG:
+$('#popup-test').on('click', function() {
+	popups.createPopup('http://grimwire.com:8000/popup_test.html', function(req, res, server) {
+		console.log('request from popup', req);
+		res.writeHead(204).end();
+	});
+	return false;
+});
 
 // :TEMP:
 local.addServer('todo', function(req, res) { alert('Todo'); res.writeHead(204).end(); });
@@ -179,7 +189,7 @@ function renderItemEditmeta() {
 		'</form>'
 	].join('');
 }
-},{"../auth":1,"../pagent":6,"../util":7,"../widgets/addlink-panel":8,"../widgets/directory-delete-btn":9,"../widgets/directory-links-list":10,"./renderers":3}],3:[function(require,module,exports){
+},{"../auth":1,"../pagent":6,"../popup-bridge/parent-page":7,"../util":8,"../widgets/addlink-panel":9,"../widgets/directory-delete-btn":10,"../widgets/directory-links-list":11,"./renderers":3}],3:[function(require,module,exports){
 var util = require('../util');
 
 // Thing renderer
@@ -215,7 +225,7 @@ local.addServer('default-renderer', function(req, res) {
 		res.end(html);*/
 	});
 });
-},{"../util":7}],4:[function(require,module,exports){
+},{"../util":8}],4:[function(require,module,exports){
 var hostUA = local.agent(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
@@ -983,7 +993,7 @@ window.globals = module.exports = {
 	self.MimeType = MimeType;
 	return self;
 }(this));
-},{"path":12}],6:[function(require,module,exports){
+},{"path":13}],6:[function(require,module,exports){
 // Page Agent (PAgent)
 // ===================
 // Standard page behaviors
@@ -1134,7 +1144,105 @@ module.exports = {
 	createIframe: createIframe,
 	renderIframe: renderIframe
 };
-},{"./util":7}],7:[function(require,module,exports){
+},{"./util":8}],7:[function(require,module,exports){
+module.exports = {
+	PopupBridgeServer: PopupBridgeServer,
+	createPopup: function(url, serverFn) {
+		var server = new PopupBridgeServer({ src: url, serverFn: serverFn });
+		local.addServer('popup-'+activePopupServers.length, server);
+		return server;
+	}
+};
+var activePopups = [];
+var activePopupServers = [];
+
+// Handle messages from popups
+window.addEventListener('message', function(e) {
+	// Get the popup server
+	// :TODO: see if this works
+	var id = activePopups.indexOf(e.source);
+	if (id === -1) return;
+	var server = activePopupServers[id];
+	if (!server) return;
+	/*var server = activePopupServers[e.data.cid];
+	if (!server) {
+		return;
+	}*/
+
+	// Make sure this is from our popup's domain
+	if (e.origin !== server.getOrigin()) {
+		console.warn('Received message from popup at',e.origin,'Expected',server.getOrigin(),'Closing connection');
+		server.terminate(); // popup has gone rogue, shut it down
+		return;
+	}
+
+	// Handle message
+	server.onChannelMessage(e.data);
+});
+
+// PopupBridgeServer
+// ======================
+// EXPORTED
+// wrapper for the channel to a popup
+// - `config.src`: string, the url to open
+// - `config.serverFn`: function(req, res, server)
+function PopupBridgeServer(config) {
+	var self = this;
+	if (!config || !config.src) {
+		throw "config.src is required";
+	}
+	local.BridgeServer.call(this, config);
+	this.srcd = local.parseUri(config.src);
+	this.origin = this.srcd.protocol + '://' + this.srcd.authority;
+
+	// Open interface in a popup
+	this.popupWindow = window.open(config.src);
+	activePopupServers.push(this);
+	activePopups.push(this.popupWindow);
+}
+PopupBridgeServer.prototype = Object.create(local.BridgeServer.prototype);
+
+PopupBridgeServer.prototype.getOrigin = function() { return this.origin; };
+PopupBridgeServer.prototype.isChannelActive = function() {
+	return !!this.popupWindow;
+};
+
+PopupBridgeServer.prototype.terminate = function(status, reason) {
+	local.BridgeServer.prototype.terminate.call(this, status, reason);
+
+	var a = activePopups.indexOf(this.popupWindow);
+	if (a !== -1) {
+		delete activePopups[a];
+	}
+
+	var b = activePopupServers.indexOf(this);
+	if (b !== -1) {
+		delete activePopupServers[b];
+	}
+
+	this.popupWindow = null;
+};
+
+// Sends a single message across the channel
+// - `msg`: required string
+PopupBridgeServer.prototype.channelSendMsg = function(msg) {
+	if (!this.popupWindow) throw "Attempted to send message to closed popup";
+	this.popupWindow.postMessage(msg, this.getOrigin());
+};
+
+// Remote request handler
+PopupBridgeServer.prototype.handleRemoteRequest = function(request, response) {
+	if (this.config.serverFn) {
+		this.config.serverFn.call(this, request, response, this);
+	} else if (local.getServer('popup-bridge')) {
+		var server = local.getServer('popup-bridge');
+		server.fn.call(server.context, request, response, this);
+	} else {
+		response.writeHead(501, 'server not implemented');
+		response.end();
+	}
+};
+},{}],8:[function(require,module,exports){
 var globals = require('./globals');
 
 var lbracket_regex = /</g;
@@ -1287,7 +1395,7 @@ module.exports = {
 	fetch: fetch,
 	fetchMeta: function(url) { return fetch(url, true); }
 };
-},{"./globals":4}],8:[function(require,module,exports){
+},{"./globals":4}],9:[function(require,module,exports){
 var globals   = require('../globals');
 var util      = require('../util');
 var mimetypes = require('../mimetypes');
@@ -1417,7 +1525,7 @@ module.exports = {
 		$('.addlink-panel #post-link-btn').on('click', onPostLink);
 	}
 };
-},{"../globals":4,"../mimetypes":5,"../util":7}],9:[function(require,module,exports){
+},{"../globals":4,"../mimetypes":5,"../util":8}],10:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -1437,7 +1545,7 @@ module.exports = {
 		}
 	}
 };
-},{"../globals":4}],10:[function(require,module,exports){
+},{"../globals":4}],11:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -1461,7 +1569,7 @@ module.exports = {
 		}
 	}
 };
-},{"../globals":4}],11:[function(require,module,exports){
+},{"../globals":4}],12:[function(require,module,exports){
 
 
 //
@@ -1679,7 +1787,7 @@ if (typeof Object.getOwnPropertyDescriptor === 'function') {
   exports.getOwnPropertyDescriptor = valueObject;
 }
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 var process=require("__browserify_process");// Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -1890,7 +1998,7 @@ exports.extname = function(path) {
   return splitPath(path)[3];
 };
 
-},{"__browserify_process":14,"_shims":11,"util":13}],13:[function(require,module,exports){
+},{"__browserify_process":15,"_shims":12,"util":14}],14:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2435,7 +2543,7 @@ function hasOwnProperty(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
 
-},{"_shims":11}],14:[function(require,module,exports){
+},{"_shims":12}],15:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};

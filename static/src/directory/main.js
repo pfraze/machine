@@ -4,6 +4,7 @@ local.logAllExceptions = true;
 require('../pagent').setup();
 require('../auth').setup();
 var util = require('../util');
+var popups = require('../popup-bridge/parent-page');
 
 // ui
 require('../widgets/addlink-panel').setup();
@@ -21,6 +22,15 @@ var rendererQueries = {
 // Do render
 var mediaLinks = local.queryLinks(document, { rel: 'stdrel.com/media' });
 renderFeed();
+
+// :DEBUG:
+$('#popup-test').on('click', function() {
+	popups.createPopup('http://grimwire.com:8000/popup_test.html', function(req, res, server) {
+		console.log('request from popup', req);
+		res.writeHead(204).end();
+	});
+	return false;
+});
 
 // :TEMP:
 local.addServer('todo', function(req, res) { alert('Todo'); res.writeHead(204).end(); });
