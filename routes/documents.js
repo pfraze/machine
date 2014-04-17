@@ -78,6 +78,7 @@ module.exports = function(server) {
 		meta.rel = (meta.rel||'').split(' ')
 			.filter(function(rel) { return rel.indexOf('.') !== -1; }) // filter out non-URI reltypes
 			.join(' ');
+		meta.created_at = Date.now();
 
 		// Make all doc links a media type
 		if (doc) {
