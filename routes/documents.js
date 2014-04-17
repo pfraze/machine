@@ -6,10 +6,16 @@ var winston = require('winston');
 
 module.exports = function(server) {
 	// :TODO: head
-	server.get('/:dir/:doc', getDocument);
+	server.get('/:dir/:doc', padDocId, getDocument);
 	server.post('/:dir', checkPerms, addDocument);
-	server.put('/:dir/:doc/meta', checkPerms, updateDocumentMeta);
-	server.delete('/:dir/:doc', checkPerms, deleteDocument);
+	server.put('/:dir/:doc/meta', checkPerms, padDocId, updateDocumentMeta);
+	server.delete('/:dir/:doc', checkPerms, padDocId, deleteDocument);
+
+	// helper to make sure the id has the proper 0pad
+	function padDocId(req, res, next) {
+		req.params.doc = util.pad0(req.params.doc, 16);
+		next();
+	}
 
 	function getDocument(req, res, next) {
 		db.getDirMetaDB(req.param('dir')).get(req.param('doc'), function(err, meta) {
@@ -100,7 +106,7 @@ module.exports = function(server) {
 				winston.error('Failed to create document in DB', { error: err, inputs: ops, request: util.formatReqForLog(req) });
 				return res.send(500);
 			}
-			res.setHeader('location', config.url + '/' + req.param('dir') + '/' + id);
+			res.setHeader('location', config.url + '/' + req.param('dir') + '/' + util.trim0(id));
 			res.send(201);
 		});
 	}

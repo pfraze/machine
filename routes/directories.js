@@ -42,6 +42,8 @@ module.exports = function(server) {
 
 	function loadJsonDocsFromDB(req, res, next) {
 		// Find all the json docs
+		// :TODO: can't this just be a readstream that's setup exactly like the meta read?
+		//        the two db segments *should* mirror each other
 		var fetches = {};
 		var docDb = db.getDirDocsDB(req.param('dir'));
 		res.locals.items.forEach(function(item, i) {
@@ -89,7 +91,8 @@ module.exports = function(server) {
 				var slotsHTML = [];
 				res.locals.items.forEach(function(item, i) {
 					// Render <link> el
-					item.value.href = item.value.href || (config.url + '/' + req.param('dir') + '/' + item.key);
+					item.value.href = item.value.href ||
+						(config.url + '/' + req.param('dir') + '/' + util.trim0(item.key));
 					linksHTML.push(util.renderLinkEl(item.value));
 
 					// Render slot, embedding json doc if present
