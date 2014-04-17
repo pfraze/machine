@@ -179,7 +179,30 @@ module.exports = function(server) {
 				}
 				// Release directory ID
 				db.deallocateDirID(req.param('dir'));
-				res.send(204);
+
+				// Clear out items
+				var metaDb = db.getDirMetaDB(req.param('dir'));
+				var docsDb = db.getDirDocsDB(req.param('dir'));
+
+				metaDb.createKeyStream({ limit: -1 })
+					.on('data', addOp)
+					.on('end', doBatch);
+
+				var ops = [];
+				function addOp(key) {
+					ops.push({ type: 'del', key: key, prefix: metaDb });
+					ops.push({ type: 'del', key: key, prefix: docsDb });
+				}
+				function doBatch() {
+					db.getMainDB().batch(ops, function(err) {
+						if (err) {
+							console.error(err);
+							winston.error('Failed to delete documents in DB', { error: err, inputs: ops, request: util.formatReqForLog(req) });
+							return res.send(500);
+						}
+						res.send(204);
+					});
+				}
 			});
 		});
 	}
