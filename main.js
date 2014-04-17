@@ -18,6 +18,7 @@ var config = require('./lib/config');
 var configDefaults = {
 	hostname: require("os").hostname(),
 	port: undefined,
+	'public': false,
 	ssl: false,
 	is_upstream: false,
 	downstream_port: false,
@@ -27,6 +28,7 @@ var configDefaults = {
 var configCLI = {
 	hostname: argv.h || argv.hostname,
 	port: argv.p || argv.port,
+	'public': argv['public'],
 	ssl: argv.ssl,
 	is_upstream: (typeof (argv.u || argv.is_upstream) != 'undefined') ? !!(argv.u || argv.is_upstream) : undefined,
 	downstream_port: argv.u || argv.is_upstream,
@@ -64,6 +66,7 @@ html.load(config);
 // ===============
 var server = express();
 winston.add(winston.transports.File, { filename: 'server.log', handleExceptions: false });
+winston.remove(winston.transports.Console); // its console logging is too ugly
 db.setup(config.dbpath);
 
 // Common Handlers
@@ -155,12 +158,25 @@ if (config.ssl && !config.is_upstream) {
 		key: require('fs').readFileSync('ssl-key.pem'),
 		cert: require('fs').readFileSync('ssl-cert.pem')
 	};
-	https.createServer(sslOpts, server).listen(config.port);
+	https.createServer(sslOpts, server).listen(config.port, (config['public'] ? undefined : 'localhost'));
 } else {
-	server.listen(config.port);
+	server.listen(config.port, (config['public'] ? undefined : 'localhost'));
 }
 server.startTime = new Date();
+
+// start bananer
 winston.info('Relay HTTP server listening on port '+config.port, config);
+console.log('Relay HTTP server listening on port '+config.port);
+console.log(config);
+if (config['public']) {
+	console.log('++================================================++');
+	console.log('|| Public Mode - Accepting requests from any host ||');
+	console.log('++================================================++');
+} else {
+	console.log('++=======================================================++');
+	console.log('|| Private Mode - Accepting requests from localhost only ||');
+	console.log('++=======================================================++');
+}
 
 // PID Management
 // ==============

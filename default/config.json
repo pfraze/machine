@@ -1,5 +1,6 @@
 {
-	"hostname": "foo.com",
+	"hostname": "localhost",
     "port": 8000,
+    "public": false,
 	"dbpath": "./db"
 }
