@@ -49,12 +49,18 @@ renderFeed();
 local.addServer('todo', function(req, res) { alert('Todo'); res.writeHead(204).end(); });
 
 // Item meta-update handler
-local.addServer('meta', function(req, res) { req.on('end', function() {
-	var id = req.path.slice(1);
-	if (!id || !mediaLinks[id]) { return res.writeHead(404).end(); }
-	if (req.method != 'PUT') { return res.writeHead(405).end(); }
-	$('#meta-msg-'+id).text('');
+local.addServer('meta', function(req, res) {
+	req.on('end', function() {
+		var id = req.path.slice(1);
+		if (!id || !mediaLinks[id]) { return res.writeHead(404).end(); }
+		$('#meta-msg-'+id).text('');
 
+		if (req.method == 'PUT')    { putItemMeta(req, res, id); }
+		if (req.method == 'DELETE') { deleteItem(req, res, id); }
+		else                        { res.writeHead(405).end(); }
+	});
+});
+function putItemMeta(req, res, id) {
 	var meta;
 	try { meta = util.parseRawMeta(req.body.link); }
 	catch (e) {
@@ -96,7 +102,31 @@ local.addServer('meta', function(req, res) { req.on('end', function() {
 			}
 			res.writeHead(502).end();
 		});
-}); });
+}
+function deleteItem(req, res, id) {
+	if (!confirm('Delete this item?')) return;
+
+	local.DELETE(mediaLinks[id].href)
+		.then(function(res2) {
+			res.writeHead(204).end();
+
+			// update locally
+			delete mediaLinks[id];
+
+			// redraw
+			$('#slot-'+id+' .edit-meta').popover('toggle');
+			$('#slot-'+id).remove();
+		})
+		.fail(function(res2) {
+			switch (res2.status) {
+				case 401:
+				case 403:
+					$('#meta-msg-'+id).text('You\'re not authorized to edit this directory.');
+					return res.writeHead(403).end();
+			}
+			res.writeHead(502).end();
+		});
+}
 
 function findRenderersForLinks(links) {
 	for (var url in rendererQueries) {
@@ -176,6 +206,7 @@ function renderItemEditmeta() {
 			'<textarea name="link" rows="10">'+util.escapeHTML(util.serializeRawMeta(mediaLinks[id]))+'</textarea>',
 			'<input type="submit" class="btn btn-primary" value="Update">',
 			' &nbsp; <span id="meta-msg-'+id+'"></span>',
+			'<input type="submit" class="pull-right btn btn-default" value="Delete" formmethod="DELETE">',
 		'</form>'
 	].join('');
 }
