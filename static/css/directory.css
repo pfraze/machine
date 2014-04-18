@@ -1,7 +1,7 @@
 body { background: #eee; }
 
 .container, .row, .row > div { height: 100%; }
-.col-sm-8 { background: #fff; border-left: 1px solid #ccc; border-right: 1px solid #ccc; }
+.center-pane { background: #fff; border-left: 1px solid #ccc; border-right: 1px solid #ccc; }
 
 .addlink-panel { position: fixed; left: 10px; bottom: 0; z-index: 1; box-shadow: none; }
 .fetch-result { margin: 15px 0 0 0; }
@@ -11,9 +11,12 @@ body { background: #eee; }
 .config-panel h3 { margin: 0; }
 .config-panel a { color: #555; }
 
-.directory-item-slot { margin: 5px; background: #fff; }
-.directory-item-header { font-size: 10px; padding: 2px 5px; border-bottom: 1px solid #ddd }
-.directory-item-header, .directory-item-header a { color: gray; }
+.directory-item-slot { margin: 5px; background: #fff; border: 1px solid white; }
+.directory-item-slot.selected { background: #EEEEEE; border: 1px dashed #ccc; }
+.directory-item-header { font-size: 10px; padding: 2px 5px; border-bottom: 1px solid #ddd; color: gray;}
+.directory-item-header a { color: gray; }
+.selected .directory-item-header { background: #2C98FF; color: #eee; }
+.selected .directory-item-header a { color: #eee; }
 .directory-item-content { padding: 10px; }
 .directory-item-content :last-child { margin-bottom: 0; }
 
