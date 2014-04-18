@@ -147,7 +147,7 @@ function renderItem(i) {
 
 	function renderTemplateResponse(link, i) {
 		return function(res) {
-			var html = sec.sanitizeRenderedItem(''+res.body+'<div class="addlink-panel">foo</div>');
+			var html = sec.sanitizeRenderedItem(''+res.body);
 			$('#slot-'+i).html([
 				'<div class="directory-item-header">'+renderItemHeader(link)+'</div>',
 				((res.body) ? ('<div class="directory-item-content">'+html+'</div>') : '')
