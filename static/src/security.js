@@ -1,9 +1,6 @@
 // Items rendered in the directory by plugins
 var renderedItem = {
 	allowedTags: [ // https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/HTML5/HTML5_element_list
-		// metadata
-		'link',
-
 		// sections
 		'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
 		'header', 'footer', 'section', 'nav', 'article', 'aside', 'address',
