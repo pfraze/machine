@@ -20,7 +20,170 @@ module.exports = {
 		}
 	}
 };
-},{"./globals":4}],2:[function(require,module,exports){
+},{"./globals":6}],2:[function(require,module,exports){
+module.exports = {
+	get: getExecution,
+	runAction: runAction
+};
+
+// Executor
+// ========
+var _executions = {};
+
+// EXPORTED
+// execution lookup, validates against domain
+function getExecution(domain, id) {
+	var exec = _executions[id];
+	if (exec && exec.domain === domain)
+		return exec;
+}
+
+// EXPORTED
+// create "action" execution
+function runAction(url, meta, reqBody) {
+	var execid = allocId();
+	var urld = local.parseUri(url);
+	var domain = urld.protocol + '://' + urld.authority;
+
+	// allocate execution and gui space
+	var exec = createExecution(execid, domain, meta);
+	createActionGui(exec);
+
+	// setup and dispatch request
+	var req = new local.Request({
+		method: 'POST',
+		url: local.joinUri(url, execid),
+		Accept: 'text/html'
+	});
+	exec.req = req;
+	exec.res_ = local.dispatch(req);
+	exec.res_.always(handleActionRes(exec.id));
+	req.end(reqBody);
+
+	return exec;
+}
+
+// produces callback to handle the response of an action
+function handleActionRes(execid) {
+	return function(res) {
+		var exec = _executions[execid];
+		if (!exec) { return console.error('Execution not in masterlist when handling response', execid, res); }
+		// ^ this should never happen, if it does the flow is broken somehow
+
+		// render response and destroy the execution
+		var gui = res.body;
+		if (!gui) {
+			gui = '';
+			if (exec.meta && exec.meta.title) gui += exec.meta.title+' ';
+			if (res.status >= 200 && res.status < 400) gui += 'Finished';
+			else gui += 'Failed';
+		}
+		exec.setGui(gui);
+		exec.stop();
+	};
+}
+
+// allocate unused id
+function allocId() {
+	var execid;
+	do {
+		execid = Math.round(Math.random()*1000000000); // :TODO: pretty weak PNRG, is that a problem?
+	} while(execid in _executions);
+	return execid;
+}
+
+// create execution base-structure, store in masterlist
+function createExecution(execid, domain, meta) {
+	_executions[execid] = {
+		meta: meta,
+		domain: domain,
+		id: execid,
+		el: null,
+
+		stop: stopExecution,
+		setGui: setExecutionGui
+	};
+	return _executions[execid];
+}
+
+// Execution-object Methods
+// ========================
+
+// closes request, removes self from masterlist
+function stopExecution(fastRemove) {
+	if (this.id in _executions) {
+		this.req.close();
+		delete _executions[this.id];
+
+		if (fastRemove) {
+			$(this.el).remove();
+		} else {
+			// remove gui in 3 seconds
+			var el = this.el;
+			setTimeout(function() { $(el).remove(); }, 3000);
+		}
+	}
+}
+
+// updates self's gui
+function setExecutionGui(v) {
+	var html = (v && typeof v == 'object') ? JSON.stringify(v) : (''+v);
+	if (html && this.el)
+		this.el.querySelector('.execgui-inner').innerHTML = html;
+}
+
+// Action-specific Methods
+// =======================
+
+// create gui-segment for an action to use
+function createActionGui(execution) {
+	var title = execution.domain;
+	if (execution.meta && execution.meta.title) {
+		title = execution.meta.title;
+	}
+	var $el = $(
+		'<div id="execgui-'+execution.id+'" class="execgui actiongui">'+
+			'<div class="actiongui-title"><small>'+title+' <a href="#" class="glyphicon glyphicon-remove"></a></small></div>'+
+			'<div class="execgui-inner">Loading...</div>'+
+		'</div>'
+	);
+	$('#action-guis').append($el);
+	execution.el = $el[0];
+	execution.el.addEventListener('request', onActionGuiRequest.bind(execution));
+	execution.el.querySelector('.actiongui-title .glyphicon-remove').addEventListener('click', onActionGuiClose.bind(execution));
+}
+
+// handle request-event from an action's gui
+function onActionGuiRequest(e) {
+	var req = e.detail;
+	var body = req.body; delete req.body;
+
+	// audit request
+	// :TODO: only to self
+
+	// prep request
+	if (!req.headers) { req.headers = {}; }
+	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
+	req = (req instanceof local.Request) ? req : (new local.Request(req));
+	if (!local.isAbsUri(req.url)) {
+		req.url = local.joinUri(this.domain, req.url);
+	}
+
+	// dispatch, render response
+	var self = this;
+	local.dispatch(req).always(function(res) {
+		if (res.body) {
+			self.setGui(res.body);
+		}
+	});
+	req.end(body);
+}
+
+// handle titlebar close button click
+function onActionGuiClose(e) {
+	this.stop(true);
+}
+},{}],3:[function(require,module,exports){
 // Environment Setup
 // =================
 local.logAllExceptions = true;
@@ -33,6 +196,29 @@ var sec = require('../security');
 require('../widgets/addlink-panel').setup();
 require('../widgets/directory-links-list').setup();
 require('../widgets/directory-delete-btn').setup();
+
+// plugin execution
+local.addServer('worker-bridge', require('./worker-bridge')());
+var exec = require('./executor');
+
+
+// Actions
+// =======
+
+// :DEBUG:
+$('#debug-stopwatch').on('click', function() {
+	var execution = exec.runAction(
+		'local://grimwire.com:8000(js/act/stopwatch.js)/',
+		{title:'StopWatch'}
+	);
+	// setTimeout(function() { execution.stop(); }, 500);
+	console.log(execution.req.url);
+});
+
+
+
+// Rendering
+// =========
 
 // Active renderers
 require('./renderers');
@@ -212,7 +398,7 @@ function renderItemEditmeta() {
 		'</form>'
 	].join('');
 }
-},{"../auth":1,"../pagent":6,"../security":7,"../util":8,"../widgets/addlink-panel":9,"../widgets/directory-delete-btn":10,"../widgets/directory-links-list":11,"./renderers":3}],3:[function(require,module,exports){
+},{"../auth":1,"../pagent":8,"../security":9,"../util":10,"../widgets/addlink-panel":11,"../widgets/directory-delete-btn":12,"../widgets/directory-links-list":13,"./executor":2,"./renderers":4,"./worker-bridge":5}],4:[function(require,module,exports){
 var util = require('../util');
 
 // Thing renderer
@@ -248,7 +434,53 @@ local.addServer('default-renderer', function(req, res) {
 		res.end(html);*/
 	});
 });
-},{"../util":8}],4:[function(require,module,exports){
+},{"../util":10}],5:[function(require,module,exports){
+var exec = require('./executor');
+
+module.exports = function(config) {
+	// toplevel
+	function root(req, res, worker) {
+		var links = [];
+		links.push({ href: '/', rel: 'self service via', title: 'Host Page' });
+		// :TODO: add hosts
+
+		// Respond
+		res.setHeader('Link', links);
+		res.writeHead(204).end();
+	}
+
+	// gui service
+	function gui(req, res, worker) {
+		var execid = req.path.slice(5);
+
+		// fetch worker's execution
+		var execution = exec.get(worker.getUrl(), execid);
+		if (!execution) {
+			return res.writeHead(404, 'id not attached to worker').end();
+		}
+
+		if (req.method == 'PUT') {
+			req.on('end', function() {
+				execution.setGui(req.body);
+				res.writeHead(204).end();
+			});
+		} else {
+			res.writeHead(405, 'only accepts PUT').end();
+		}
+	}
+
+	// server starting-point
+	return function(req, res, worker) {
+		if (req.path == '/') {
+			root(req, res, worker);
+		} else if(req.path.indexOf('/gui') === 0) {
+			gui(req, res, worker);
+		} else {
+			res.writeHead(404).end();
+		}
+	};
+};
+},{"./executor":2}],6:[function(require,module,exports){
 var hostUA = local.agent(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
@@ -261,7 +493,7 @@ window.globals = module.exports = {
 	meUA: hostUA.follow({ rel: 'item', id: '.me' }),
 	fetchProxyUA: hostUA.follow({ rel: 'service', id: '.fetch' }),
 };
-},{}],5:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 //
 // mimetype.js - A catalog object of mime types based on file extensions
 //
@@ -1016,7 +1248,7 @@ window.globals = module.exports = {
 	self.MimeType = MimeType;
 	return self;
 }(this));
-},{"path":13}],6:[function(require,module,exports){
+},{"path":15}],8:[function(require,module,exports){
 // Page Agent (PAgent)
 // ===================
 // Standard page behaviors
@@ -1036,12 +1268,13 @@ function setup() {
 	try { local.bindRequestEvents(document.body); }
 	catch (e) { console.error('Failed to bind body request events.', e); }
 	document.body.addEventListener('request', function(e) {
-		dispatchRequest(e.detail, null, $(e.target));
+		console.log('toplevel request event', e); // :TODO:
+		// var target = e.target;
+		// dispatchRequest(e.detail, ((region) ? $(region) : null), $(target));
 	});
 }
 
-function dispatchRequest(req, $iframe, $target) {
-	var target = req.target; // local.Request() will strip `target`
+function dispatchRequest(req, $region, $target) {
 	var body = req.body; delete req.body;
 
 	if (!req.headers) { req.headers = {}; }
@@ -1050,14 +1283,16 @@ function dispatchRequest(req, $iframe, $target) {
 
 	// Relative link? Make absolute
 	if (!local.isAbsUri(req.url)) {
-		var baseurl = ($iframe.data('origin')) ? $iframe.data('origin') : (window.location.protocol + '//' + window.location.host);
+		var baseurl = ($region && $region.data('domain'))
+			? $region.data('domain')
+			: (window.location.protocol + '//' + window.location.host);
 		req.url = local.joinUri(baseurl, req.url);
 	}
 
 	// Handle request based on target and origin
 	var res_;
 	req.urld = req.urld || local.parseUri(req.url);
-	var newOrigin = (req.urld.protocol != 'data') ? (req.urld.protocol || 'httpl')+'://'+req.urld.authority : null;
+	var newOrigin = (req.urld.protocol != 'data') ? (req.urld.protocol || 'local')+'://'+req.urld.authority : null;
 	if ($iframe && (!target || target == '_self')) {
 		// In-place update
 		res_ = local.dispatch(req);
@@ -1086,88 +1321,12 @@ function dispatchRequest(req, $iframe, $target) {
 	return res_;
 }
 
-var iframeCounter = 0;
-function createIframe($container, originHost) {
-	var html = '<iframe id="iframe-'+iframeCounter+'" seamless="seamless" sandbox="allow-popups allow-same-origin allow-scripts" data-origin="'+originHost+'"><html><body></body></html></iframe>';
-	// ^ sandbox="allow-same-origin allow-scripts" allows the parent page to reach into the iframe
-	// CSP and script stripping occurs in renderIframe()
-	iframeCounter++;
-	$container.append(html);
-	return $container.find('iframe').last();
-}
-
-var hostURL = window.location.protocol + '//' + window.location.host;
-function renderIframe($iframe, html) {
-	// html = '<link href="'+hostURL+'/css/bootstrap.css" rel="stylesheet">'+html;
-	// <link href="'+hostURL+'/css/iframe.css" rel="stylesheet">
-	html = '<meta http-equiv="Content-Security-Policy" content="default-src *; style-src * \'unsafe-inline\'; script-src \'self\'; object-src \'none\'; frame-src \'none\';" />'+html;
-	html = '<base href="'+$iframe.data('origin')+'">'+html;
-	// ^ script-src 'self' enables the parent page to reach into the iframe
-	html = util.stripScripts(html); // CSP stops inline or remote script execution, but we still want to stop inclusions of scripts from our domain
-	$iframe.attr('srcdoc', html);
-
-	// :HACK: everything below here in this function kinda blows
-
-	// Size the iframe to its content
-	/*function sizeIframe() {
-		this.height = null; // reset so we can get a fresh measurement
-
-		var oh = this.contentWindow.document.body.offsetHeight;
-		var sh = this.contentWindow.document.body.scrollHeight;
-		// for whatever reason, chrome gives a minimum of 150 for scrollHeight, but is accurate if below that. Whatever.
-		this.height = ((sh == 150) ? oh : sh) + 'px';
-
-		// In 100ms, do it again - it seems styles aren't always in place
-		var self = this;
-		setTimeout(function() {
-			var oh = self.contentWindow.document.body.offsetHeight;
-			var sh = self.contentWindow.document.body.scrollHeight;
-			self.height = ((sh == 150) ? oh : sh) + 'px';
-		}, 100);
-	}
-	$iframe.load(sizeIframe);*/
-
-	// Bind request events
-	// :TODO: can this go in .load() ?
-	var attempts = 0;
-	var bindPoller = setInterval(function() {
-		try {
-			local.bindRequestEvents($iframe.contents()[0].body);
-			$iframe.contents()[0].body.addEventListener('request', iframeRequestEventHandler);
-			clearInterval(bindPoller);
-		} catch(e) {
-			attempts++;
-			if (attempts > 100) {
-				console.error('Failed to bind iframe events, which meant FIVE SECONDS went by the browser constructing it. Who\'s driving this clown-car?');
-				clearInterval(bindPoller);
-			}
-		}
-	}, 50); // wait 50 ms for the page to setup
-}
-
-function iframeRequestEventHandler(e) {
-	var iframeEl = $(e.target)[0].ownerDocument.defaultView.frameElement;
-	//               ^ :TODO: uh, did I $ wrap and dewrap this Element for no reason?
-	var $iframe = $(iframeEl);
-	var req = e.detail;
-	prepIframeRequest(req, $iframe);
-	dispatchRequest(req, $iframe, $(e.target));
-}
-
-function prepIframeRequest(req, $iframe) {
-	if ($iframe.data('origin')) {
-		// Put origin into the headers
-		req.headers.from = $iframe.data('origin');
-	}
-}
 
 module.exports = {
 	setup: setup,
-	dispatchRequest: dispatchRequest,
-	createIframe: createIframe,
-	renderIframe: renderIframe
+	dispatchRequest: dispatchRequest
 };
-},{"./util":8}],7:[function(require,module,exports){
+},{"./util":10}],9:[function(require,module,exports){
 // Items rendered in the directory by plugins
 var renderedItem = {
 	allowedTags: [ // https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/HTML5/HTML5_element_list
@@ -1241,7 +1400,7 @@ module.exports = {
 		return window.html.sanitizeWithPolicy(html, renderedItem.policy);
 	}
 };
-},{}],8:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 var globals = require('./globals');
 
 var lbracket_regex = /</g;
@@ -1394,7 +1553,7 @@ module.exports = {
 	fetch: fetch,
 	fetchMeta: function(url) { return fetch(url, true); }
 };
-},{"./globals":4}],9:[function(require,module,exports){
+},{"./globals":6}],11:[function(require,module,exports){
 var globals   = require('../globals');
 var util      = require('../util');
 var mimetypes = require('../mimetypes');
@@ -1524,7 +1683,7 @@ module.exports = {
 		$('.addlink-panel #post-link-btn').on('click', onPostLink);
 	}
 };
-},{"../globals":4,"../mimetypes":5,"../util":8}],10:[function(require,module,exports){
+},{"../globals":6,"../mimetypes":7,"../util":10}],12:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -1544,24 +1703,25 @@ module.exports = {
 		}
 	}
 };
-},{"../globals":4}],11:[function(require,module,exports){
+},{"../globals":6}],13:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
 	setup: function() {
-		$('.directory-links-list').on('click', function(e) {
+		$('.center-pane').on('click', function(e) {
+			if (!e.ctrlKey) {
+				// unselect current selection if ctrl isnot held down
+				$('.directory-links-list .selected').removeClass('selected');
+			}
+
 			var slotEl = local.util.findParentNode.byClass(e.target, 'directory-item-slot');
 			if (slotEl) {
-				if (!e.ctrlKey) {
-					// unselect current selection if ctrl isnot held down
-					$('.directory-links-list .selected').removeClass('selected');
-				}
 				slotEl.classList.add('selected');
 			}
 		});
 	}
 };
-},{"../globals":4}],12:[function(require,module,exports){
+},{"../globals":6}],14:[function(require,module,exports){
 
 
 //
@@ -1779,7 +1939,7 @@ if (typeof Object.getOwnPropertyDescriptor === 'function') {
   exports.getOwnPropertyDescriptor = valueObject;
 }
 
-},{}],13:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 var process=require("__browserify_process");// Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -1990,7 +2150,7 @@ exports.extname = function(path) {
   return splitPath(path)[3];
 };
 
-},{"__browserify_process":15,"_shims":12,"util":14}],14:[function(require,module,exports){
+},{"__browserify_process":17,"_shims":14,"util":16}],16:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2535,7 +2695,7 @@ function hasOwnProperty(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
 
-},{"_shims":12}],15:[function(require,module,exports){
+},{"_shims":14}],17:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -2589,5 +2749,5 @@ process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
 
-},{}]},{},[2])
+},{}]},{},[3])
 ;

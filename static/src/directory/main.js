@@ -11,6 +11,29 @@ require('../widgets/addlink-panel').setup();
 require('../widgets/directory-links-list').setup();
 require('../widgets/directory-delete-btn').setup();
 
+// plugin execution
+local.addServer('worker-bridge', require('./worker-bridge')());
+var exec = require('./executor');
+
+
+// Actions
+// =======
+
+// :DEBUG:
+$('#debug-stopwatch').on('click', function() {
+	var execution = exec.runAction(
+		'local://grimwire.com:8000(js/act/stopwatch.js)/',
+		{title:'StopWatch'}
+	);
+	// setTimeout(function() { execution.stop(); }, 500);
+	console.log(execution.req.url);
+});
+
+
+
+// Rendering
+// =========
+
 // Active renderers
 require('./renderers');
 var rendererQueries = {
