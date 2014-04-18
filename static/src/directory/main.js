@@ -4,6 +4,7 @@ local.logAllExceptions = true;
 require('../pagent').setup();
 require('../auth').setup();
 var util = require('../util');
+var sec = require('../security');
 
 // ui
 require('../widgets/addlink-panel').setup();
@@ -146,16 +147,17 @@ function renderItem(i) {
 
 	function renderTemplateResponse(link, i) {
 		return function(res) {
+			var html = sec.sanitizeRenderedItem(''+res.body+'<div class="addlink-panel">foo</div>');
 			$('#slot-'+i).html([
 				'<div class="directory-item-header">'+renderItemHeader(link)+'</div>',
-				((res.body) ? ('<div class="directory-item-content">'+res.body+'</div>') : '')
+				((res.body) ? ('<div class="directory-item-content">'+html+'</div>') : '')
 			].join(''));
 		};
 	}
 	function handleTemplateFailure(link, i) {
 		return function(res) {
 			console.error('Failed to render item', i, link, res);
-			$('#slot-'+i).html('Failed to render :( '+res.status+' '+res.reason);
+			$('#slot-'+i).html('Failed to render :( '+util.escapeHTML(res.status+' '+res.reason));
 		};
 	}
 	return local.POST(json, req)

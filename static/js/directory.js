@@ -27,6 +27,7 @@ local.logAllExceptions = true;
 require('../pagent').setup();
 require('../auth').setup();
 var util = require('../util');
+var sec = require('../security');
 
 // ui
 require('../widgets/addlink-panel').setup();
@@ -169,16 +170,17 @@ function renderItem(i) {
 
 	function renderTemplateResponse(link, i) {
 		return function(res) {
+			var html = sec.sanitizeRenderedItem(''+res.body+'<div class="addlink-panel">foo</div>');
 			$('#slot-'+i).html([
 				'<div class="directory-item-header">'+renderItemHeader(link)+'</div>',
-				((res.body) ? ('<div class="directory-item-content">'+res.body+'</div>') : '')
+				((res.body) ? ('<div class="directory-item-content">'+html+'</div>') : '')
 			].join(''));
 		};
 	}
 	function handleTemplateFailure(link, i) {
 		return function(res) {
 			console.error('Failed to render item', i, link, res);
-			$('#slot-'+i).html('Failed to render :( '+res.status+' '+res.reason);
+			$('#slot-'+i).html('Failed to render :( '+util.escapeHTML(res.status+' '+res.reason));
 		};
 	}
 	return local.POST(json, req)
@@ -210,7 +212,7 @@ function renderItemEditmeta() {
 		'</form>'
 	].join('');
 }
-},{"../auth":1,"../pagent":6,"../util":7,"../widgets/addlink-panel":8,"../widgets/directory-delete-btn":9,"../widgets/directory-links-list":10,"./renderers":3}],3:[function(require,module,exports){
+},{"../auth":1,"../pagent":6,"../security":7,"../util":8,"../widgets/addlink-panel":9,"../widgets/directory-delete-btn":10,"../widgets/directory-links-list":11,"./renderers":3}],3:[function(require,module,exports){
 var util = require('../util');
 
 // Thing renderer
@@ -246,7 +248,7 @@ local.addServer('default-renderer', function(req, res) {
 		res.end(html);*/
 	});
 });
-},{"../util":7}],4:[function(require,module,exports){
+},{"../util":8}],4:[function(require,module,exports){
 var hostUA = local.agent(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
@@ -1014,7 +1016,7 @@ window.globals = module.exports = {
 	self.MimeType = MimeType;
 	return self;
 }(this));
-},{"path":12}],6:[function(require,module,exports){
+},{"path":13}],6:[function(require,module,exports){
 // Page Agent (PAgent)
 // ===================
 // Standard page behaviors
@@ -1165,7 +1167,84 @@ module.exports = {
 	createIframe: createIframe,
 	renderIframe: renderIframe
 };
-},{"./util":7}],7:[function(require,module,exports){
+},{"./util":8}],7:[function(require,module,exports){
+// Items rendered in the directory by plugins
+var renderedItem = {
+	allowedTags: [ // https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/HTML5/HTML5_element_list
+		// metadata
+		'link',
+
+		// sections
+		'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+		'header', 'footer', 'section', 'nav', 'article', 'aside', 'address',
+
+		// grouping
+		'hr', 'p', 'pre', 'blockquote',
+		'ol', 'ul', 'li', 'dl', 'dt', 'dd',
+		'figure', 'figcaption',
+		'div',
+
+		// text-level semantics
+		'a', 'em', 'strong', 'small', 's',
+		'cite', 'q', 'dfn', 'abbr',
+		'data', 'time', 'code', 'var', 'samp', 'kbd',
+		'sub', 'sup', 'i', 'b', 'u',
+		'mark', 'ruby', 'rt', 'rp', 'bdi', 'bdo',
+		'span', 'br', 'wbr',
+
+		// edits
+		'ins', 'del',
+
+		// embedded content
+		'img', 'video', 'audio', 'source', 'track',
+
+		// tabular data
+		'table', 'caption', 'colgroup', 'col',
+		'tbody', 'thead', 'tfoot',
+		'tr', 'td', 'th',
+
+		// forms
+		'form', 'fieldset', 'legend',
+		'label', 'input', 'button', 'select',
+		'datalist', 'optgroup', 'option',
+		'textarea', 'keygen', 'output',
+		'progress', 'meter'
+	],
+	disallowedClasses: [
+		// Boostrap
+		// because of position: fixed or position: absolute
+		'affix', 'dropdown-backdrop', 'navbar-fixed-top', 'navbar-fixed-bottom',
+		'modal', 'modal-backdrop',
+		'carousel-control', 'carousel-indicators',
+		'next', 'prev', // these are from .carousel-inner > .next
+
+		// Custom
+		'addlink-panel', 'config-panel'
+	],
+
+	urlsPolicy: function(url) { return url; }, // allow all
+	tokensPolicy: function(token) {
+		if (renderedItem.disallowedClasses.indexOf(token) == -1) {
+			return token;
+		}
+		console.warn('Removed disallowed id/class:', token);
+	},
+	policy: function(tagName, attribs) {
+		var ri = renderedItem;
+		if (ri.allowedTags.indexOf(tagName) !== -1) {
+			return {attribs: window.html.sanitizeAttribs(tagName, attribs, ri.urlsPolicy, ri.tokensPolicy)};
+		} else {
+			console.warn('Removed disallowed tag:', tagName);
+		}
+	}
+};
+
+module.exports = {
+	sanitizeRenderedItem: function(html) {
+		return window.html.sanitizeWithPolicy(html, renderedItem.policy);
+	}
+};
+},{}],8:[function(require,module,exports){
 var globals = require('./globals');
 
 var lbracket_regex = /</g;
@@ -1318,7 +1397,7 @@ module.exports = {
 	fetch: fetch,
 	fetchMeta: function(url) { return fetch(url, true); }
 };
-},{"./globals":4}],8:[function(require,module,exports){
+},{"./globals":4}],9:[function(require,module,exports){
 var globals   = require('../globals');
 var util      = require('../util');
 var mimetypes = require('../mimetypes');
@@ -1448,7 +1527,7 @@ module.exports = {
 		$('.addlink-panel #post-link-btn').on('click', onPostLink);
 	}
 };
-},{"../globals":4,"../mimetypes":5,"../util":7}],9:[function(require,module,exports){
+},{"../globals":4,"../mimetypes":5,"../util":8}],10:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -1468,7 +1547,7 @@ module.exports = {
 		}
 	}
 };
-},{"../globals":4}],10:[function(require,module,exports){
+},{"../globals":4}],11:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -1492,7 +1571,7 @@ module.exports = {
 		}
 	}
 };
-},{"../globals":4}],11:[function(require,module,exports){
+},{"../globals":4}],12:[function(require,module,exports){
 
 
 //
@@ -1710,7 +1789,7 @@ if (typeof Object.getOwnPropertyDescriptor === 'function') {
   exports.getOwnPropertyDescriptor = valueObject;
 }
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 var process=require("__browserify_process");// Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -1921,7 +2000,7 @@ exports.extname = function(path) {
   return splitPath(path)[3];
 };
 
-},{"__browserify_process":14,"_shims":11,"util":13}],13:[function(require,module,exports){
+},{"__browserify_process":15,"_shims":12,"util":14}],14:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2466,7 +2545,7 @@ function hasOwnProperty(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
 
-},{"_shims":11}],14:[function(require,module,exports){
+},{"_shims":12}],15:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
