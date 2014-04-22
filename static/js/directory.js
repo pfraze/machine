@@ -22,6 +22,7 @@ module.exports = {
 };
 },{"./globals":6}],2:[function(require,module,exports){
 module.exports = {
+	setup: setup,
 	get: getExecution,
 	runAction: runAction
 };
@@ -29,6 +30,37 @@ module.exports = {
 // Executor
 // ========
 var _executions = {};
+var _modal_execution = null; // the execution currently in a modal
+
+// EXPORTED
+function setup() {
+	// setup modal-window close behavior
+	$('#modal-window').on('hide.bs.modal', function() {
+		if (_modal_execution) {
+			// if we still have a modal execution, then it has been cancelled
+			_modal_execution.stop(true);
+			_modal_execution = null;
+		}
+	});
+	// setup modal-window primary button behavior
+	$('#modal-window .modal-footer .btn-primary').on('click', function() {
+		var $form = $('#modal-window .modal-body form');
+		if ($form.length === 0) {
+			console.warn('Wanted to submit the modal, but no form found in content');
+			return;
+		}
+
+		var request = local.util.extractRequest($form[0], $form[0]);
+		if (!request) { console.warn('Unable to build request from modal form'); return; }
+
+		// dispatch request and continue execution
+		var exec = _modal_execution;
+		local.util.finishPayloadFileReads(request).then(function() {
+			exec.dispatch(request).always(handleActionRes(exec.id));
+		});
+		// don't close modal yet - wait for response in case it's still needed
+	});
+}
 
 // EXPORTED
 // execution lookup, validates against domain
@@ -58,52 +90,48 @@ function runAction(url, meta, reqBody) {
 	});
 	exec.req = req;
 	exec.res_ = local.dispatch(req);
-	exec.res_.always(handleRunActionRes(exec.id));
+	exec.res_.always(handleActionRes(exec.id));
 	req.end(reqBody);
 
 	return exec;
 }
 
 // produces callback to handle the response of an action
-function handleRunActionRes(execid) {
+function handleActionRes(execid) {
 	return function(res) {
 		var exec = _executions[execid];
 		if (!exec) { return console.error('Execution not in masterlist when handling response', execid, res); }
 		// ^ this should never happen, if it does the flow is broken somehow
+		var modal = (res.parsedHeaders.pragma) ? res.parsedHeaders.pragma.modal : false;
 
 		if (res.header('Content-Type') == 'text/event-stream') {
 			// stream update events into the GUI
-			var buffer = '', eventDelimIndex;
-			res.on('data', function(chunk) {
-				chunk = buffer + chunk;
-				// Step through each event, as its been given
-				while ((eventDelimIndex = chunk.indexOf('\r\n\r\n')) !== -1) {
-					var e = chunk.slice(0, eventDelimIndex);
-					e = local.contentTypes.deserialize('text/event-stream', e);
-					if (e.event == 'update') {
-						exec.setGui(e.data);
-					}
-					chunk = chunk.slice(eventDelimIndex+4);
-				}
-				buffer = chunk;
-				res.body = '';
-			});
+			streamGui(res, exec);
 		} else {
 			// output final response to GUI
 			res.on('end', function() {
 				var gui = res.body;
 				if (!gui) {
-					gui = '';
-					if (exec.meta && exec.meta.title) gui += exec.meta.title+' ';
-					if (res.status >= 200 && res.status < 400) gui += 'Finished';
-					else gui += 'Failed';
+					var reason;
+					if (res.reason) { reason = res.reason; }
+					else if (res.status >= 200 && res.status < 400) { reason = 'success'; }
+					else if (res.status >= 400 && res.status < 500) { reason = 'bad request'; }
+					else if (res.status >= 500 && res.status < 600) { reason = 'error'; }
+					gui = reason + ' <small>'+res.status+'</small>';
 				}
-				exec.setGui(gui);
+				if (modal) {
+					exec.spawnModal(modal, gui);
+				} else {
+					exec.setGui(gui);
+				}
 			});
 		}
 
 		// stop on response close
-		res.on('close', exec.stop.bind(exec));
+		if (!modal) {
+			res.on('close', exec.stop.bind(exec, false));
+			closeModalIfActive(); // close modal now because we know we dont need it
+		}
 	};
 }
 
@@ -124,14 +152,66 @@ function createExecution(execid, domain, meta) {
 		id: execid,
 		el: null,
 
+		dispatch: dispatchFromExecution,
 		stop: stopExecution,
-		setGui: setExecutionGui
+		setGui: setExecutionGui,
+		spawnModal: spawnExecutionModal
 	};
 	return _executions[execid];
 }
 
+// helper to update an execution using an event-stream
+function streamGui(res, exec) {
+	var buffer = '', eventDelimIndex;
+	res.on('data', function(chunk) {
+		chunk = buffer + chunk;
+		// Step through each event, as its been given
+		while ((eventDelimIndex = chunk.indexOf('\r\n\r\n')) !== -1) {
+			var e = chunk.slice(0, eventDelimIndex);
+			e = local.contentTypes.deserialize('text/event-stream', e);
+			if (e.event == 'update') {
+				exec.setGui(e.data);
+			}
+			chunk = chunk.slice(eventDelimIndex+4);
+		}
+		buffer = chunk;
+		res.body = '';
+	});
+}
+
+// helper to close the active modal
+function closeModalIfActive() {
+	_modal_execution = null;
+	$('#modal-window').modal('hide');
+}
+
 // Execution-object Methods
 // ========================
+
+// executes a request from the execution, either from a GUI element or from the worker
+function dispatchFromExecution(req) {
+	// audit request
+	// :TODO: only to self
+
+	// prep request
+	var body = req.body;
+	delete req.body;
+
+	req.stream = true;
+
+	if (!req.headers) { req.headers = {}; }
+	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
+
+	if (!local.isAbsUri(req.url)) {
+		req.url = local.joinUri(this.domain, req.url);
+	}
+
+	// dispatch
+	req = (req instanceof local.Request) ? req : (new local.Request(req));
+	var res_ = local.dispatch(req);
+	req.end(body);
+	return res_;
+}
 
 // closes request, removes self from masterlist
 function stopExecution(fastRemove) {
@@ -150,10 +230,36 @@ function stopExecution(fastRemove) {
 }
 
 // updates self's gui
-function setExecutionGui(v) {
-	var html = (v && typeof v == 'object') ? JSON.stringify(v) : (''+v);
+function setExecutionGui(doc) {
+	var html = (doc && typeof doc == 'object') ? JSON.stringify(doc) : (''+doc);
 	if (html && this.el)
 		this.el.querySelector('.execgui-inner').innerHTML = html;
+}
+
+// creates a modal
+// - `modalDef`: a string of "title text|ok button text|cancel button text"
+function spawnExecutionModal(modalDef, doc) {
+	if (_modal_execution && _modal_execution !== this) {
+		console.error('Attempted to create a modal while another modal existed! Please report this to the layer1 devs.');
+		return;
+	}
+	_modal_execution = this;
+	this.setGui('Waiting for user input');
+
+	// pull out text from modal definition
+	modalDef = (modalDef||'').split('|');
+	var title  = modalDef[0] || this.meta.title || this.meta.href;
+	var ok     = modalDef[1] || 'Submit';
+	var cancel = modalDef[2] || 'Cancel';
+
+	// create modal
+	var html = (doc && typeof doc == 'object') ? JSON.stringify(doc) : (''+doc);
+	var $mwin = $('#modal-window');
+	$mwin.find('.modal-title').text(title);
+	$mwin.find('.modal-footer .btn-primary').text(ok);
+	$mwin.find('.modal-footer .btn-default').text(cancel);
+	$mwin.find('.modal-body').html(doc);
+	$mwin.modal();
 }
 
 // Action-specific Methods
@@ -179,28 +285,12 @@ function createActionGui(execution) {
 
 // handle request-event from an action's gui
 function onActionGuiRequest(e) {
-	var req = e.detail;
-	var body = req.body; delete req.body;
-
-	// audit request
-	// :TODO: only to self
-
-	// prep request
-	if (!req.headers) { req.headers = {}; }
-	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
-	req = (req instanceof local.Request) ? req : (new local.Request(req));
-	if (!local.isAbsUri(req.url)) {
-		req.url = local.joinUri(this.domain, req.url);
-	}
-
-	// dispatch, render response
 	var self = this;
-	local.dispatch(req).always(function(res) {
+	this.dispatch(e.detail).always(function(res) {
 		if (res.body) {
 			self.setGui(res.body);
 		}
 	});
-	req.end(body);
 }
 
 // handle titlebar close button click
@@ -213,8 +303,10 @@ function onActionGuiClose(e) {
 local.logAllExceptions = true;
 require('../pagent').setup();
 require('../auth').setup();
+require('../http-headers').setup();
 var util = require('../util');
 var sec = require('../security');
+var exec = require('./executor');
 
 // ui
 require('../widgets/addlink-panel').setup();
@@ -223,20 +315,25 @@ require('../widgets/directory-delete-btn').setup();
 
 // plugin execution
 local.addServer('worker-bridge', require('./worker-bridge')());
-var exec = require('./executor');
-
+exec.setup();
 
 // Actions
 // =======
 
 // :DEBUG:
+$('#debug-stopwatch').tooltip({ placement: 'right' });
 $('#debug-stopwatch').on('click', function() {
 	var execution = exec.runAction(
 		'local://grimwire.com:8000(js/act/stopwatch.js)/',
 		{title:'StopWatch'}
 	);
-	// setTimeout(function() { execution.stop(); }, 500);
-	console.log(execution.req.url);
+});
+$('#debug-mkjson').tooltip({ placement: 'right' });
+$('#debug-mkjson').on('click', function() {
+	var execution = exec.runAction(
+		'local://grimwire.com:8000(js/act/mkjson.js)/',
+		{title:'Make JSON Document'}
+	);
 });
 
 
@@ -422,7 +519,7 @@ function renderItemEditmeta() {
 		'</form>'
 	].join('');
 }
-},{"../auth":1,"../pagent":8,"../security":9,"../util":10,"../widgets/addlink-panel":11,"../widgets/directory-delete-btn":12,"../widgets/directory-links-list":13,"./executor":2,"./renderers":4,"./worker-bridge":5}],4:[function(require,module,exports){
+},{"../auth":1,"../http-headers":7,"../pagent":9,"../security":10,"../util":11,"../widgets/addlink-panel":12,"../widgets/directory-delete-btn":13,"../widgets/directory-links-list":14,"./executor":2,"./renderers":4,"./worker-bridge":5}],4:[function(require,module,exports){
 var util = require('../util');
 
 // Thing renderer
@@ -458,7 +555,7 @@ local.addServer('default-renderer', function(req, res) {
 		res.end(html);*/
 	});
 });
-},{"../util":10}],5:[function(require,module,exports){
+},{"../util":11}],5:[function(require,module,exports){
 var exec = require('./executor');
 
 module.exports = function(config) {
@@ -496,6 +593,33 @@ window.globals = module.exports = {
 	fetchProxyUA: hostUA.follow({ rel: 'service', id: '.fetch' }),
 };
 },{}],7:[function(require,module,exports){
+module.exports = { setup: setup };
+function setup() {
+	local.httpHeaders.register('pragma',
+		function serialize_pragma(obj) {
+			var str, strs = [];
+			for (var k in obj) {
+				str = k;
+				if (obj[k] !== true) {
+					str += '="'+obj[k]+'"';
+				}
+				strs.push(str);
+			}
+			return strs.join(' ');
+		},
+		function parse_pragma(str) {
+			//             "key"     "="      \""val\""    "val"
+			//         -------------- -       ---------   -------
+			var re = /([\-a-z0-9_\.]+)=?(?:(?:"([^"]+)")|([^;\s]+))?/g;
+			var match, obj = {};
+			while ((match = re.exec(str))) {
+				obj[match[1]] = match[2] || match[3];
+			}
+			return obj;
+		}
+	);
+}
+},{}],8:[function(require,module,exports){
 //
 // mimetype.js - A catalog object of mime types based on file extensions
 //
@@ -1250,7 +1374,7 @@ window.globals = module.exports = {
 	self.MimeType = MimeType;
 	return self;
 }(this));
-},{"path":15}],8:[function(require,module,exports){
+},{"path":16}],9:[function(require,module,exports){
 // Page Agent (PAgent)
 // ===================
 // Standard page behaviors
@@ -1328,7 +1452,7 @@ module.exports = {
 	setup: setup,
 	dispatchRequest: dispatchRequest
 };
-},{"./util":10}],9:[function(require,module,exports){
+},{"./util":11}],10:[function(require,module,exports){
 // Items rendered in the directory by plugins
 var renderedItem = {
 	allowedTags: [ // https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/HTML5/HTML5_element_list
@@ -1402,7 +1526,7 @@ module.exports = {
 		return window.html.sanitizeWithPolicy(html, renderedItem.policy);
 	}
 };
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 var globals = require('./globals');
 
 var lbracket_regex = /</g;
@@ -1555,7 +1679,7 @@ module.exports = {
 	fetch: fetch,
 	fetchMeta: function(url) { return fetch(url, true); }
 };
-},{"./globals":6}],11:[function(require,module,exports){
+},{"./globals":6}],12:[function(require,module,exports){
 var globals   = require('../globals');
 var util      = require('../util');
 var mimetypes = require('../mimetypes');
@@ -1685,7 +1809,7 @@ module.exports = {
 		$('.addlink-panel #post-link-btn').on('click', onPostLink);
 	}
 };
-},{"../globals":6,"../mimetypes":7,"../util":10}],12:[function(require,module,exports){
+},{"../globals":6,"../mimetypes":8,"../util":11}],13:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -1705,7 +1829,7 @@ module.exports = {
 		}
 	}
 };
-},{"../globals":6}],13:[function(require,module,exports){
+},{"../globals":6}],14:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -1723,7 +1847,7 @@ module.exports = {
 		});
 	}
 };
-},{"../globals":6}],14:[function(require,module,exports){
+},{"../globals":6}],15:[function(require,module,exports){
 
 
 //
@@ -1941,7 +2065,7 @@ if (typeof Object.getOwnPropertyDescriptor === 'function') {
   exports.getOwnPropertyDescriptor = valueObject;
 }
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 var process=require("__browserify_process");// Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2152,7 +2276,7 @@ exports.extname = function(path) {
   return splitPath(path)[3];
 };
 
-},{"__browserify_process":17,"_shims":14,"util":16}],16:[function(require,module,exports){
+},{"__browserify_process":18,"_shims":15,"util":17}],17:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2697,7 +2821,7 @@ function hasOwnProperty(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
 
-},{"_shims":14}],17:[function(require,module,exports){
+},{"_shims":15}],18:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};

@@ -3,8 +3,10 @@
 local.logAllExceptions = true;
 require('../pagent').setup();
 require('../auth').setup();
+require('../http-headers').setup();
 var util = require('../util');
 var sec = require('../security');
+var exec = require('./executor');
 
 // ui
 require('../widgets/addlink-panel').setup();
@@ -13,20 +15,25 @@ require('../widgets/directory-delete-btn').setup();
 
 // plugin execution
 local.addServer('worker-bridge', require('./worker-bridge')());
-var exec = require('./executor');
-
+exec.setup();
 
 // Actions
 // =======
 
 // :DEBUG:
+$('#debug-stopwatch').tooltip({ placement: 'right' });
 $('#debug-stopwatch').on('click', function() {
 	var execution = exec.runAction(
 		'local://grimwire.com:8000(js/act/stopwatch.js)/',
 		{title:'StopWatch'}
 	);
-	// setTimeout(function() { execution.stop(); }, 500);
-	console.log(execution.req.url);
+});
+$('#debug-mkjson').tooltip({ placement: 'right' });
+$('#debug-mkjson').on('click', function() {
+	var execution = exec.runAction(
+		'local://grimwire.com:8000(js/act/mkjson.js)/',
+		{title:'Make JSON Document'}
+	);
 });
 
 
