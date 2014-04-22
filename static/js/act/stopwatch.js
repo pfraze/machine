@@ -5,7 +5,7 @@ function main(req, res) {
 		return run(req, res, req.path.slice(1));
 	}
 
-	res.header('Link', [{ href: '/', rel: 'self todorel.com/action', title: 'Stopwatch' }]);
+	res.header('Link', [{ href: '/', rel: 'self stdrel.com/action', title: 'Stopwatch' }]);
 	res.header('Content-Type', 'application/json');
 
 	if (req.method == 'HEAD') {
@@ -13,37 +13,40 @@ function main(req, res) {
 	}
 	res.writeHead(200).end({
 		behavior: false,
-		queries: false
+		targets: false
 	});
 }
 
 var runs = {};
 function run(req, res, id) {
 	if (!(id in runs) && req.method == 'POST') {
+		res.header('Content-Type', 'text/event-stream');
+		res.writeHead(200, 'ok');
+
+		runs[id] = res;
+		res.id = id;
+		render(res, 0);
+
 		res.start = Date.now();
 		var intId = setInterval(function() {
 			var elapsed = Math.round((Date.now() - res.start)/1000);
-			render(id, elapsed, true);
+			render(res, elapsed);
 		}, 1000);
-		render(id, 0, true);
 
-		runs[id] = res;
 		req.on('close', function() {
 			clearInterval(intId);
 			delete runs[id];
 		});
 	} else if (req.method == 'DELETE') {
 		var elapsed = Math.round((Date.now() - runs[id].start)/1000);
-		runs[id].header('Content-Type', 'text/html');
-		runs[id].writeHead(200).end('<strong>'+elapsed+'</strong>');
+		render(runs[id], elapsed, true);
+		runs[id].end();
 		res.writeHead(204).end();
 	}
 }
 
-function render(id, elapsed) {
-	var html = '<strong>'+elapsed+'</strong> <a href="/'+id+'" method="DELETE">stop</a>';
-	local.PUT(html, {
-		url: 'host.page/gui/'+id,
-		headers: {'Content-Type': 'text/html'}
-	});
+function render(res, elapsed, isdone) {
+	var html = '<strong>'+elapsed+'</strong>';
+	if (!isdone) html += ' <a href="/'+res.id+'" method="DELETE">stop</a>';
+	res.write('event: update\r\ndata: '+html+'\r\n\r\n');
 }

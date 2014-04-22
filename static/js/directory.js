@@ -53,33 +53,57 @@ function runAction(url, meta, reqBody) {
 	var req = new local.Request({
 		method: 'POST',
 		url: local.joinUri(url, execid),
-		Accept: 'text/html'
+		Accept: 'text/html',
+		stream: true
 	});
 	exec.req = req;
 	exec.res_ = local.dispatch(req);
-	exec.res_.always(handleActionRes(exec.id));
+	exec.res_.always(handleRunActionRes(exec.id));
 	req.end(reqBody);
 
 	return exec;
 }
 
 // produces callback to handle the response of an action
-function handleActionRes(execid) {
+function handleRunActionRes(execid) {
 	return function(res) {
 		var exec = _executions[execid];
 		if (!exec) { return console.error('Execution not in masterlist when handling response', execid, res); }
 		// ^ this should never happen, if it does the flow is broken somehow
 
-		// render response and destroy the execution
-		var gui = res.body;
-		if (!gui) {
-			gui = '';
-			if (exec.meta && exec.meta.title) gui += exec.meta.title+' ';
-			if (res.status >= 200 && res.status < 400) gui += 'Finished';
-			else gui += 'Failed';
+		if (res.header('Content-Type') == 'text/event-stream') {
+			// stream update events into the GUI
+			var buffer = '', eventDelimIndex;
+			res.on('data', function(chunk) {
+				chunk = buffer + chunk;
+				// Step through each event, as its been given
+				while ((eventDelimIndex = chunk.indexOf('\r\n\r\n')) !== -1) {
+					var e = chunk.slice(0, eventDelimIndex);
+					e = local.contentTypes.deserialize('text/event-stream', e);
+					if (e.event == 'update') {
+						exec.setGui(e.data);
+					}
+					chunk = chunk.slice(eventDelimIndex+4);
+				}
+				buffer = chunk;
+				res.body = '';
+			});
+		} else {
+			// output final response to GUI
+			res.on('end', function() {
+				var gui = res.body;
+				if (!gui) {
+					gui = '';
+					if (exec.meta && exec.meta.title) gui += exec.meta.title+' ';
+					if (res.status >= 200 && res.status < 400) gui += 'Finished';
+					else gui += 'Failed';
+				}
+				exec.setGui(gui);
+			});
 		}
-		exec.setGui(gui);
-		exec.stop();
+
+		// stop on response close
+		res.on('close', exec.stop.bind(exec));
 	};
 }
 
@@ -449,32 +473,10 @@ module.exports = function(config) {
 		res.writeHead(204).end();
 	}
 
-	// gui service
-	function gui(req, res, worker) {
-		var execid = req.path.slice(5);
-
-		// fetch worker's execution
-		var execution = exec.get(worker.getUrl(), execid);
-		if (!execution) {
-			return res.writeHead(404, 'id not attached to worker').end();
-		}
-
-		if (req.method == 'PUT') {
-			req.on('end', function() {
-				execution.setGui(req.body);
-				res.writeHead(204).end();
-			});
-		} else {
-			res.writeHead(405, 'only accepts PUT').end();
-		}
-	}
-
 	// server starting-point
 	return function(req, res, worker) {
 		if (req.path == '/') {
 			root(req, res, worker);
-		} else if(req.path.indexOf('/gui') === 0) {
-			gui(req, res, worker);
 		} else {
 			res.writeHead(404).end();
 		}
