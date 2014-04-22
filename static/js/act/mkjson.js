@@ -33,20 +33,29 @@ function run(req, res, id) {
 				return res.writeHead(422, 'invalid JSON').end(
 					'<form action="/'+id+'?go" method="POST">'+
 						'<div class="form-group has-error">'+
-							'<textarea class="form-control" rows="20" name="doc">'+(req.body.doc||'')+'</textarea>'+
+							'<textarea class="form-control" rows="12" name="doc">'+(req.body.doc||'')+'</textarea>'+
 							'<span class="help-block">'+err+'</span>'+
 						'</div>'+
 					'</form>'
 				);
 			}
-			local.POST(json, 'host.env/feed?rel=stdrel.com/media&type=application/json');
-			res.writeHead(204).end();
+			local.POST(json, {
+				url: 'host.env/feed',
+				query: { rel: 'stdrel.com/media', type: 'application/json' },
+				Authorization: 'Exec '+id
+			}).then(function() {
+				res.writeHead(204).end();
+			}).fail(function(res2) {
+				res.header('Content-Type', 'text/html');
+				res.writeHead(502, 'got '+res2.status+' from upstream');
+				res.end('<strong>Error</strong>: Failed to add document');
+			});
 		} else {
 			res.header('Pragma', 'modal="Make JSON|Create|Cancel"');
 			res.header('Content-Type', 'text/html');
 			res.writeHead(200).end(
 				'<form action="/'+id+'?go" method="POST">'+
-					'<textarea class="form-control" rows="20" name="doc"></textarea>'+
+					'<textarea class="form-control" rows="12" name="doc"></textarea>'+
 				'</form>'
 			);
 		}
