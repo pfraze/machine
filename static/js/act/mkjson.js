@@ -13,16 +13,18 @@ function main(req, res) {
 	}
 	res.writeHead(200).end({
 		behavior: ['add-an-item'],
-		targets: ['collection']
+		targets: false
 	});
 }
 
 function run(req, res, id) {
 	if (req.method == 'POST') {
 		if (req.query.go) {
-			var err, doc, json;
+			var err, doc, json, title, docid;
 			if (req.body && typeof req.body.doc != 'undefined' && req.body.doc !== '') {
 				doc = req.body.doc;
+				title = req.body.title;
+				docid = req.body.id;
 				try { json = JSON.parse(doc); }
 				catch (e) { err = e.toString(); }
 			} else {
@@ -32,12 +34,12 @@ function run(req, res, id) {
 			if (err) {
 				res.header('Pragma', 'modal="Make JSON|Create|Cancel"');
 				res.header('Content-Type', 'text/html');
-				return res.writeHead(422, 'invalid JSON').end(render(id, doc, err));
+				return res.writeHead(422, 'invalid JSON').end(render(id, doc, title, docid, err));
 			}
 
 			local.POST(json, {
 				url: 'host.env/feed',
-				query: { rel: 'stdrel.com/media', type: 'application/json', title: req.body.title||undefined },
+				query: { rel: 'stdrel.com/media', type: 'application/json', title: title, id: id },
 				Authorization: 'Exec '+id
 			}).then(function() {
 				res.writeHead(204).end();
@@ -47,28 +49,28 @@ function run(req, res, id) {
 				res.end('<strong>Error</strong>: Failed to add document');
 			});
 		} else {
-			local.GET({
-				url: 'host.env/selection/0',
-				Authorization: 'Exec '+id
-			}).always(function(res2) {
-				res.header('Pragma', 'modal="Make JSON|Create|Cancel"');
-				res.header('Content-Type', 'text/html');
-				var body = (res2.body && typeof res2.body == 'object') ? JSON.stringify(res2.body) : res2.body;
-				res.writeHead(200).end(render(id, body));
-			});
+			var initDoc='', initTitle='', initId='';
+			res.header('Pragma', 'modal="Make JSON|Create|Cancel"');
+			res.header('Content-Type', 'text/html');
+			res.writeHead(200).end(render(id));
 		}
 	} else {
 		res.writeHead(405).end();
 	}
 }
 
-function render(id, doc, err) {
-	doc = doc || '';
-	err = err || '';
+function render(execid, doc, title, id, err) {
+	doc   = doc || '';
+	title = title || '';
+	id    = id || '';
+	err   = err || '';
 	var hasError = (err) ? 'has-error' : '';
-	return '<form action="/'+id+'?go" method="POST">'+
+	return '<form action="/'+execid+'?go" method="POST">'+
 		'<div class="form-group">'+
-			'<input type="text" class="form-control" name="title" placeholder="Title">'+
+			'<input type="text" class="form-control" name="title" placeholder="Title" value="'+esc(title)+'">'+
+		'</div>'+
+		'<div class="form-group">'+
+			'<input type="text" class="form-control" name="id" placeholder="ID" value="'+esc(id)+'">'+
 		'</div>'+
 		'<div class="form-group '+hasError+'">'+
 			'<textarea class="form-control" rows="12" name="doc">'+esc(doc)+'</textarea>'+

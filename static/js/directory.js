@@ -20,7 +20,7 @@ module.exports = {
 		}
 	}
 };
-},{"./globals":7}],2:[function(require,module,exports){
+},{"./globals":8}],2:[function(require,module,exports){
 module.exports = {
 	setup: setup,
 	get: getExecution,
@@ -322,27 +322,90 @@ function onActionGuiClose(e) {
 	this.stop(true);
 }
 },{}],3:[function(require,module,exports){
+module.exports = {
+	setup: function() {},
+	get: function() { return _cfg; },
+	queryActions: queryActions,
+	queryRenderers: queryRenderers,
+};
+
+// The active feed config
+var _cfg = {
+	actions: [
+		{
+			meta: { href: 'local://grimwire.com:8000(js/act/stopwatch.js)/', title: 'StopWatch' },
+			behavior: false,
+			targets: false
+		},
+		{
+			meta: { href: 'local://grimwire.com:8000(js/act/mkjson.js)/', title: 'Make JSON Document' },
+			behavior: ['add-an-item'],
+			targets: false
+		},
+		{
+			meta: { href: 'local://grimwire.com:8000(js/act/copydoc.js)/', title: 'Copy Document' },
+			behavior: ['read-selected', 'add-an-item'],
+			targets: [{rel:'stdrel.com/media', type:'application/json'}]
+		}
+	],
+	renderers: [
+		{
+			meta: { href: 'local://thing-renderer', title: 'Thing Renderer' },
+			targets: ['schema.org/Thing']
+		},
+		{
+			meta: { href: 'local://default-renderer', title: 'Default Renderer' },
+			targets: ['stdrel.com/media']
+		}
+	]
+};
+
+function query(targetLink, coll) {
+	var matches = [];
+	for (var i=0; i < coll.length; i++) {
+		var a = coll[i];
+		if (!a.targets) continue;
+		for (var j=0; j < (a.targets.length||0); j++) {
+			if (local.queryLink(targetLink, a.targets[j])) {
+				matches.push(a);
+			}
+		}
+	}
+	return matches;
+}
+
+function queryActions(targetLink) {
+	return query(targetLink, _cfg.actions);
+}
+
+function queryRenderers(targetLink) {
+	return query(targetLink, _cfg.renderers);
+}
+},{}],4:[function(require,module,exports){
 var sec = require('../security');
 var util = require('../util');
+var feedcfg = require('./feedcfg');
+var executor = require('./executor');
 
 module.exports = {
 	setup: setup,
-	renderFeed: renderFeed
+	renderFeed: renderFeed,
+	renderActions: renderActions
 };
 
 var _mediaLinks;
-var _rendererQueries;
+var _activeActions;
 function setup(mediaLinks) {
 	_mediaLinks = mediaLinks;
+	_activeActions = null;
 
 	// Active renderers
-	require('./renderers');
-	_rendererQueries = {
-		// :TODO: load from persistant storage
-		'local://thing-renderer': { rel: 'schema.org/Thing' },
-		'local://default-renderer': { rel: 'stdrel.com/media' }
-	};
 	renderFeed();
+	renderActions();
+
+	// Selection
+	$('.center-pane').on('click', onClickCenterpane);
+	$('#action-btns').on('click', onClickAction);
 }
 
 // Item meta-update handler
@@ -372,7 +435,6 @@ function putItemMeta(req, res, id) {
 			// update locally
 			meta.href = _mediaLinks[id].href; // preserve, since href was stripped earlier
 			_mediaLinks[id] = meta;
-			findRenderersForLinks([_mediaLinks[id]]);
 
 			// redraw
 			$('#slot-'+id+' .edit-meta').popover('toggle');
@@ -425,22 +487,7 @@ function deleteItem(req, res, id) {
 		});
 }
 
-function findRenderersForLinks(links) {
-	for (var url in _rendererQueries) {
-		var matches = local.queryLinks(links, _rendererQueries[url]);
-		for (var i=0; i < matches.length; i++) {
-			if (!matches[i].__renderers) {
-				Object.defineProperty(matches[i], '__renderers', { enumerable: false, value: [] });
-			}
-			matches[i].__renderers.push(url);
-		}
-	}
-}
-
 function renderFeed() {
-	// Collect renderers for each link
-	findRenderersForLinks(_mediaLinks);
-
 	// Render the medias
 	var renderPromises = [];
 	for (var i = 0; i < _mediaLinks.length; i++) {
@@ -459,7 +506,8 @@ function renderFeed() {
 
 function renderItem(i) {
 	var link = _mediaLinks[i];
-	var url = link.__renderers[0] || 'local://default-renderer';
+	var renderers = feedcfg.queryRenderers(link);
+	var url = (renderers[0]) ? renderers[0].meta.href : 'local://default-renderer';
 	var json = $('#slot-'+i).data('doc') || null;
 	var req = { url: url, query: link, Accept: 'text/html' };
 	if (json) req.Content_Type = 'application/json';
@@ -508,21 +556,81 @@ function renderItemEditmeta() {
 		'</form>'
 	].join('');
 }
-},{"../security":11,"../util":12,"./renderers":5}],4:[function(require,module,exports){
+
+function onClickCenterpane(e) {
+	if (!e.ctrlKey) {
+		// unselect current selection if ctrl isnot held down
+		$('.directory-links-list .selected').removeClass('selected');
+	}
+
+	var slotEl = local.util.findParentNode.byClass(e.target, 'directory-item-slot');
+	if (slotEl) {
+		slotEl.classList.add('selected');
+	}
+
+	// redraw actions based on the selection
+	renderActions();
+	return false;
+}
+
+function renderActions() {
+	// gather applicable actions
+	var $sel = $('.directory-links-list .selected');
+	_activeActions = {};
+	if ($sel.length === 0) {
+		// no-target actions
+		feedcfg.get().actions.forEach(function(action) {
+			if (!action.targets)
+				_activeActions[action.meta.href] = action;
+		});
+	} else {
+		// matching actions
+		for (var i=0; i < $sel.length; i++) {
+			var id = $sel[i].id.slice(5);
+			var link = _mediaLinks[id];
+			if (!link) continue;
+
+			var matches = feedcfg.queryActions(link);
+			for (var j=0; j < matches.length; j++) {
+				_activeActions[matches[j].meta.href] = matches[j];
+			}
+		}
+	}
+
+	// render
+	var $btns = $('#action-btns');
+	var html = '';
+	for (var href in _activeActions) {
+		var m = _activeActions[href].meta;
+		html += '<a href="#" data-action="'+m.href+'" title="Behaviors TODO">'+m.title+'</a><br>';
+	}
+	$btns.html(html);
+	$btns.find('a').tooltip({ placement: 'right' });
+}
+
+function onClickAction(e) {
+	var action = _activeActions[e.target.dataset.action];
+	if (!action) { throw "Action not found in active list"; } // should not happen
+	executor.runAction(action.meta.href, action.meta);
+	return false;
+}
+},{"../security":12,"../util":13,"./executor":2,"./feedcfg":3}],5:[function(require,module,exports){
 // Environment Setup
 // =================
 local.logAllExceptions = true;
 require('../pagent').setup();
 require('../auth').setup();
 require('../http-headers').setup();
+require('./feedcfg').setup();
+require('./renderers'); // :DEBUG:
 var executor = require('./executor');
 var gui = require('./gui');
 
 var mediaLinks = local.queryLinks(document, { rel: 'stdrel.com/media' });
 
+
 // ui
 require('../widgets/addlink-panel').setup();
-require('../widgets/directory-links-list').setup();
 require('../widgets/directory-delete-btn').setup();
 gui.setup(mediaLinks);
 
@@ -530,26 +638,10 @@ gui.setup(mediaLinks);
 local.addServer('worker-bridge', require('./worker-bridge')(mediaLinks));
 executor.setup(mediaLinks);
 
-// :DEBUG:
-$('#debug-stopwatch').tooltip({ placement: 'right' });
-$('#debug-stopwatch').on('click', function() {
-	var execution = executor.runAction(
-		'local://grimwire.com:8000(js/act/stopwatch.js)/',
-		{title:'StopWatch'}
-	);
-});
-$('#debug-mkjson').tooltip({ placement: 'right' });
-$('#debug-mkjson').on('click', function() {
-	var execution = executor.runAction(
-		'local://grimwire.com:8000(js/act/mkjson.js)/',
-		{title:'Make JSON Document'}
-	);
-});
-
 // :TEMP:
 local.addServer('todo', function(req, res) { alert('Todo'); res.writeHead(204).end(); });
 
-},{"../auth":1,"../http-headers":8,"../pagent":10,"../widgets/addlink-panel":13,"../widgets/directory-delete-btn":14,"../widgets/directory-links-list":15,"./executor":2,"./gui":3,"./worker-bridge":6}],5:[function(require,module,exports){
+},{"../auth":1,"../http-headers":9,"../pagent":11,"../widgets/addlink-panel":14,"../widgets/directory-delete-btn":15,"./executor":2,"./feedcfg":3,"./gui":4,"./renderers":6,"./worker-bridge":7}],6:[function(require,module,exports){
 var util = require('../util');
 
 // Thing renderer
@@ -585,7 +677,7 @@ local.addServer('default-renderer', function(req, res) {
 		res.end(html);*/
 	});
 });
-},{"../util":12}],6:[function(require,module,exports){
+},{"../util":13}],7:[function(require,module,exports){
 var executor = require('./executor');
 var globals = require('../globals');
 
@@ -746,11 +838,6 @@ module.exports = function(mediaLinks) {
 		}
 	}
 
-	// item /meta behavior
-	function serveItemMeta(req, res, itemLink) {
-		res.writeHead(501).end();
-	}
-
 	// helper
 	function getPathEnd(url) {
 		var parts = url.split('/');
@@ -803,7 +890,7 @@ function table(keys) {
 	arr.push(obj); // dont forget the last one
 	return arr;
 }
-},{"../globals":7,"./executor":2}],7:[function(require,module,exports){
+},{"../globals":8,"./executor":2}],8:[function(require,module,exports){
 var hostAgent = local.agent(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
@@ -816,7 +903,7 @@ window.globals = module.exports = {
 	meAgent: hostAgent.follow({ rel: 'item', id: '.me' }),
 	fetchProxyAgent: hostAgent.follow({ rel: 'service', id: '.fetch' }),
 };
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 module.exports = { setup: setup };
 function setup() {
 	local.httpHeaders.register('pragma',
@@ -843,7 +930,7 @@ function setup() {
 		}
 	);
 }
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 //
 // mimetype.js - A catalog object of mime types based on file extensions
 //
@@ -1598,7 +1685,7 @@ function setup() {
 	self.MimeType = MimeType;
 	return self;
 }(this));
-},{"path":17}],10:[function(require,module,exports){
+},{"path":17}],11:[function(require,module,exports){
 // Page Agent (PAgent)
 // ===================
 // Standard page behaviors
@@ -1619,8 +1706,7 @@ function setup() {
 	catch (e) { console.error('Failed to bind body request events.', e); }
 	document.body.addEventListener('request', function(e) {
 		console.log('toplevel request event', e); // :TODO:
-		// var target = e.target;
-		// dispatchRequest(e.detail, ((region) ? $(region) : null), $(target));
+		dispatchRequest(e.detail);
 	});
 }
 
@@ -1633,40 +1719,11 @@ function dispatchRequest(req, $region, $target) {
 
 	// Relative link? Make absolute
 	if (!local.isAbsUri(req.url)) {
-		var baseurl = ($region && $region.data('domain'))
-			? $region.data('domain')
-			: (window.location.protocol + '//' + window.location.host);
+		var baseurl = (window.location.protocol + '//' + window.location.host);
 		req.url = local.joinUri(baseurl, req.url);
 	}
 
-	// Handle request based on target and origin
-	var res_;
-	req.urld = req.urld || local.parseUri(req.url);
-	var newOrigin = (req.urld.protocol != 'data') ? (req.urld.protocol || 'local')+'://'+req.urld.authority : null;
-	if ($iframe && (!target || target == '_self')) {
-		// In-place update
-		res_ = local.dispatch(req);
-		res_.always(function(res) {
-			$iframe.data('origin', newOrigin);
-			renderIframe($iframe, util.renderResponse(req, res));
-		});
-	} else if (target == '_child') {
-		throw "target=_child Not yet implemented";
-		// New iframe
-		res_ = local.dispatch(req);
-		res_.always(function(res) {
-			var $newIframe = createIframe($('todo'), newOrigin); // :TODO: - container
-			renderIframe($newIframe, util.renderResponse(req, res));
-			return res;
-		});
-	} else if ((!$iframe && !target) || target == '_null') {
-		// Null target, simple dispatch
-		res_ = local.dispatch(req);
-	} else {
-		console.error('Invalid request target', target, req, origin);
-		return null;
-	}
-
+	var res_ = local.dispatch(req);
 	req.end(body);
 	return res_;
 }
@@ -1676,7 +1733,7 @@ module.exports = {
 	setup: setup,
 	dispatchRequest: dispatchRequest
 };
-},{"./util":12}],11:[function(require,module,exports){
+},{"./util":13}],12:[function(require,module,exports){
 // Items rendered in the directory by plugins
 var renderedItem = {
 	allowedTags: [ // https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/HTML5/HTML5_element_list
@@ -1750,7 +1807,7 @@ module.exports = {
 		return window.html.sanitizeWithPolicy(html, renderedItem.policy);
 	}
 };
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 var globals = require('./globals');
 
 var lbracket_regex = /</g;
@@ -1903,7 +1960,7 @@ module.exports = {
 	fetch: fetch,
 	fetchMeta: function(url) { return fetch(url, true); }
 };
-},{"./globals":7}],13:[function(require,module,exports){
+},{"./globals":8}],14:[function(require,module,exports){
 var globals   = require('../globals');
 var util      = require('../util');
 var mimetypes = require('../mimetypes');
@@ -2033,7 +2090,7 @@ module.exports = {
 		$('.addlink-panel #post-link-btn').on('click', onPostLink);
 	}
 };
-},{"../globals":7,"../mimetypes":9,"../util":12}],14:[function(require,module,exports){
+},{"../globals":8,"../mimetypes":10,"../util":13}],15:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -2053,25 +2110,7 @@ module.exports = {
 		}
 	}
 };
-},{"../globals":7}],15:[function(require,module,exports){
-var globals = require('../globals');
-
-module.exports = {
-	setup: function() {
-		$('.center-pane').on('click', function(e) {
-			if (!e.ctrlKey) {
-				// unselect current selection if ctrl isnot held down
-				$('.directory-links-list .selected').removeClass('selected');
-			}
-
-			var slotEl = local.util.findParentNode.byClass(e.target, 'directory-item-slot');
-			if (slotEl) {
-				slotEl.classList.add('selected');
-			}
-		});
-	}
-};
-},{"../globals":7}],16:[function(require,module,exports){
+},{"../globals":8}],16:[function(require,module,exports){
 
 
 //
@@ -3099,5 +3138,5 @@ process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
 
-},{}]},{},[4])
+},{}]},{},[5])
 ;
