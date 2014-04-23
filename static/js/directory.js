@@ -338,12 +338,12 @@ var _cfg = {
 			targets: false
 		},
 		{
-			meta: { href: 'local://grimwire.com:8000(js/act/mkjson.js)/', title: 'Make JSON Document' },
+			meta: { href: 'local://grimwire.com:8000(js/act/mkjson.js)/', title: 'Make JSON' },
 			behavior: ['add-an-item'],
 			targets: false
 		},
 		{
-			meta: { href: 'local://grimwire.com:8000(js/act/copydoc.js)/', title: 'Copy Document' },
+			meta: { href: 'local://grimwire.com:8000(js/act/copydoc.js)/', title: 'Copy JSON' },
 			behavior: ['read-selected', 'add-an-item'],
 			targets: [{rel:'stdrel.com/media', type:'application/json'}]
 		}
@@ -408,153 +408,23 @@ function setup(mediaLinks) {
 	$('#action-btns').on('click', onClickAction);
 }
 
-// Item meta-update handler
-local.addServer('meta', function(req, res) {
-	req.on('end', function() {
-		var id = req.path.slice(1);
-		if (!id || !_mediaLinks[id]) { return res.writeHead(404).end(); }
-		$('#meta-msg-'+id).text('');
-
-		if (req.method == 'PUT')    { putItemMeta(req, res, id); }
-		if (req.method == 'DELETE') { deleteItem(req, res, id); }
-		else                        { res.writeHead(405).end(); }
-	});
-});
-function putItemMeta(req, res, id) {
-	var meta;
-	try { meta = util.parseRawMeta(req.body.link); }
-	catch (e) {
-		$('#meta-msg-'+id).text(e.toString());
-		return res.writeHead(422).end();
-	}
-
-	local.PUT(meta, { url: _mediaLinks[id].href+'/meta' })
-		.then(function(res2) {
-			res.writeHead(204).end();
-
-			// update locally
-			meta.href = _mediaLinks[id].href; // preserve, since href was stripped earlier
-			_mediaLinks[id] = meta;
-
-			// redraw
-			$('#slot-'+id+' .edit-meta').popover('toggle');
-			$('#meta-msg-'+id).text('Updated');
-			renderItem(id);
-			local.util.nextTick(function() {
-				$('#slot-'+id+' .edit-meta').popover({
-					html: true,
-					content: renderItemEditmeta,
-					container: 'body',
-					placement: 'bottom'
-				});
-			});
-		})
-		.fail(function(res2) {
-			switch (res2.status) {
-				case 422:
-					$('#meta-msg-'+id).text(res2.body.error);
-					return res.writeHead(422).end();
-				case 401:
-				case 403:
-					$('#meta-msg-'+id).text('You\'re not authorized to edit this directory.');
-					return res.writeHead(403).end();
-			}
-			res.writeHead(502).end();
-		});
-}
-function deleteItem(req, res, id) {
-	if (!confirm('Delete this item?')) return;
-
-	local.DELETE(_mediaLinks[id].href)
-		.then(function(res2) {
-			res.writeHead(204).end();
-
-			// update locally
-			delete _mediaLinks[id];
-
-			// redraw
-			$('#slot-'+id+' .edit-meta').popover('toggle');
-			$('#slot-'+id).remove();
-		})
-		.fail(function(res2) {
-			switch (res2.status) {
-				case 401:
-				case 403:
-					$('#meta-msg-'+id).text('You\'re not authorized to edit this directory.');
-					return res.writeHead(403).end();
-			}
-			res.writeHead(502).end();
-		});
-}
-
 function renderFeed() {
 	// Render the medias
-	var renderPromises = [];
 	for (var i = 0; i < _mediaLinks.length; i++) {
-		renderPromises.push(renderItem(i));
+		renderItem(i);
 	}
-
-	local.promise.bundle(renderPromises).then(function() {
-		$('.edit-meta').popover({
-			html: true,
-			content: renderItemEditmeta,
-			container: 'body',
-			placement: 'bottom'
-		});
-	});
 }
 
 function renderItem(i) {
 	var link = _mediaLinks[i];
-	var renderers = feedcfg.queryRenderers(link);
-	var url = (renderers[0]) ? renderers[0].meta.href : 'local://default-renderer';
-	var json = $('#slot-'+i).data('doc') || null;
-	var req = { url: url, query: link, Accept: 'text/html' };
-	if (json) req.Content_Type = 'application/json';
-
-	function renderTemplateResponse(link, i) {
-		return function(res) {
-			var html = sec.sanitizeRenderedItem(''+res.body);
-			$('#slot-'+i).html([
-				'<div class="directory-item-header">'+renderItemHeader(link)+'</div>',
-				((res.body) ? ('<div class="directory-item-content">'+html+'</div>') : '')
-			].join(''));
-		};
-	}
-	function handleTemplateFailure(link, i) {
-		return function(res) {
-			console.error('Failed to render item', i, link, res);
-			$('#slot-'+i).html('Failed to render :( '+util.escapeHTML(res.status+' '+res.reason));
-		};
-	}
-	return local.POST(json, req)
-		.then(
-			renderTemplateResponse(link, i),
-			handleTemplateFailure(link, i)
-		);
-}
-
-function renderItemHeader(link) {
 	var title = util.escapeHTML(link.title || link.id || 'Untitled');
-	if (link.type) { title += ' ('+util.escapeHTML(link.type)+')'; }
+	var id = util.escapeHTML(link.id || '');
+	var type = util.escapeHTML(link.type || '');
+	var types = type ? type.split('/') : ['', ''];
 
-	return [
-		'<a target="_top" href="'+util.escapeHTML(link.href)+'">'+title+'</a> &middot; ',
-		'<a target="_top" class="edit-meta" href="javascript:void(0)">meta</a>'
-	].join('');
-}
-
-function renderItemEditmeta() {
-	var $slot = $(this).parents('.directory-item-slot');
-	var id = $slot.attr('id').slice(5);
-	return [
-		'<form action="local://meta/'+id+'" method="PUT">',
-			'<textarea name="link" rows="10">'+util.escapeHTML(util.serializeRawMeta(_mediaLinks[id]))+'</textarea>',
-			'<input type="submit" class="btn btn-primary" value="Update">',
-			' &nbsp; <span id="meta-msg-'+id+'"></span>',
-			'<input type="submit" class="pull-right btn btn-default" value="Delete" formmethod="DELETE">',
-		'</form>'
-	].join('');
+	$('#slot-'+i).html(
+		'<span class="type '+types[0]+'">'+types[1]+'</span> <span class="title">'+title+'</span>'
+	);
 }
 
 function onClickCenterpane(e) {

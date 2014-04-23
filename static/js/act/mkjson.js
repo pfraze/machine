@@ -5,7 +5,7 @@ function main(req, res) {
 		return req.on('end', run.bind(null, req, res, req.path.slice(1)));
 	}
 
-	res.header('Link', [{ href: '/', rel: 'self layer1.io/action', title: 'Make JSON Document' }]);
+	res.header('Link', [{ href: '/', rel: 'self layer1.io/action', title: 'Make JSON' }]);
 	res.header('Content-Type', 'application/json');
 
 	if (req.method == 'HEAD') {

@@ -14,12 +14,12 @@ var _cfg = {
 			targets: false
 		},
 		{
-			meta: { href: 'local://grimwire.com:8000(js/act/mkjson.js)/', title: 'Make JSON Document' },
+			meta: { href: 'local://grimwire.com:8000(js/act/mkjson.js)/', title: 'Make JSON' },
 			behavior: ['add-an-item'],
 			targets: false
 		},
 		{
-			meta: { href: 'local://grimwire.com:8000(js/act/copydoc.js)/', title: 'Copy Document' },
+			meta: { href: 'local://grimwire.com:8000(js/act/copydoc.js)/', title: 'Copy JSON' },
 			behavior: ['read-selected', 'add-an-item'],
 			targets: [{rel:'stdrel.com/media', type:'application/json'}]
 		}
