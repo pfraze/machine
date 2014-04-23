@@ -20,7 +20,7 @@ module.exports = {
 		}
 	}
 };
-},{"./globals":6}],2:[function(require,module,exports){
+},{"./globals":7}],2:[function(require,module,exports){
 module.exports = {
 	setup: setup,
 	get: getExecution,
@@ -30,10 +30,13 @@ module.exports = {
 // Executor
 // ========
 var _executions = {};
+var _mediaLinks; // links to items in the feed
 var _modal_execution = null; // the execution currently in a modal
 
 // EXPORTED
-function setup() {
+function setup(mediaLinks) {
+	_mediaLinks = mediaLinks;
+
 	// setup modal-window close behavior
 	$('#modal-window').on('hide.bs.modal', function() {
 		if (_modal_execution) {
@@ -151,13 +154,27 @@ function createExecution(execid, domain, meta) {
 		domain: domain,
 		id: execid,
 		el: null,
+		selection: captureSelection(),
 
 		dispatch: dispatchFromExecution,
 		stop: stopExecution,
+
 		setGui: setExecutionGui,
-		spawnModal: spawnExecutionModal
+		spawnModal: spawnExecutionModal,
+
+		getSelectedLinks: getExecutionSelectedLinks
 	};
 	return _executions[execid];
+}
+
+// helper to get the items selected currently
+function captureSelection() {
+	var $selected = $('.directory-links-list > .selected');
+	var arr = [];
+	for (var i=0; i < $selected.length; i++) {
+		arr.push(parseInt($selected[i].id.slice(5), 10)); // skip 'slot-' to extract id
+	}
+	return arr;
 }
 
 // helper to update an execution using an event-stream
@@ -262,6 +279,13 @@ function spawnExecutionModal(modalDef, doc) {
 	$mwin.modal();
 }
 
+// helper gives a list of links for the selected items captured on the execution
+function getExecutionSelectedLinks() {
+	return this.selection.map(function(id) {
+		return _mediaLinks[id];
+	})
+}
+
 // Action-specific Methods
 // =======================
 
@@ -298,69 +322,34 @@ function onActionGuiClose(e) {
 	this.stop(true);
 }
 },{}],3:[function(require,module,exports){
-// Environment Setup
-// =================
-local.logAllExceptions = true;
-require('../pagent').setup();
-require('../auth').setup();
-require('../http-headers').setup();
-var util = require('../util');
 var sec = require('../security');
-var exec = require('./executor');
+var util = require('../util');
 
-// ui
-require('../widgets/addlink-panel').setup();
-require('../widgets/directory-links-list').setup();
-require('../widgets/directory-delete-btn').setup();
-
-// plugin execution
-local.addServer('worker-bridge', require('./worker-bridge')());
-exec.setup();
-
-// Actions
-// =======
-
-// :DEBUG:
-$('#debug-stopwatch').tooltip({ placement: 'right' });
-$('#debug-stopwatch').on('click', function() {
-	var execution = exec.runAction(
-		'local://grimwire.com:8000(js/act/stopwatch.js)/',
-		{title:'StopWatch'}
-	);
-});
-$('#debug-mkjson').tooltip({ placement: 'right' });
-$('#debug-mkjson').on('click', function() {
-	var execution = exec.runAction(
-		'local://grimwire.com:8000(js/act/mkjson.js)/',
-		{title:'Make JSON Document'}
-	);
-});
-
-
-
-// Rendering
-// =========
-
-// Active renderers
-require('./renderers');
-var rendererQueries = {
-	// :TODO: load from persistant storage
-	'local://thing-renderer': { rel: 'schema.org/Thing' },
-	'local://default-renderer': { rel: 'stdrel.com/media' }
+module.exports = {
+	setup: setup,
+	renderFeed: renderFeed
 };
 
-// Do render
-var mediaLinks = local.queryLinks(document, { rel: 'stdrel.com/media' });
-renderFeed();
+var _mediaLinks;
+var _rendererQueries;
+function setup(mediaLinks) {
+	_mediaLinks = mediaLinks;
 
-// :TEMP:
-local.addServer('todo', function(req, res) { alert('Todo'); res.writeHead(204).end(); });
+	// Active renderers
+	require('./renderers');
+	_rendererQueries = {
+		// :TODO: load from persistant storage
+		'local://thing-renderer': { rel: 'schema.org/Thing' },
+		'local://default-renderer': { rel: 'stdrel.com/media' }
+	};
+	renderFeed();
+}
 
 // Item meta-update handler
 local.addServer('meta', function(req, res) {
 	req.on('end', function() {
 		var id = req.path.slice(1);
-		if (!id || !mediaLinks[id]) { return res.writeHead(404).end(); }
+		if (!id || !_mediaLinks[id]) { return res.writeHead(404).end(); }
 		$('#meta-msg-'+id).text('');
 
 		if (req.method == 'PUT')    { putItemMeta(req, res, id); }
@@ -376,14 +365,14 @@ function putItemMeta(req, res, id) {
 		return res.writeHead(422).end();
 	}
 
-	local.PUT(meta, { url: mediaLinks[id].href+'/meta' })
+	local.PUT(meta, { url: _mediaLinks[id].href+'/meta' })
 		.then(function(res2) {
 			res.writeHead(204).end();
 
 			// update locally
-			meta.href = mediaLinks[id].href; // preserve, since href was stripped earlier
-			mediaLinks[id] = meta;
-			findRenderersForLinks([mediaLinks[id]]);
+			meta.href = _mediaLinks[id].href; // preserve, since href was stripped earlier
+			_mediaLinks[id] = meta;
+			findRenderersForLinks([_mediaLinks[id]]);
 
 			// redraw
 			$('#slot-'+id+' .edit-meta').popover('toggle');
@@ -414,12 +403,12 @@ function putItemMeta(req, res, id) {
 function deleteItem(req, res, id) {
 	if (!confirm('Delete this item?')) return;
 
-	local.DELETE(mediaLinks[id].href)
+	local.DELETE(_mediaLinks[id].href)
 		.then(function(res2) {
 			res.writeHead(204).end();
 
 			// update locally
-			delete mediaLinks[id];
+			delete _mediaLinks[id];
 
 			// redraw
 			$('#slot-'+id+' .edit-meta').popover('toggle');
@@ -437,8 +426,8 @@ function deleteItem(req, res, id) {
 }
 
 function findRenderersForLinks(links) {
-	for (var url in rendererQueries) {
-		var matches = local.queryLinks(links, rendererQueries[url]);
+	for (var url in _rendererQueries) {
+		var matches = local.queryLinks(links, _rendererQueries[url]);
 		for (var i=0; i < matches.length; i++) {
 			if (!matches[i].__renderers) {
 				Object.defineProperty(matches[i], '__renderers', { enumerable: false, value: [] });
@@ -450,11 +439,11 @@ function findRenderersForLinks(links) {
 
 function renderFeed() {
 	// Collect renderers for each link
-	findRenderersForLinks(mediaLinks);
+	findRenderersForLinks(_mediaLinks);
 
 	// Render the medias
 	var renderPromises = [];
-	for (var i = 0; i < mediaLinks.length; i++) {
+	for (var i = 0; i < _mediaLinks.length; i++) {
 		renderPromises.push(renderItem(i));
 	}
 
@@ -469,7 +458,7 @@ function renderFeed() {
 }
 
 function renderItem(i) {
-	var link = mediaLinks[i];
+	var link = _mediaLinks[i];
 	var url = link.__renderers[0] || 'local://default-renderer';
 	var json = $('#slot-'+i).data('doc') || null;
 	var req = { url: url, query: link, Accept: 'text/html' };
@@ -512,14 +501,55 @@ function renderItemEditmeta() {
 	var id = $slot.attr('id').slice(5);
 	return [
 		'<form action="local://meta/'+id+'" method="PUT">',
-			'<textarea name="link" rows="10">'+util.escapeHTML(util.serializeRawMeta(mediaLinks[id]))+'</textarea>',
+			'<textarea name="link" rows="10">'+util.escapeHTML(util.serializeRawMeta(_mediaLinks[id]))+'</textarea>',
 			'<input type="submit" class="btn btn-primary" value="Update">',
 			' &nbsp; <span id="meta-msg-'+id+'"></span>',
 			'<input type="submit" class="pull-right btn btn-default" value="Delete" formmethod="DELETE">',
 		'</form>'
 	].join('');
 }
-},{"../auth":1,"../http-headers":7,"../pagent":9,"../security":10,"../util":11,"../widgets/addlink-panel":12,"../widgets/directory-delete-btn":13,"../widgets/directory-links-list":14,"./executor":2,"./renderers":4,"./worker-bridge":5}],4:[function(require,module,exports){
+},{"../security":11,"../util":12,"./renderers":5}],4:[function(require,module,exports){
+// Environment Setup
+// =================
+local.logAllExceptions = true;
+require('../pagent').setup();
+require('../auth').setup();
+require('../http-headers').setup();
+var executor = require('./executor');
+var gui = require('./gui');
+
+var mediaLinks = local.queryLinks(document, { rel: 'stdrel.com/media' });
+
+// ui
+require('../widgets/addlink-panel').setup();
+require('../widgets/directory-links-list').setup();
+require('../widgets/directory-delete-btn').setup();
+gui.setup(mediaLinks);
+
+// plugin execution
+local.addServer('worker-bridge', require('./worker-bridge')(mediaLinks));
+executor.setup(mediaLinks);
+
+// :DEBUG:
+$('#debug-stopwatch').tooltip({ placement: 'right' });
+$('#debug-stopwatch').on('click', function() {
+	var execution = executor.runAction(
+		'local://grimwire.com:8000(js/act/stopwatch.js)/',
+		{title:'StopWatch'}
+	);
+});
+$('#debug-mkjson').tooltip({ placement: 'right' });
+$('#debug-mkjson').on('click', function() {
+	var execution = executor.runAction(
+		'local://grimwire.com:8000(js/act/mkjson.js)/',
+		{title:'Make JSON Document'}
+	);
+});
+
+// :TEMP:
+local.addServer('todo', function(req, res) { alert('Todo'); res.writeHead(204).end(); });
+
+},{"../auth":1,"../http-headers":8,"../pagent":10,"../widgets/addlink-panel":13,"../widgets/directory-delete-btn":14,"../widgets/directory-links-list":15,"./executor":2,"./gui":3,"./worker-bridge":6}],5:[function(require,module,exports){
 var util = require('../util');
 
 // Thing renderer
@@ -555,15 +585,20 @@ local.addServer('default-renderer', function(req, res) {
 		res.end(html);*/
 	});
 });
-},{"../util":11}],5:[function(require,module,exports){
+},{"../util":12}],6:[function(require,module,exports){
 var executor = require('./executor');
+var globals = require('../globals');
 
-module.exports = function(config) {
+module.exports = function(mediaLinks) {
 	// toplevel
 	function root(req, res, worker) {
-		var links = [];
-		links.push({ href: '/', rel: 'self service via', title: 'Host Page' });
-		// :TODO: add hosts
+		var links = table(
+			['href',      'id',        'rel',                         'title'],
+			'/',          undefined,   'self service via',            'Host Page',
+			'/selection', 'selection', 'service layer1.io/selection', 'Selected Items at Time of Execution',
+			'/feed',      'feed',      'service layer1.io/feed',      'Current Feed',
+			'/service',   'service',   'service layer1.io/service',   'Layer1 Toplevel Service'
+		);
 
 		// Respond
 		res.setHeader('Link', links);
@@ -572,17 +607,154 @@ module.exports = function(config) {
 
 	// selected items
 	function selection(req, res, worker) {
-		res.writeHead(501).end();
+		var pathd = req.path.split('/');
+		var itemid = pathd[2];
+		var convLink = function(uri, i) { return '/selection/'+i; };
+
+		var headerLinks;
+		var selLinks = req.exec.getSelectedLinks();
+
+		if (itemid) {
+			if (!selLinks[itemid]) { return res.writeHead(404).end(); }
+			var link = local.util.deepClone(selLinks[itemid]);
+			headerLinks = table(
+				['href',      'id',        'rel',                            'title'],
+				'/',          undefined,   'via',                            'Host Page',
+				'/selection', 'selection', 'up service layer1.io/selection', 'Selected Items at Time of Execution'
+			);
+			serveItem(req, res, headerLinks, link, { conv: function(uri) { return '/selection/'+itemid; } });
+		}
+		else {
+			var links = local.util.deepClone(selLinks);
+			headerLinks = table(
+				['href',      'id',        'rel',                              'title'],
+				'/',          undefined,   'up service via',                   'Host Page',
+				'/selection', 'selection', 'self service layer1.io/selection', 'Selected Items at Time of Execution'
+			);
+			serveCollection(req, res, headerLinks, links, { noPost: true, conv: convLink });
+		}
 	}
 
 	// feed items
 	function feed(req, res, worker) {
-		res.writeHead(501).end();
+		var pathd = req.path.split('/');
+		var itemid = pathd[2];
+		var convLink = function(uri) { return '/feed/'+getPathEnd(uri); };
+
+		if (itemid) {
+			if (!mediaLinks[itemid]) { return res.writeHead(404).end(); }
+			var link = local.util.deepClone(mediaLinks[itemid]);
+			headerLinks = table(
+				['href', 'id',      'rel',                       'title'],
+				'/',     undefined, 'service via',               'Host Page',
+				'/feed', 'feed',    'up service layer1.io/feed', 'Current Feed'
+			);
+			serveItem(req, res, headerLinks, link, { conv: convLink });
+		}
+		else {
+			var links = local.util.deepClone(mediaLinks);
+			headerLinks = table(
+				['href', 'id',      'rel',                         'title'],
+				'/',     undefined, 'up service via',              'Host Page',
+				'/feed', 'feed',    'self service layer1.io/feed', 'Current Feed'
+			);
+			serveCollection(req, res, headerLinks, links, { conv: convLink });
+		}
 	}
 
 	// service proxy
 	function service(req, res, worker) {
+		// :TODO:
 		res.writeHead(501).end();
+	}
+
+	// collection behavior
+	function serveCollection(req, res, headerLinks, links, opts) {
+		opts = opts || {};
+		var uris = {};
+		links.forEach(function(link, i) {
+			// update link references to point to this service
+			uris[i] = link.href;
+			link.href = opts.conv(link.href, i);
+		});
+
+		// set headers
+		res.header('Link', headerLinks.concat(links));
+
+		// :TODO: check permissions
+
+		// route method
+		switch (req.method) {
+			case 'HEAD': return res.writeHead(204).end();
+			case 'GET':  return res.writeHead(204).end(); // :TODO:
+			case 'POST':
+				if (opts.noPost) {
+					res.header('Allow', 'HEAD, GET');
+					return res.writeHead(405, 'bad method').end();
+				}
+				req.on('end', function() {
+					globals.pageAgent.POST(req.body, {
+						Content_Type: req.header('Content-Type'),
+						query: req.query
+					}).then(function(res2) {
+						res.header('Location', opts.conv(res2.header('Location')));
+						res.writeHead(201, 'created').end();
+					}, function(res2) {
+						res.writeHead(res2.status, res2.reason).end(res2.body);
+					});
+				});
+				break;
+			default:
+				res.header('Allow', 'HEAD, GET'+((!opts.noPost)?', POST':''));
+				res.writeHead(405, 'bad method').end();
+		}
+	}
+
+	// item behavior
+	function serveItem(req, res, headerLinks, link, opts) {
+		opts = opts || {};
+		// update link references to point to this service
+		var uri = link.href;
+		link.href = opts.conv(uri);
+		link.rel = 'self '+link.rel;
+
+		// set headers
+		res.header('Link', headerLinks.concat(link));
+
+		// :TODO: check permissions
+
+		// route method
+		switch (req.method) {
+			case 'HEAD': return res.writeHead(204).end();
+			case 'GET':
+				local.GET({
+					url: uri,
+					Accept: req.header('Accept'),
+					query: req.query,
+					stream: true
+				}).then(function(res2) {
+					res.writeHead(200, 'ok', {'Content-Type': res2.header('Content-Type')});
+					local.pipe(res, res2);
+				}, function(res2) {
+					res.writeHead(res2.status, res2.reason);
+					local.pipe(res, res2);
+				});
+				break;
+			default:
+				res.header('Allow', 'HEAD, GET');
+				res.writeHead(405, 'bad method').end();
+		}
+	}
+
+	// item /meta behavior
+	function serveItemMeta(req, res, itemLink) {
+		res.writeHead(501).end();
+	}
+
+	// helper
+	function getPathEnd(url) {
+		var parts = url.split('/');
+		return parts[parts.length - 1];
 	}
 
 	// helper
@@ -608,6 +780,7 @@ module.exports = function(config) {
 			return res.writeHead(403, 'invalid execid - expired or not assigned to this worker').end();
 		}
 
+		// route
 		var pathbase = '/'+req.path.split('/')[1];
 		switch (pathbase) {
 			case '/':          return root(req, res, worker);
@@ -618,20 +791,32 @@ module.exports = function(config) {
 		}
 	};
 };
-},{"./executor":2}],6:[function(require,module,exports){
-var hostUA = local.agent(window.location.protocol + '//' + window.location.host);
+
+// helper to make an array of objects
+function table(keys) {
+	var obj, i, j=-1;
+	var arr = [];
+	for (i=1, j; i < arguments.length; i++, j++) {
+		if (!keys[j]) { if (obj) { arr.push(obj); } obj = {}; j = 0; } // new object
+		obj[keys[j]] = arguments[i];
+	}
+	arr.push(obj); // dont forget the last one
+	return arr;
+}
+},{"../globals":7,"./executor":2}],7:[function(require,module,exports){
+var hostAgent = local.agent(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
 		user: $('body').data('user') || null,
 		isPageAdmin: $('body').data('user-is-admin') == '1'
 	},
-	hostUA: hostUA,
-	pageUA: local.agent(window.location.toString()),
-	authUA: hostUA.follow({ rel: 'service', id: 'auth' }),
-	meUA: hostUA.follow({ rel: 'item', id: '.me' }),
-	fetchProxyUA: hostUA.follow({ rel: 'service', id: '.fetch' }),
+	hostAgent: hostAgent,
+	pageAgent: local.agent(window.location.toString()),
+	authAgent: hostAgent.follow({ rel: 'service', id: 'auth' }),
+	meAgent: hostAgent.follow({ rel: 'item', id: '.me' }),
+	fetchProxyAgent: hostAgent.follow({ rel: 'service', id: '.fetch' }),
 };
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 module.exports = { setup: setup };
 function setup() {
 	local.httpHeaders.register('pragma',
@@ -658,7 +843,7 @@ function setup() {
 		}
 	);
 }
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 //
 // mimetype.js - A catalog object of mime types based on file extensions
 //
@@ -1413,7 +1598,7 @@ function setup() {
 	self.MimeType = MimeType;
 	return self;
 }(this));
-},{"path":16}],9:[function(require,module,exports){
+},{"path":17}],10:[function(require,module,exports){
 // Page Agent (PAgent)
 // ===================
 // Standard page behaviors
@@ -1491,7 +1676,7 @@ module.exports = {
 	setup: setup,
 	dispatchRequest: dispatchRequest
 };
-},{"./util":11}],10:[function(require,module,exports){
+},{"./util":12}],11:[function(require,module,exports){
 // Items rendered in the directory by plugins
 var renderedItem = {
 	allowedTags: [ // https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/HTML5/HTML5_element_list
@@ -1565,7 +1750,7 @@ module.exports = {
 		return window.html.sanitizeWithPolicy(html, renderedItem.policy);
 	}
 };
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 var globals = require('./globals');
 
 var lbracket_regex = /</g;
@@ -1671,7 +1856,7 @@ function fetch(url, useHead) {
 		} else if (!attempts.length && res.status === 0 && !triedProxy) {
 			// May be a CORS issue, try the proxy
 			triedProxy = true;
-			globals.fetchProxyUA.resolve({ nohead: true }).always(function(proxyUrl) {
+			globals.fetchProxyAgent.resolve({ nohead: true }).always(function(proxyUrl) {
 				if (!urld.protocol) {
 					if (useHead) {
 						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }));
@@ -1718,7 +1903,7 @@ module.exports = {
 	fetch: fetch,
 	fetchMeta: function(url) { return fetch(url, true); }
 };
-},{"./globals":6}],12:[function(require,module,exports){
+},{"./globals":7}],13:[function(require,module,exports){
 var globals   = require('../globals');
 var util      = require('../util');
 var mimetypes = require('../mimetypes');
@@ -1759,7 +1944,7 @@ function onPostDoc(e) {
 	// Add to dir's docs
 	var link = local.util.deepClone(curLink);
 	delete link.href;
-	globals.pageUA.POST(curResponse.body, { query: link, Content_Type: curLink.type })
+	globals.pageAgent.POST(curResponse.body, { query: link, Content_Type: curLink.type })
 		.always(handlePostResponse);
 }
 
@@ -1768,7 +1953,7 @@ function onPostLink(e) {
 	if (!curLink) return;
 
 	// Add to dir's links
-	globals.pageUA.POST(null, { query: curLink })
+	globals.pageAgent.POST(null, { query: curLink })
 		.always(handlePostResponse);
 }
 
@@ -1848,7 +2033,7 @@ module.exports = {
 		$('.addlink-panel #post-link-btn').on('click', onPostLink);
 	}
 };
-},{"../globals":6,"../mimetypes":8,"../util":11}],13:[function(require,module,exports){
+},{"../globals":7,"../mimetypes":9,"../util":12}],14:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -1856,7 +2041,7 @@ module.exports = {
 		if (globals.session.isPageAdmin) {
 			$('.directory-delete-btn').on('click', function() {
 				if (!confirm('Delete this directory. Are you sure?')) return false;
-				globals.pageUA.DELETE()
+				globals.pageAgent.DELETE()
 					.then(function(res) {
 						window.location = '/';
 					})
@@ -1868,7 +2053,7 @@ module.exports = {
 		}
 	}
 };
-},{"../globals":6}],14:[function(require,module,exports){
+},{"../globals":7}],15:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -1886,7 +2071,7 @@ module.exports = {
 		});
 	}
 };
-},{"../globals":6}],15:[function(require,module,exports){
+},{"../globals":7}],16:[function(require,module,exports){
 
 
 //
@@ -2104,7 +2289,7 @@ if (typeof Object.getOwnPropertyDescriptor === 'function') {
   exports.getOwnPropertyDescriptor = valueObject;
 }
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 var process=require("__browserify_process");// Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2315,7 +2500,7 @@ exports.extname = function(path) {
   return splitPath(path)[3];
 };
 
-},{"__browserify_process":18,"_shims":15,"util":17}],17:[function(require,module,exports){
+},{"__browserify_process":19,"_shims":16,"util":18}],18:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2860,7 +3045,7 @@ function hasOwnProperty(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
 
-},{"_shims":15}],18:[function(require,module,exports){
+},{"_shims":16}],19:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -2914,5 +3099,5 @@ process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
 
-},{}]},{},[3])
+},{}]},{},[4])
 ;

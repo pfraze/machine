@@ -5,7 +5,7 @@ module.exports = {
 		if (globals.session.isPageAdmin) {
 			$('.directory-delete-btn').on('click', function() {
 				if (!confirm('Delete this directory. Are you sure?')) return false;
-				globals.pageUA.DELETE()
+				globals.pageAgent.DELETE()
 					.then(function(res) {
 						window.location = '/';
 					})

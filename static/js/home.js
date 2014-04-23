@@ -21,17 +21,17 @@ module.exports = {
 	}
 };
 },{"./globals":2}],2:[function(require,module,exports){
-var hostUA = local.agent(window.location.protocol + '//' + window.location.host);
+var hostAgent = local.agent(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
 		user: $('body').data('user') || null,
 		isPageAdmin: $('body').data('user-is-admin') == '1'
 	},
-	hostUA: hostUA,
-	pageUA: local.agent(window.location.toString()),
-	authUA: hostUA.follow({ rel: 'service', id: 'auth' }),
-	meUA: hostUA.follow({ rel: 'item', id: '.me' }),
-	fetchProxyUA: hostUA.follow({ rel: 'service', id: '.fetch' }),
+	hostAgent: hostAgent,
+	pageAgent: local.agent(window.location.toString()),
+	authAgent: hostAgent.follow({ rel: 'service', id: 'auth' }),
+	meAgent: hostAgent.follow({ rel: 'item', id: '.me' }),
+	fetchProxyAgent: hostAgent.follow({ rel: 'service', id: '.fetch' }),
 };
 },{}],3:[function(require,module,exports){
 // Environment Setup
@@ -226,7 +226,7 @@ function fetch(url, useHead) {
 		} else if (!attempts.length && res.status === 0 && !triedProxy) {
 			// May be a CORS issue, try the proxy
 			triedProxy = true;
-			globals.fetchProxyUA.resolve({ nohead: true }).always(function(proxyUrl) {
+			globals.fetchProxyAgent.resolve({ nohead: true }).always(function(proxyUrl) {
 				if (!urld.protocol) {
 					if (useHead) {
 						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }));
@@ -280,7 +280,7 @@ module.exports = {
 	setup: function() {
 		if (globals.session.user) {
 			// Populate "my dirs"
-			globals.meUA.GET().then(function(res) {
+			globals.meAgent.GET().then(function(res) {
 				var html = res.body.directories.map(function(dir) {
 					return '<a href="/'+dir.id+'" class="list-group-item"><h4 class="list-group-item-heading">'+dir.name+'</h4></a>';
 				}).join('');
@@ -291,7 +291,7 @@ module.exports = {
 			$('.user-directories-panel .btn').on('click', function(req, res) {
 				var id = prompt('Enter the name of your new directory');
 				if (!id) return false;
-				globals.hostUA.POST({ id: id })
+				globals.hostAgent.POST({ id: id })
 					.then(function(res) {
 						window.location = res.headers.location;
 					})

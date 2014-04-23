@@ -7,10 +7,13 @@ module.exports = {
 // Executor
 // ========
 var _executions = {};
+var _mediaLinks; // links to items in the feed
 var _modal_execution = null; // the execution currently in a modal
 
 // EXPORTED
-function setup() {
+function setup(mediaLinks) {
+	_mediaLinks = mediaLinks;
+
 	// setup modal-window close behavior
 	$('#modal-window').on('hide.bs.modal', function() {
 		if (_modal_execution) {
@@ -128,13 +131,27 @@ function createExecution(execid, domain, meta) {
 		domain: domain,
 		id: execid,
 		el: null,
+		selection: captureSelection(),
 
 		dispatch: dispatchFromExecution,
 		stop: stopExecution,
+
 		setGui: setExecutionGui,
-		spawnModal: spawnExecutionModal
+		spawnModal: spawnExecutionModal,
+
+		getSelectedLinks: getExecutionSelectedLinks
 	};
 	return _executions[execid];
+}
+
+// helper to get the items selected currently
+function captureSelection() {
+	var $selected = $('.directory-links-list > .selected');
+	var arr = [];
+	for (var i=0; i < $selected.length; i++) {
+		arr.push(parseInt($selected[i].id.slice(5), 10)); // skip 'slot-' to extract id
+	}
+	return arr;
 }
 
 // helper to update an execution using an event-stream
@@ -237,6 +254,13 @@ function spawnExecutionModal(modalDef, doc) {
 	$mwin.find('.modal-footer .btn-default').text(cancel);
 	$mwin.find('.modal-body').html(doc);
 	$mwin.modal();
+}
+
+// helper gives a list of links for the selected items captured on the execution
+function getExecutionSelectedLinks() {
+	return this.selection.map(function(id) {
+		return _mediaLinks[id];
+	})
 }
 
 // Action-specific Methods

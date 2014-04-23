@@ -38,7 +38,7 @@ function onPostDoc(e) {
 	// Add to dir's docs
 	var link = local.util.deepClone(curLink);
 	delete link.href;
-	globals.pageUA.POST(curResponse.body, { query: link, Content_Type: curLink.type })
+	globals.pageAgent.POST(curResponse.body, { query: link, Content_Type: curLink.type })
 		.always(handlePostResponse);
 }
 
@@ -47,7 +47,7 @@ function onPostLink(e) {
 	if (!curLink) return;
 
 	// Add to dir's links
-	globals.pageUA.POST(null, { query: curLink })
+	globals.pageAgent.POST(null, { query: curLink })
 		.always(handlePostResponse);
 }
 

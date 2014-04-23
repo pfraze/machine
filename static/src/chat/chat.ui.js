@@ -3,7 +3,7 @@
 var util = require('../util');
 var pagent = require('./pagent');
 var linkRegistry = require('./linkregistry');
-var roomhostUA = local.agent('httpl://appcfg').follow({ rel: 'todo.com/rel/roomhost' });
+var roomhostAgent = local.agent('httpl://appcfg').follow({ rel: 'todo.com/rel/roomhost' });
 
 var server = servware();
 module.exports = server;
@@ -34,7 +34,7 @@ function allowDocument(req, res) {
 function allowChatHost(req, res) {
 	var origin = req.header('Origin');
 	if (!origin) return true; // allow from document
-	return roomhostUA.resolve().then(function(url) {
+	return roomhostAgent.resolve().then(function(url) {
 		if (origin == url) return true; // allow chathost
 		throw 403;
 	});
@@ -46,7 +46,7 @@ function validate(req, res) {
 }
 
 function sendToChathost(req, res) {
-	return roomhostUA.dispatch({ method: 'EMIT', body: req.body.msg }).then(function() { return true; });
+	return roomhostAgent.dispatch({ method: 'EMIT', body: req.body.msg }).then(function() { return true; });
 }
 
 function clearInput(req, res) {

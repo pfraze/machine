@@ -4,7 +4,7 @@ module.exports = {
 	setup: function() {
 		if (globals.session.user) {
 			// Populate "my dirs"
-			globals.meUA.GET().then(function(res) {
+			globals.meAgent.GET().then(function(res) {
 				var html = res.body.directories.map(function(dir) {
 					return '<a href="/'+dir.id+'" class="list-group-item"><h4 class="list-group-item-heading">'+dir.name+'</h4></a>';
 				}).join('');
@@ -15,7 +15,7 @@ module.exports = {
 			$('.user-directories-panel .btn').on('click', function(req, res) {
 				var id = prompt('Enter the name of your new directory');
 				if (!id) return false;
-				globals.hostUA.POST({ id: id })
+				globals.hostAgent.POST({ id: id })
 					.then(function(res) {
 						window.location = res.headers.location;
 					})

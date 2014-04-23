@@ -103,7 +103,7 @@ function fetch(url, useHead) {
 		} else if (!attempts.length && res.status === 0 && !triedProxy) {
 			// May be a CORS issue, try the proxy
 			triedProxy = true;
-			globals.fetchProxyUA.resolve({ nohead: true }).always(function(proxyUrl) {
+			globals.fetchProxyAgent.resolve({ nohead: true }).always(function(proxyUrl) {
 				if (!urld.protocol) {
 					if (useHead) {
 						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }));
