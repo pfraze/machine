@@ -24,88 +24,71 @@ module.exports = {
 module.exports = {
 	setup: setup,
 	get: getExecution,
-	runAction: runAction
+	dispatch: dispatch
 };
 
 // Executor
 // ========
 var _executions = {};
 var _mediaLinks; // links to items in the feed
-var _modal_execution = null; // the execution currently in a modal
 
 // EXPORTED
 function setup(mediaLinks) {
 	_mediaLinks = mediaLinks;
-
-	// setup modal-window close behavior
-	$('#modal-window').on('hide.bs.modal', function() {
-		if (_modal_execution) {
-			// if we still have a modal execution, then it has been cancelled
-			_modal_execution.stop(true);
-			_modal_execution = null;
-		}
-	});
-	// setup modal-window primary button behavior
-	$('#modal-window .modal-footer .btn-primary').on('click', function() {
-		var $form = $('#modal-window .modal-body form');
-		if ($form.length === 0) {
-			console.warn('Wanted to submit the modal, but no form found in content');
-			return;
-		}
-
-		var request = local.util.extractRequest($form[0], $form[0]);
-		if (!request) { console.warn('Unable to build request from modal form'); return; }
-
-		// dispatch request and continue execution
-		var exec = _modal_execution;
-		local.util.finishPayloadFileReads(request).then(function() {
-			exec.dispatch(request).always(handleActionRes(exec.id));
-		});
-		// don't close modal yet - wait for response in case it's still needed
-	});
 }
 
 // EXPORTED
 // execution lookup, validates against domain
 function getExecution(domain, id) {
 	var exec = _executions[id];
-	if (exec && exec.domain === domain)
+	if (exec && (exec.domain === domain || domain === true))
 		return exec;
 }
 
 // EXPORTED
-// create "action" execution
-function runAction(url, meta, reqBody) {
-	var execid = allocId();
-	var urld = local.parseUri(url);
-	var domain = urld.protocol + '://' + urld.authority;
+// create an execution for the request
+// - req: obj, the request
+// - pluginMeta: obj, the link to the plugin
+// - $el: jquery element, the plugin's GUI
+function dispatch(req, pluginMeta, $el) {
+	var reqUrld      = local.parseUri(req.url);
+	var reqDomain    = reqUrld.protocol + '://' + reqUrld.authority;
+	var pluginUrld   = local.parseUri(pluginMeta.href);
+	var pluginDomain = pluginUrld.protocol + '://' + pluginUrld.authority;
+
+	// audit request
+	// :TODO:
 
 	// allocate execution and gui space
-	var exec = createExecution(execid, domain, meta);
-	createActionGui(exec);
+	var execid = allocId();
+	var exec = createExecution(execid, pluginDomain, pluginMeta, $el);
 
-	// setup and dispatch request
-	var req = new local.Request({
-		method: 'POST',
-		url: local.joinUri(url, execid),
-		Accept: 'text/html',
-		stream: true
-	});
-	exec.req = req;
-	exec.res_ = local.dispatch(req);
-	exec.res_.always(handleActionRes(exec.id));
-	req.end(reqBody);
+	// prep request
+	var body = req.body;
+	delete req.body;
 
+	req.stream = true;
+
+	if (!req.headers) { req.headers = {}; }
+	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
+	req.headers.authorization = 'ID '+execid; // attach execid
+
+	if (!local.isAbsUri(req.url)) {
+		req.url = local.joinUri(pluginDomain, req.url);
+	}
+
+	// dispatch
+	exec.req = (req instanceof local.Request) ? req : (new local.Request(req));
+	exec.res_ = local.dispatch(req).always(handleExecRes(execid));
+	exec.req.end(body);
 	return exec;
 }
 
 // produces callback to handle the response of an action
-function handleActionRes(execid) {
+function handleExecRes(execid) {
 	return function(res) {
 		var exec = _executions[execid];
 		if (!exec) { return console.error('Execution not in masterlist when handling response', execid, res); }
-		// ^ this should never happen, if it does the flow is broken somehow
-		var modal = (res.parsedHeaders.pragma) ? res.parsedHeaders.pragma.modal : false;
 
 		if (res.header('Content-Type') == 'text/event-stream') {
 			// stream update events into the GUI
@@ -122,19 +105,12 @@ function handleActionRes(execid) {
 					else if (res.status >= 500 && res.status < 600) { reason = 'error'; }
 					gui = reason + ' <small>'+res.status+'</small>';
 				}
-				if (modal) {
-					exec.spawnModal(modal, gui);
-				} else {
-					exec.setGui(gui);
-				}
+				exec.setGui(gui);
 			});
 		}
 
-		// stop on response close
-		if (!modal) {
-			res.on('close', exec.stop.bind(exec, false));
-			closeModalIfActive(); // close modal now because we know we dont need it
-		}
+		// end on response close
+		res.on('close', exec.end.bind(exec));
 	};
 }
 
@@ -148,20 +124,16 @@ function allocId() {
 }
 
 // create execution base-structure, store in masterlist
-function createExecution(execid, domain, meta) {
+function createExecution(execid, domain, meta, $el) {
 	_executions[execid] = {
 		meta: meta,
 		domain: domain,
 		id: execid,
-		el: null,
+		$el: $el,
 		selection: captureSelection(),
 
-		dispatch: dispatchFromExecution,
-		stop: stopExecution,
-
+		end: endExecution,
 		setGui: setExecutionGui,
-		spawnModal: spawnExecutionModal,
-
 		getSelectedLinks: getExecutionSelectedLinks
 	};
 	return _executions[execid];
@@ -196,192 +168,72 @@ function streamGui(res, exec) {
 	});
 }
 
-// helper to close the active modal
-function closeModalIfActive() {
-	_modal_execution = null;
-	$('#modal-window').modal('hide');
-}
 
 // Execution-object Methods
 // ========================
 
-// executes a request from the execution, either from a GUI element or from the worker
-function dispatchFromExecution(req) {
-	// audit request
-	// :TODO: only to self
-
-	// prep request
-	var body = req.body;
-	delete req.body;
-
-	req.stream = true;
-
-	if (!req.headers) { req.headers = {}; }
-	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
-
-	if (!local.isAbsUri(req.url)) {
-		req.url = local.joinUri(this.domain, req.url);
-	}
-
-	// dispatch
-	req = (req instanceof local.Request) ? req : (new local.Request(req));
-	var res_ = local.dispatch(req);
-	req.end(body);
-	return res_;
-}
-
 // closes request, removes self from masterlist
-function stopExecution(fastRemove) {
+function endExecution() {
 	if (this.id in _executions) {
 		this.req.close();
 		delete _executions[this.id];
-
-		if (fastRemove) {
-			$(this.el).remove();
-		} else {
-			// remove gui in 3 seconds
-			var el = this.el;
-			setTimeout(function() { $(el).remove(); }, 3000);
-		}
 	}
 }
 
 // updates self's gui
 function setExecutionGui(doc) {
 	var html = (doc && typeof doc == 'object') ? JSON.stringify(doc) : (''+doc);
-	if (html && this.el)
-		this.el.querySelector('.execgui-inner').innerHTML = html;
-}
-
-// creates a modal
-// - `modalDef`: a string of "title text|ok button text|cancel button text"
-function spawnExecutionModal(modalDef, doc) {
-	if (_modal_execution && _modal_execution !== this) {
-		console.error('Attempted to create a modal while another modal existed! Please report this to the layer1 devs.');
-		return;
-	}
-	_modal_execution = this;
-	this.setGui('Waiting for user input');
-
-	// pull out text from modal definition
-	modalDef = (modalDef||'').split('|');
-	var title  = modalDef[0] || this.meta.title || this.meta.href;
-	var ok     = modalDef[1] || 'Submit';
-	var cancel = modalDef[2] || 'Cancel';
-
-	// create modal
-	var html = (doc && typeof doc == 'object') ? JSON.stringify(doc) : (''+doc);
-	var $mwin = $('#modal-window');
-	$mwin.find('.modal-title').text(title);
-	$mwin.find('.modal-footer .btn-primary').text(ok);
-	$mwin.find('.modal-footer .btn-default').text(cancel);
-	$mwin.find('.modal-body').html(doc);
-	$mwin.modal();
+	if (html && this.$el)
+		this.$el.find('.plugingui-inner').html(html);
 }
 
 // helper gives a list of links for the selected items captured on the execution
 function getExecutionSelectedLinks() {
 	return this.selection.map(function(id) {
 		return _mediaLinks[id];
-	})
-}
-
-// Action-specific Methods
-// =======================
-
-// create gui-segment for an action to use
-function createActionGui(execution) {
-	var title = execution.domain;
-	if (execution.meta && execution.meta.title) {
-		title = execution.meta.title;
-	}
-	var $el = $(
-		'<div id="execgui-'+execution.id+'" class="execgui actiongui">'+
-			'<div class="actiongui-title"><small>'+title+' <a href="#" class="glyphicon glyphicon-remove"></a></small></div>'+
-			'<div class="execgui-inner">Loading...</div>'+
-		'</div>'
-	);
-	$('#action-guis').append($el);
-	execution.el = $el[0];
-	execution.el.addEventListener('request', onActionGuiRequest.bind(execution));
-	execution.el.querySelector('.actiongui-title .glyphicon-remove').addEventListener('click', onActionGuiClose.bind(execution));
-}
-
-// handle request-event from an action's gui
-function onActionGuiRequest(e) {
-	var self = this;
-	this.dispatch(e.detail).always(function(res) {
-		if (res.body) {
-			self.setGui(res.body);
-		}
 	});
 }
 
-// handle titlebar close button click
-function onActionGuiClose(e) {
-	this.stop(true);
-}
+// :TODO: ?
+// // handle titlebar close button click
+// function onActionGuiClose(e) {
+// 	this.end();
+// }
 },{}],3:[function(require,module,exports){
+var util = require('../util');
+
 module.exports = {
 	setup: function() {},
 	get: function() { return _cfg; },
-	queryActions: queryActions,
-	queryRenderers: queryRenderers,
+	queryGuis: queryGuis
 };
 
 // The active feed config
 var _cfg = {
-	actions: [
-		{
-			meta: { href: 'local://grimwire.com:8000(js/act/stopwatch.js)/', title: 'StopWatch' },
-			behavior: false,
-			targets: false
-		},
-		{
-			meta: { href: 'local://grimwire.com:8000(js/act/mkjson.js)/', title: 'Make JSON' },
-			behavior: ['add-an-item'],
-			targets: false
-		},
-		{
-			meta: { href: 'local://grimwire.com:8000(js/act/copydoc.js)/', title: 'Copy JSON' },
-			behavior: ['read-selected', 'add-an-item'],
-			targets: [{rel:'stdrel.com/media', type:'application/json'}]
-		}
-	],
-	renderers: [
-		{
-			meta: { href: 'local://thing-renderer', title: 'Thing Renderer' },
-			targets: ['schema.org/Thing']
-		},
-		{
-			meta: { href: 'local://default-renderer', title: 'Default Renderer' },
-			targets: ['stdrel.com/media']
-		}
-	]
+	guis: util.table(
+		['href',                    'rel',           'title',       'for'],
+		'local://thing-renderer',   'layer1.io/gui', 'Thing GUI',   'schema.org/Thing',
+		'local://default-renderer', 'layer1.io/gui', 'Default GUI', 'stdrel.com/media',
+		'local://grimwire.com:8000(js/act/stopwatch.js)', 'layer1.io/gui', 'Stopwatch', 'stdrel.com/media'
+	)
 };
 
-function query(targetLink, coll) {
+function queryGuis(targetLink) {
 	var matches = [];
-	for (var i=0; i < coll.length; i++) {
-		var a = coll[i];
-		if (!a.targets) continue;
-		for (var j=0; j < (a.targets.length||0); j++) {
-			if (local.queryLink(targetLink, a.targets[j])) {
-				matches.push(a);
-			}
+	for (var i=0; i < _cfg.guis.length; i++) {
+		var g = _cfg.guis[i];
+		if (!g.for) continue;
+		if (typeof g.for == 'string' && g.for[0] == '{' || g.for[0] == '[' || g.for[0] == '"') {
+			try { g.for = JSON.parse(g.for); }
+			catch (e) {}
+		}
+		if (local.queryLink(targetLink, g.for)) {
+			matches.push(g);
 		}
 	}
 	return matches;
 }
-
-function queryActions(targetLink) {
-	return query(targetLink, _cfg.actions);
-}
-
-function queryRenderers(targetLink) {
-	return query(targetLink, _cfg.renderers);
-}
-},{}],4:[function(require,module,exports){
+},{"../util":13}],4:[function(require,module,exports){
 var sec = require('../security');
 var util = require('../util');
 var feedcfg = require('./feedcfg');
@@ -389,42 +241,36 @@ var executor = require('./executor');
 
 module.exports = {
 	setup: setup,
-	renderFeed: renderFeed,
-	renderActions: renderActions
+	renderMetaFeed: renderMetaFeed,
+	renderGuis: renderGuis
 };
 
 var _mediaLinks;
-var _activeActions;
+var _activeGuis;
 function setup(mediaLinks) {
 	_mediaLinks = mediaLinks;
-	_activeActions = null;
+	_activeGuis = null;
 
 	// Active renderers
-	renderFeed();
-	renderActions();
+	renderMetaFeed();
+	renderGuis();
 
 	// Selection
 	$('.center-pane').on('click', onClickCenterpane);
-	$('#action-btns').on('click', onClickAction);
 }
 
-function renderFeed() {
+function renderMetaFeed() {
 	// Render the medias
 	for (var i = 0; i < _mediaLinks.length; i++) {
-		renderItem(i);
+		var link = _mediaLinks[i];
+		var title = util.escapeHTML(link.title || link.id || 'Untitled');
+		var type = util.escapeHTML(link.type || '');
+		var types = type ? type.split('/') : ['', ''];
+
+		$('#slot-'+i).html(
+			'<span class="type '+types[0]+'">'+types[1]+'</span> <span class="title">'+title+'</span>'
+		);
 	}
-}
-
-function renderItem(i) {
-	var link = _mediaLinks[i];
-	var title = util.escapeHTML(link.title || link.id || 'Untitled');
-	var id = util.escapeHTML(link.id || '');
-	var type = util.escapeHTML(link.type || '');
-	var types = type ? type.split('/') : ['', ''];
-
-	$('#slot-'+i).html(
-		'<span class="type '+types[0]+'">'+types[1]+'</span> <span class="title">'+title+'</span>'
-	);
 }
 
 function onClickCenterpane(e) {
@@ -439,19 +285,19 @@ function onClickCenterpane(e) {
 	}
 
 	// redraw actions based on the selection
-	renderActions();
+	renderGuis();
 	return false;
 }
 
-function renderActions() {
+function renderGuis() {
 	// gather applicable actions
 	var $sel = $('.directory-links-list .selected');
-	_activeActions = {};
+	_activeGuis = {};
 	if ($sel.length === 0) {
 		// no-target actions
-		feedcfg.get().actions.forEach(function(action) {
-			if (!action.targets)
-				_activeActions[action.meta.href] = action;
+		feedcfg.get().guis.forEach(function(gui) {
+			if (!gui.for)
+				_activeGuis[gui.href] = gui;
 		});
 	} else {
 		// matching actions
@@ -460,29 +306,39 @@ function renderActions() {
 			var link = _mediaLinks[id];
 			if (!link) continue;
 
-			var matches = feedcfg.queryActions(link);
+			var matches = feedcfg.queryGuis(link);
 			for (var j=0; j < matches.length; j++) {
-				_activeActions[matches[j].meta.href] = matches[j];
+				_activeGuis[matches[j].href] = matches[j];
 			}
 		}
 	}
 
-	// render
-	var $btns = $('#action-btns');
-	var html = '';
-	for (var href in _activeActions) {
-		var m = _activeActions[href].meta;
-		html += '<a href="#" data-action="'+m.href+'" title="Behaviors TODO">'+m.title+'</a><br>';
+	// create gui spaces
+	var $guis = $('#plugin-guis');
+	$guis.empty();
+	for (var href in _activeGuis) {
+		var $gui = createPluginGuiEl(_activeGuis[href]);
+		$guis.append($gui);
+		$gui.on('request', onPluginGuiRequest);
+		executor.dispatch({ method: 'GET', url: href }, _activeGuis[href], $gui);
 	}
-	$btns.html(html);
-	$btns.find('a').tooltip({ placement: 'right' });
 }
 
-function onClickAction(e) {
-	var action = _activeActions[e.target.dataset.action];
-	if (!action) { throw "Action not found in active list"; } // should not happen
-	executor.runAction(action.meta.href, action.meta);
-	return false;
+// create gui-segment for a plugin to use
+function createPluginGuiEl(meta) {
+	var title = util.escapeHTML(meta.title || meta.id || meta.href);
+	return $(
+		'<div class="plugingui" data-plugin="'+meta.href+'">'+
+			'<div class="plugingui-title"><small>'+title+' <a href="#" class="glyphicon glyphicon-remove"></a></small></div>'+
+			'<div class="plugingui-inner">Loading...</div>'+
+		'</div>'
+	);
+}
+
+function onPluginGuiRequest(e) {
+	var $gui = $(this);
+	var href = $gui.data('plugin');
+	executor.dispatch(e.detail, _activeGuis[href], $gui);
 }
 },{"../security":12,"../util":13,"./executor":2,"./feedcfg":3}],5:[function(require,module,exports){
 // Environment Setup
@@ -505,7 +361,9 @@ require('../widgets/directory-delete-btn').setup();
 gui.setup(mediaLinks);
 
 // plugin execution
-local.addServer('worker-bridge', require('./worker-bridge')(mediaLinks));
+var hostEnvServer = require('./worker-bridge')(mediaLinks);
+local.addServer('worker-bridge', hostEnvServer);
+local.addServer('host.env', hostEnvServer);
 executor.setup(mediaLinks);
 
 // :TEMP:
@@ -514,47 +372,47 @@ local.addServer('todo', function(req, res) { alert('Todo'); res.writeHead(204).e
 },{"../auth":1,"../http-headers":9,"../pagent":11,"../widgets/addlink-panel":14,"../widgets/directory-delete-btn":15,"./executor":2,"./feedcfg":3,"./gui":4,"./renderers":6,"./worker-bridge":7}],6:[function(require,module,exports){
 var util = require('../util');
 
+// :TODO: remove all of this, replace with standard GUIs
+
 // Thing renderer
 local.addServer('thing-renderer', function(req, res) {
-	req.on('end', function() {
-		res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
-		var desc = [];
-		var url = (req.body.url) ? util.escapeHTML(req.body.url) : '#';
-		if (req.body.description) { desc.push(util.escapeHTML(req.body.description)); }
-		if (req.body.url) { desc.push('<a href="'+url+'">Link</a>'); }
-		var html = [
-			'<div class="media">',
-				((req.body.image) ? '<a target="_top" href="'+url+'" class="pull-left"><img class="media-object" src="'+util.escapeHTML(req.body.image)+'" alt="'+util.escapeHTML(req.body.name)+'" height="64"></a>' : ''),
-				'<div class="media-body">',
-					'<h4 class="media-heading">'+util.escapeHTML(req.body.name)+'</h4>',
-					((desc.length) ? '<p>'+desc.join('<br>')+'</p>' : ''),
-				'</div>',
-			'</div>'
-		].join('');
-		res.end(html);
-	});
+	local.GET({ url: 'local://host.env/selection/0', Authorization: req.header('Authorization') })
+		.always(function(res2) {
+			res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
+			var desc = [];
+			var url = (res2.body.url) ? util.escapeHTML(res2.body.url) : '#';
+			if (res2.body.description) { desc.push(util.escapeHTML(res2.body.description)); }
+			if (res2.body.url) { desc.push('<a href="'+url+'">Link</a>'); }
+			var html = [
+				'<div class="media">',
+					'<div class="media-body">',
+						'<h4 class="media-heading">'+util.escapeHTML(res2.body.name)+'</h4>',
+						((desc.length) ? '<p>'+desc.join('<br>')+'</p>' : ''),
+					'</div>',
+				'</div>'
+			].join('');
+			res.end(html);
+		});
 });
 
 // Default renderer
 local.addServer('default-renderer', function(req, res) {
-	req.on('end', function() {
-		res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
-		res.end('<p><a target="_top" href="'+util.escapeHTML(req.query.href)+'">Link</a></p>');
-		/*var html = JSON.stringify(req.query);
-		if (req.body) {
-			html += '<br><strong>'+JSON.stringify(req.body)+'</strong>';
-		}
-		res.end(html);*/
-	});
+	local.HEAD({ url: 'local://host.env/selection/0', Authorization: req.header('Authorization') })
+		.always(function(res2) {
+			var selfLink = local.queryLinks(res2, 'self');
+			res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
+			res.end(util.escapeHTML(JSON.stringify(selfLink)));
+		});
 });
 },{"../util":13}],7:[function(require,module,exports){
+var util = require('../util');
 var executor = require('./executor');
 var globals = require('../globals');
 
 module.exports = function(mediaLinks) {
 	// toplevel
 	function root(req, res, worker) {
-		var links = table(
+		var links = util.table(
 			['href',      'id',        'rel',                         'title'],
 			'/',          undefined,   'self service via',            'Host Page',
 			'/selection', 'selection', 'service layer1.io/selection', 'Selected Items at Time of Execution',
@@ -579,7 +437,7 @@ module.exports = function(mediaLinks) {
 		if (itemid) {
 			if (!selLinks[itemid]) { return res.writeHead(404).end(); }
 			var link = local.util.deepClone(selLinks[itemid]);
-			headerLinks = table(
+			headerLinks = util.table(
 				['href',      'id',        'rel',                            'title'],
 				'/',          undefined,   'via',                            'Host Page',
 				'/selection', 'selection', 'up service layer1.io/selection', 'Selected Items at Time of Execution'
@@ -588,7 +446,7 @@ module.exports = function(mediaLinks) {
 		}
 		else {
 			var links = local.util.deepClone(selLinks);
-			headerLinks = table(
+			headerLinks = util.table(
 				['href',      'id',        'rel',                              'title'],
 				'/',          undefined,   'up service via',                   'Host Page',
 				'/selection', 'selection', 'self service layer1.io/selection', 'Selected Items at Time of Execution'
@@ -606,7 +464,7 @@ module.exports = function(mediaLinks) {
 		if (itemid) {
 			if (!mediaLinks[itemid]) { return res.writeHead(404).end(); }
 			var link = local.util.deepClone(mediaLinks[itemid]);
-			headerLinks = table(
+			headerLinks = util.table(
 				['href', 'id',      'rel',                       'title'],
 				'/',     undefined, 'service via',               'Host Page',
 				'/feed', 'feed',    'up service layer1.io/feed', 'Current Feed'
@@ -615,7 +473,7 @@ module.exports = function(mediaLinks) {
 		}
 		else {
 			var links = local.util.deepClone(mediaLinks);
-			headerLinks = table(
+			headerLinks = util.table(
 				['href', 'id',      'rel',                         'title'],
 				'/',     undefined, 'up service via',              'Host Page',
 				'/feed', 'feed',    'self service layer1.io/feed', 'Current Feed'
@@ -720,7 +578,7 @@ module.exports = function(mediaLinks) {
 		if (!auth) return false;
 
 		var parts = auth.split(' ');
-		if (parts[0] != 'Exec' || !parts[1]) return false;
+		if (parts[0] != 'ID' || !parts[1]) return false;
 
 		return +parts[1] || false;
 	}
@@ -730,9 +588,9 @@ module.exports = function(mediaLinks) {
 		// check execution id
 		req.execid = extractExecId(req);
 		if (req.execid === false) {
-			return res.writeHead(401, 'must set Authorization header to "Exec <execid>"').end();
+			return res.writeHead(401, 'must reuse Authorization header in incoming request for all outgoing requests').end();
 		}
-		req.exec = executor.get(worker.getUrl(), req.execid);
+		req.exec = executor.get(worker ? worker.getUrl() : true, req.execid); // worker DNE, req came from page so allow
 		if (!req.exec) {
 			return res.writeHead(403, 'invalid execid - expired or not assigned to this worker').end();
 		}
@@ -748,19 +606,7 @@ module.exports = function(mediaLinks) {
 		}
 	};
 };
-
-// helper to make an array of objects
-function table(keys) {
-	var obj, i, j=-1;
-	var arr = [];
-	for (i=1, j; i < arguments.length; i++, j++) {
-		if (!keys[j]) { if (obj) { arr.push(obj); } obj = {}; j = 0; } // new object
-		obj[keys[j]] = arguments[i];
-	}
-	arr.push(obj); // dont forget the last one
-	return arr;
-}
-},{"../globals":8,"./executor":2}],8:[function(require,module,exports){
+},{"../globals":8,"../util":13,"./executor":2}],8:[function(require,module,exports){
 var hostAgent = local.agent(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
@@ -1817,12 +1663,26 @@ function fetch(url, useHead) {
 	return p;
 }
 
+// helper to make an array of objects
+function table(keys) {
+	var obj, i, j=-1;
+	var arr = [];
+	for (i=1, j; i < arguments.length; i++, j++) {
+		if (!keys[j]) { if (obj) { arr.push(obj); } obj = {}; j = 0; } // new object
+		obj[keys[j]] = arguments[i];
+	}
+	arr.push(obj); // dont forget the last one
+	return arr;
+}
+
 module.exports = {
 	escapeHTML: escapeHTML,
 	makeSafe: escapeHTML,
 	escapeQuotes: escapeQuotes,
 	stripScripts: stripScripts,
 	renderResponse: renderResponse,
+
+	table: table,
 
 	serializeRawMeta: serializeRawMeta,
 	parseRawMeta: parseRawMeta,

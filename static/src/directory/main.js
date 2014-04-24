@@ -18,7 +18,9 @@ require('../widgets/directory-delete-btn').setup();
 gui.setup(mediaLinks);
 
 // plugin execution
-local.addServer('worker-bridge', require('./worker-bridge')(mediaLinks));
+var hostEnvServer = require('./worker-bridge')(mediaLinks);
+local.addServer('worker-bridge', hostEnvServer);
+local.addServer('host.env', hostEnvServer);
 executor.setup(mediaLinks);
 
 // :TEMP:

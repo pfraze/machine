@@ -1,10 +1,11 @@
+var util = require('../util');
 var executor = require('./executor');
 var globals = require('../globals');
 
 module.exports = function(mediaLinks) {
 	// toplevel
 	function root(req, res, worker) {
-		var links = table(
+		var links = util.table(
 			['href',      'id',        'rel',                         'title'],
 			'/',          undefined,   'self service via',            'Host Page',
 			'/selection', 'selection', 'service layer1.io/selection', 'Selected Items at Time of Execution',
@@ -29,7 +30,7 @@ module.exports = function(mediaLinks) {
 		if (itemid) {
 			if (!selLinks[itemid]) { return res.writeHead(404).end(); }
 			var link = local.util.deepClone(selLinks[itemid]);
-			headerLinks = table(
+			headerLinks = util.table(
 				['href',      'id',        'rel',                            'title'],
 				'/',          undefined,   'via',                            'Host Page',
 				'/selection', 'selection', 'up service layer1.io/selection', 'Selected Items at Time of Execution'
@@ -38,7 +39,7 @@ module.exports = function(mediaLinks) {
 		}
 		else {
 			var links = local.util.deepClone(selLinks);
-			headerLinks = table(
+			headerLinks = util.table(
 				['href',      'id',        'rel',                              'title'],
 				'/',          undefined,   'up service via',                   'Host Page',
 				'/selection', 'selection', 'self service layer1.io/selection', 'Selected Items at Time of Execution'
@@ -56,7 +57,7 @@ module.exports = function(mediaLinks) {
 		if (itemid) {
 			if (!mediaLinks[itemid]) { return res.writeHead(404).end(); }
 			var link = local.util.deepClone(mediaLinks[itemid]);
-			headerLinks = table(
+			headerLinks = util.table(
 				['href', 'id',      'rel',                       'title'],
 				'/',     undefined, 'service via',               'Host Page',
 				'/feed', 'feed',    'up service layer1.io/feed', 'Current Feed'
@@ -65,7 +66,7 @@ module.exports = function(mediaLinks) {
 		}
 		else {
 			var links = local.util.deepClone(mediaLinks);
-			headerLinks = table(
+			headerLinks = util.table(
 				['href', 'id',      'rel',                         'title'],
 				'/',     undefined, 'up service via',              'Host Page',
 				'/feed', 'feed',    'self service layer1.io/feed', 'Current Feed'
@@ -170,7 +171,7 @@ module.exports = function(mediaLinks) {
 		if (!auth) return false;
 
 		var parts = auth.split(' ');
-		if (parts[0] != 'Exec' || !parts[1]) return false;
+		if (parts[0] != 'ID' || !parts[1]) return false;
 
 		return +parts[1] || false;
 	}
@@ -180,9 +181,9 @@ module.exports = function(mediaLinks) {
 		// check execution id
 		req.execid = extractExecId(req);
 		if (req.execid === false) {
-			return res.writeHead(401, 'must set Authorization header to "Exec <execid>"').end();
+			return res.writeHead(401, 'must reuse Authorization header in incoming request for all outgoing requests').end();
 		}
-		req.exec = executor.get(worker.getUrl(), req.execid);
+		req.exec = executor.get(worker ? worker.getUrl() : true, req.execid); // worker DNE, req came from page so allow
 		if (!req.exec) {
 			return res.writeHead(403, 'invalid execid - expired or not assigned to this worker').end();
 		}
@@ -198,15 +199,3 @@ module.exports = function(mediaLinks) {
 		}
 	};
 };
-
-// helper to make an array of objects
-function table(keys) {
-	var obj, i, j=-1;
-	var arr = [];
-	for (i=1, j; i < arguments.length; i++, j++) {
-		if (!keys[j]) { if (obj) { arr.push(obj); } obj = {}; j = 0; } // new object
-		obj[keys[j]] = arguments[i];
-	}
-	arr.push(obj); // dont forget the last one
-	return arr;
-}

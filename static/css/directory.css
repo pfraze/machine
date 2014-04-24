@@ -1,5 +1,3 @@
-.container, .row, .row > div { height: 100%; }
-
 h1 { color: #808080; }
 
 .addlink-panel { position: fixed; left: 10px; bottom: 0; z-index: 1; box-shadow: none; }
@@ -9,8 +7,9 @@ h1 { color: #808080; }
 .directory-links-list { border-top: 1px solid #ccc; }
 .directory-item-slot { background: #fff; cursor: pointer; padding: 3px; border-bottom: 1px solid #ccc; }
 .directory-item-slot:hover { background: #ffe; }
-.directory-item-slot.selected { background: #eee; font-weight: bold; }
+.directory-item-slot.selected { background: #3087B8; font-weight: bold; color: white; }
 .directory-item-slot .type { display: inline-block; font-size: 11px; color: #333; padding: 3px; font-family: consolas; }
+.directory-item-slot.selected .type { color: white; }
 
 .popover { max-width: 600px; }
 .popover textarea { width: 570px; font-family: consolas; margin-bottom: 10px; }

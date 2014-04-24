@@ -137,12 +137,26 @@ function fetch(url, useHead) {
 	return p;
 }
 
+// helper to make an array of objects
+function table(keys) {
+	var obj, i, j=-1;
+	var arr = [];
+	for (i=1, j; i < arguments.length; i++, j++) {
+		if (!keys[j]) { if (obj) { arr.push(obj); } obj = {}; j = 0; } // new object
+		obj[keys[j]] = arguments[i];
+	}
+	arr.push(obj); // dont forget the last one
+	return arr;
+}
+
 module.exports = {
 	escapeHTML: escapeHTML,
 	makeSafe: escapeHTML,
 	escapeQuotes: escapeQuotes,
 	stripScripts: stripScripts,
 	renderResponse: renderResponse,
+
+	table: table,
 
 	serializeRawMeta: serializeRawMeta,
 	parseRawMeta: parseRawMeta,

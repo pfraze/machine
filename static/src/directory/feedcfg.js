@@ -1,59 +1,33 @@
+var util = require('../util');
+
 module.exports = {
 	setup: function() {},
 	get: function() { return _cfg; },
-	queryActions: queryActions,
-	queryRenderers: queryRenderers,
+	queryGuis: queryGuis
 };
 
 // The active feed config
 var _cfg = {
-	actions: [
-		{
-			meta: { href: 'local://grimwire.com:8000(js/act/stopwatch.js)/', title: 'StopWatch' },
-			behavior: false,
-			targets: false
-		},
-		{
-			meta: { href: 'local://grimwire.com:8000(js/act/mkjson.js)/', title: 'Make JSON' },
-			behavior: ['add-an-item'],
-			targets: false
-		},
-		{
-			meta: { href: 'local://grimwire.com:8000(js/act/copydoc.js)/', title: 'Copy JSON' },
-			behavior: ['read-selected', 'add-an-item'],
-			targets: [{rel:'stdrel.com/media', type:'application/json'}]
-		}
-	],
-	renderers: [
-		{
-			meta: { href: 'local://thing-renderer', title: 'Thing Renderer' },
-			targets: ['schema.org/Thing']
-		},
-		{
-			meta: { href: 'local://default-renderer', title: 'Default Renderer' },
-			targets: ['stdrel.com/media']
-		}
-	]
+	guis: util.table(
+		['href',                    'rel',           'title',       'for'],
+		'local://thing-renderer',   'layer1.io/gui', 'Thing GUI',   'schema.org/Thing',
+		'local://default-renderer', 'layer1.io/gui', 'Default GUI', 'stdrel.com/media',
+		'local://grimwire.com:8000(js/act/stopwatch.js)', 'layer1.io/gui', 'Stopwatch', 'stdrel.com/media'
+	)
 };
 
-function query(targetLink, coll) {
+function queryGuis(targetLink) {
 	var matches = [];
-	for (var i=0; i < coll.length; i++) {
-		var a = coll[i];
-		if (!a.targets) continue;
-		for (var j=0; j < (a.targets.length||0); j++) {
-			if (local.queryLink(targetLink, a.targets[j])) {
-				matches.push(a);
-			}
+	for (var i=0; i < _cfg.guis.length; i++) {
+		var g = _cfg.guis[i];
+		if (!g.for) continue;
+		if (typeof g.for == 'string' && g.for[0] == '{' || g.for[0] == '[' || g.for[0] == '"') {
+			try { g.for = JSON.parse(g.for); }
+			catch (e) {}
+		}
+		if (local.queryLink(targetLink, g.for)) {
+			matches.push(g);
 		}
 	}
 	return matches;
-}
-
-function queryActions(targetLink) {
-	return query(targetLink, _cfg.actions);
-}
-
-function queryRenderers(targetLink) {
-	return query(targetLink, _cfg.renderers);
 }

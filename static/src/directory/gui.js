@@ -5,42 +5,36 @@ var executor = require('./executor');
 
 module.exports = {
 	setup: setup,
-	renderFeed: renderFeed,
-	renderActions: renderActions
+	renderMetaFeed: renderMetaFeed,
+	renderGuis: renderGuis
 };
 
 var _mediaLinks;
-var _activeActions;
+var _activeGuis;
 function setup(mediaLinks) {
 	_mediaLinks = mediaLinks;
-	_activeActions = null;
+	_activeGuis = null;
 
 	// Active renderers
-	renderFeed();
-	renderActions();
+	renderMetaFeed();
+	renderGuis();
 
 	// Selection
 	$('.center-pane').on('click', onClickCenterpane);
-	$('#action-btns').on('click', onClickAction);
 }
 
-function renderFeed() {
+function renderMetaFeed() {
 	// Render the medias
 	for (var i = 0; i < _mediaLinks.length; i++) {
-		renderItem(i);
+		var link = _mediaLinks[i];
+		var title = util.escapeHTML(link.title || link.id || 'Untitled');
+		var type = util.escapeHTML(link.type || '');
+		var types = type ? type.split('/') : ['', ''];
+
+		$('#slot-'+i).html(
+			'<span class="type '+types[0]+'">'+types[1]+'</span> <span class="title">'+title+'</span>'
+		);
 	}
-}
-
-function renderItem(i) {
-	var link = _mediaLinks[i];
-	var title = util.escapeHTML(link.title || link.id || 'Untitled');
-	var id = util.escapeHTML(link.id || '');
-	var type = util.escapeHTML(link.type || '');
-	var types = type ? type.split('/') : ['', ''];
-
-	$('#slot-'+i).html(
-		'<span class="type '+types[0]+'">'+types[1]+'</span> <span class="title">'+title+'</span>'
-	);
 }
 
 function onClickCenterpane(e) {
@@ -55,19 +49,19 @@ function onClickCenterpane(e) {
 	}
 
 	// redraw actions based on the selection
-	renderActions();
+	renderGuis();
 	return false;
 }
 
-function renderActions() {
+function renderGuis() {
 	// gather applicable actions
 	var $sel = $('.directory-links-list .selected');
-	_activeActions = {};
+	_activeGuis = {};
 	if ($sel.length === 0) {
 		// no-target actions
-		feedcfg.get().actions.forEach(function(action) {
-			if (!action.targets)
-				_activeActions[action.meta.href] = action;
+		feedcfg.get().guis.forEach(function(gui) {
+			if (!gui.for)
+				_activeGuis[gui.href] = gui;
 		});
 	} else {
 		// matching actions
@@ -76,27 +70,37 @@ function renderActions() {
 			var link = _mediaLinks[id];
 			if (!link) continue;
 
-			var matches = feedcfg.queryActions(link);
+			var matches = feedcfg.queryGuis(link);
 			for (var j=0; j < matches.length; j++) {
-				_activeActions[matches[j].meta.href] = matches[j];
+				_activeGuis[matches[j].href] = matches[j];
 			}
 		}
 	}
 
-	// render
-	var $btns = $('#action-btns');
-	var html = '';
-	for (var href in _activeActions) {
-		var m = _activeActions[href].meta;
-		html += '<a href="#" data-action="'+m.href+'" title="Behaviors TODO">'+m.title+'</a><br>';
+	// create gui spaces
+	var $guis = $('#plugin-guis');
+	$guis.empty();
+	for (var href in _activeGuis) {
+		var $gui = createPluginGuiEl(_activeGuis[href]);
+		$guis.append($gui);
+		$gui.on('request', onPluginGuiRequest);
+		executor.dispatch({ method: 'GET', url: href }, _activeGuis[href], $gui);
 	}
-	$btns.html(html);
-	$btns.find('a').tooltip({ placement: 'right' });
 }
 
-function onClickAction(e) {
-	var action = _activeActions[e.target.dataset.action];
-	if (!action) { throw "Action not found in active list"; } // should not happen
-	executor.runAction(action.meta.href, action.meta);
-	return false;
+// create gui-segment for a plugin to use
+function createPluginGuiEl(meta) {
+	var title = util.escapeHTML(meta.title || meta.id || meta.href);
+	return $(
+		'<div class="plugingui" data-plugin="'+meta.href+'">'+
+			'<div class="plugingui-title"><small>'+title+' <a href="#" class="glyphicon glyphicon-remove"></a></small></div>'+
+			'<div class="plugingui-inner">Loading...</div>'+
+		'</div>'
+	);
+}
+
+function onPluginGuiRequest(e) {
+	var $gui = $(this);
+	var href = $gui.data('plugin');
+	executor.dispatch(e.detail, _activeGuis[href], $gui);
 }
