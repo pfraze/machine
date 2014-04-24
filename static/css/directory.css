@@ -6,13 +6,10 @@ h1 { color: #808080; }
 .fetch-result { margin: 15px 0 0 0; }
 #post-btns { margin: 10px 0 0 0; }
 
-.config-panel { position: fixed; right: 10px; bottom: 0; z-index: 1; box-shadow: none; }
-.config-panel h3 { margin: 0; }
-.config-panel a { color: #555; }
-
 .directory-links-list { border-top: 1px solid #ccc; }
 .directory-item-slot { background: #fff; cursor: pointer; padding: 3px; border-bottom: 1px solid #ccc; }
-.directory-item-slot.selected { background: #EEEEEE; font-weight: bold; }
+.directory-item-slot:hover { background: #ffe; }
+.directory-item-slot.selected { background: #eee; font-weight: bold; }
 .directory-item-slot .type { display: inline-block; font-size: 11px; color: #333; padding: 3px; font-family: consolas; }
 
 .popover { max-width: 600px; }
