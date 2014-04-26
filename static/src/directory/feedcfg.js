@@ -9,9 +9,9 @@ module.exports = {
 // The active feed config
 var _cfg = {
 	guis: util.table(
-		['href',                    'rel',           'title',       'for'],
-		'local://thing-renderer',   'layer1.io/gui', 'Thing GUI',   'schema.org/Thing',
-		'local://default-renderer', 'layer1.io/gui', 'Default GUI', 'stdrel.com/media',
+		['href',                                          'rel',           'title',     'for'],
+		'local://thing-renderer',                         'layer1.io/gui', 'Thing',     'schema.org/Thing',
+		'local://about-renderer',                         'layer1.io/gui', 'About',     'stdrel.com/media',
 		'local://grimwire.com:8000(js/act/stopwatch.js)', 'layer1.io/gui', 'Stopwatch', 'stdrel.com/media'
 	)
 };

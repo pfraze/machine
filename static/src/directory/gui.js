@@ -101,7 +101,7 @@ function renderGuis() {
 	for (var href in _activeGuis) {
 		var $gui = createPluginGuiEl(_activeGuis[href]);
 		$guis.append($gui);
-		$gui.on('request', onPluginGuiRequest);
+		$gui[0].addEventListener('request', onPluginGuiRequest);
 		executor.dispatch({ method: 'GET', url: href }, _activeGuis[href], $gui);
 	}
 }

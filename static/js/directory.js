@@ -214,9 +214,9 @@ module.exports = {
 // The active feed config
 var _cfg = {
 	guis: util.table(
-		['href',                    'rel',           'title',       'for'],
-		'local://thing-renderer',   'layer1.io/gui', 'Thing GUI',   'schema.org/Thing',
-		'local://default-renderer', 'layer1.io/gui', 'Default GUI', 'stdrel.com/media',
+		['href',                                          'rel',           'title',     'for'],
+		'local://thing-renderer',                         'layer1.io/gui', 'Thing',     'schema.org/Thing',
+		'local://about-renderer',                         'layer1.io/gui', 'About',     'stdrel.com/media',
 		'local://grimwire.com:8000(js/act/stopwatch.js)', 'layer1.io/gui', 'Stopwatch', 'stdrel.com/media'
 	)
 };
@@ -340,7 +340,7 @@ function renderGuis() {
 	for (var href in _activeGuis) {
 		var $gui = createPluginGuiEl(_activeGuis[href]);
 		$guis.append($gui);
-		$gui.on('request', onPluginGuiRequest);
+		$gui[0].addEventListener('request', onPluginGuiRequest);
 		executor.dispatch({ method: 'GET', url: href }, _activeGuis[href], $gui);
 	}
 }
@@ -417,12 +417,35 @@ local.addServer('thing-renderer', function(req, res) {
 });
 
 // Default renderer
-local.addServer('default-renderer', function(req, res) {
+local.addServer('about-renderer', function(req, res) {
 	local.HEAD({ url: 'local://host.env/selection/0', Authorization: req.header('Authorization') })
 		.always(function(res2) {
-			var selfLink = local.queryLinks(res2, 'self');
+			var selfLink = local.queryLinks(res2, 'self')[0];
 			res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
-			res.end(util.escapeHTML(JSON.stringify(selfLink)));
+			var html = '';
+			if (req.path == '/config') {
+				html += '<p><a href="/">details</a> config</p>';
+				html += '<div class="panel panel-default"><div class="panel-body">';
+				html += '<form method="POST" action="/config">'+
+					'<div class="form-group"><textarea class="form-control" rows="8" name="meta">'+
+						util.escapeHTML(util.serializeRawMeta(selfLink))+
+					'</textarea></div>'+
+					'<button type="submit" class="btn btn-primary">Update</button>'+
+					' <button type="submit" class="btn btn-default">Defeed</button>'+
+				'</form>';
+				html += '</div></div>';
+			} else {
+				html += '<p>details <a href="/config">config</a></p>';
+				html += '<div class="panel panel-default"><div class="panel-body">';
+				if (selfLink) {
+					if (selfLink.id) { html += 'ID is '+util.escapeHTML(selfLink.id)+'<br>'; }
+					if (selfLink.rel) { html += 'Is a '+util.decorateReltype(selfLink.rel)+'<br>'; }
+					if (selfLink.created_at) { html += 'Created '+((new Date(+selfLink.created_at)).toLocaleTimeString())+'<br>'; }
+					if (selfLink.href) { html += '<a href="'+util.escapeHTML(selfLink.href)+'" target=_blank>URL</a>'; }
+				}
+				html += '</div></div>';
+			}
+			res.end(html);
 		});
 });
 },{"../util":13}],7:[function(require,module,exports){
@@ -1572,6 +1595,17 @@ function pad0(n, width, z) {
 	return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
 }
 
+function decorateReltype(str) {
+	return str.split(' ').map(function(rel) {
+		if (rel == 'up' || rel == 'self' || rel == 'current') return '';
+		if (rel.indexOf('.') === -1) {
+			return '<a href="http://www.iana.org/assignments/link-relations/link-relations.xhtml" target=_blank>'+rel+'</a>';
+		}
+		var href = (rel.indexOf(':') === -1) ? 'http://'+rel : rel;
+		return '<a href="'+href+'" target=_blank>'+rel+'</a>';
+	}).join(' ');
+}
+
 function renderResponse(req, res) {
 	if (res.body !== '') {
 		if (typeof res.body == 'string') {
@@ -1708,6 +1742,7 @@ module.exports = {
 	makeSafe: escapeHTML,
 	escapeQuotes: escapeQuotes,
 	stripScripts: stripScripts,
+	decorateReltype: decorateReltype,
 	renderResponse: renderResponse,
 
 	table: table,

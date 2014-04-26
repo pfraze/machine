@@ -118,6 +118,17 @@ function pad0(n, width, z) {
 	return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
 }
 
+function decorateReltype(str) {
+	return str.split(' ').map(function(rel) {
+		if (rel == 'up' || rel == 'self' || rel == 'current') return '';
+		if (rel.indexOf('.') === -1) {
+			return '<a href="http://www.iana.org/assignments/link-relations/link-relations.xhtml" target=_blank>'+rel+'</a>';
+		}
+		var href = (rel.indexOf(':') === -1) ? 'http://'+rel : rel;
+		return '<a href="'+href+'" target=_blank>'+rel+'</a>';
+	}).join(' ');
+}
+
 function renderResponse(req, res) {
 	if (res.body !== '') {
 		if (typeof res.body == 'string') {
@@ -254,6 +265,7 @@ module.exports = {
 	makeSafe: escapeHTML,
 	escapeQuotes: escapeQuotes,
 	stripScripts: stripScripts,
+	decorateReltype: decorateReltype,
 	renderResponse: renderResponse,
 
 	table: table,
