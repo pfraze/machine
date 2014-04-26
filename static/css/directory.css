@@ -1,7 +1,8 @@
+body { background: #F8F6EB; }
 h1 { color: #808080; }
 a { text-decoration: underline; }
 
-.addlink-panel { position: fixed; top: 0; left: 0; z-index: 1; box-shadow: none; }
+.addlink-panel { position: fixed; top: 0; left: 0; z-index: 1; box-shadow: none; background: #F3EFE0; border-radius: 0; border-bottom-right-radius: 4px; }
 .fetch-result { margin: 15px 0 0 0; }
 #post-btns { margin: 10px 0 0 0; }
 
@@ -9,12 +10,10 @@ a { text-decoration: underline; }
 
 /*.directory-links-list { border-bottom: 1px solid #ccc; }*/
 .directory-time { margin-top: 18px; font-size: 11px; color: #aaa; }
-.directory-item-slot { background: #fff; cursor: pointer; padding: 3px; /*border-top: 1px solid #ccc;*/ }
-.directory-item-slot:hover { background: #ffe; }
+.directory-item-slot { padding: 3px; }
+.directory-item-slot:hover { background: #FFFDF4; }
 .directory-item-slot.selected { background: #3087B8; font-weight: bold; color: white; }
-.directory-item-slot .type { display: inline-block; font-size: 11px; color: #333; padding: 3px; font-family: consolas; }
 .directory-item-slot .time { color: #aaa; float: right; font-size: 11px; }
-.directory-item-slot.selected .type { color: white; }
 
 #plugin-guis { position: fixed; top: 0; overflow: auto; height: 100%; padding-top: 26px; }
 .plugin-gui { margin-bottom: 18px; }

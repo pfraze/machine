@@ -29,16 +29,11 @@ function renderMetaFeed() {
 	for (var i = 0; i < _mediaLinks.length; i++) {
 		var link = _mediaLinks[i];
 		var title = util.escapeHTML(link.title || link.id || 'Untitled');
-		var type = util.escapeHTML(link.type || '');
-		var types = type ? type.split('/') : ['', ''];
 
 		var then = new Date(+link.created_at);
 		if (isNaN(then.valueOf())) then = lastDate;
 
-		$('#slot-'+i).html(
-			'<span class="type '+types[0]+'">'+types[1]+'</span> '+
-			'<span class="title">'+title+'</span>'
-		);
+		$('#slot-'+i).html('<span class="title">'+title+'</span>');
 
 		if (then.getDay() != lastDate.getDay() || (lastDate.getYear() == 69 && then.getYear() != 69)) {
 			$('#slot-'+i).before(
