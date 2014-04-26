@@ -13,7 +13,7 @@ function reset() {
 	// Reset the UI
 	var $form = $('.addlink-panel form');
 	$form[0].reset();
-	$form.find('#post-btns').attr('disabled', 'disabled').addClass('hidden');
+	$('#post-doc-btn').attr('disabled', 'disabled').addClass('hidden');
 	$form.find('.fetch-result').addClass('hidden').text('');
 }
 
@@ -108,11 +108,11 @@ function fetchLinkCB(url, $form) {
 				desc = util.escapeHTML(util.serializeRawMeta(desc)).replace(/\n/g, '<br>');
 
 				// Update UI
-				$form.find('#post-btns').attr('disabled', false).removeClass('hidden');
+				$('#post-doc-btn').attr('disabled', false).removeClass('hidden');
 				$form.find('.fetch-result').removeClass('hidden').html(desc);
 			} else {
 				// Failure
-				$form.find('#post-btns').attr('disabled', 'disabled').addClass('hidden');
+				$('#post-doc-btn').attr('disabled', 'disabled').addClass('hidden');
 				$form.find('.fetch-result').removeClass('hidden').text(res.status + ' ' + res.reason);
 			}
 		});
@@ -125,5 +125,6 @@ module.exports = {
 		$('.addlink-panel input[type=url]').on('keyup', onURLInputChange);
 		$('.addlink-panel #post-doc-btn').on('click', onPostDoc);
 		$('.addlink-panel #post-link-btn').on('click', onPostLink);
+		reset();
 	}
 };

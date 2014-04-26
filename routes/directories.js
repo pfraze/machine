@@ -9,7 +9,7 @@ var tmpl    = require('../lib/html');
 module.exports = function(server) {
 	server.post('/',        requireSession, createDir);
 	server.head('/:dir',    loadDirFromDB, linkDir, function(req, res) { res.send(204); });
-	server.get('/:dir',     loadDirFromDB, loadJsonDocsFromDB, linkDir, getDir);
+	server.get('/:dir',     loadDirFromDB, linkDir, getDir);
 	server.delete('/:dir',  requireSession, deleteDir);
 
 	function requireSession(req, res, next) {
@@ -40,7 +40,8 @@ module.exports = function(server) {
 		});
 	}
 
-	function loadJsonDocsFromDB(req, res, next) {
+	// :NOTE: removed from the GET route, no longer needed
+	/*function loadJsonDocsFromDB(req, res, next) {
 		// Find all the json docs
 		// :TODO: can't this just be a readstream that's setup exactly like the meta read?
 		//        the two db segments *should* mirror each other
@@ -59,7 +60,7 @@ module.exports = function(server) {
 			res.locals.jsonDocs = jsonDocs || {};
 			next();
 		});
-	}
+	}*/
 
 	function linkDir(req, res, next) {
 		var dirUrl = '/'+req.param('dir');
@@ -88,24 +89,13 @@ module.exports = function(server) {
 			html: function() {
 				// Render link and item slot HTMLs
 				var linksHTML = [];
-				var slotsHTML = [];
 				res.locals.items.forEach(function(item, i) {
 					// Render <link> el
 					item.value.href = item.value.href ||
 						(config.url + '/' + req.param('dir') + '/' + util.trim0(item.key));
 					linksHTML.push(util.renderLinkEl(item.value));
-
-					// Render slot, embedding json doc if present
-					var jsonDoc = res.locals.jsonDocs[item.key];
-					if (jsonDoc) {
-						var json = jsonDoc.toString().replace(/'/g, '&#39;'); // escape single quotes
-						slotsHTML.push('<div id="slot-'+i+'" class="directory-item-slot" data-doc=\''+json+'\'></div>');
-					} else {
-						slotsHTML.push('<div id="slot-'+i+'" class="directory-item-slot"></div>');
-					}
 				});
 				linksHTML = linksHTML.join('');
-				slotsHTML = slotsHTML.join('');
 
 				// Render page HTML
 				var dir = res.locals.directory;
@@ -114,8 +104,7 @@ module.exports = function(server) {
 					user_is_admin: true, //:TODO: dir.owner && (req.session.user == dir.owner),
 					dirname:       dir.id,
 					dirage:        util.timeago(dir.created_at),
-					links_html:    linksHTML,
-					slots_html:    slotsHTML
+					links_html:    linksHTML
 				});
 				res.send(page);
 			}
