@@ -1850,11 +1850,11 @@ function fetchLinkCB(url, $form) {
 				var desc = local.util.deepClone(curLink);
 				delete desc.href;
 				desc.rel = desc.rel.split(' ').filter(function(v) { return v.indexOf('.') !== -1; }).join(' '); // strip non-extension rels
-				desc = JSON.stringify(desc);
+				desc = util.escapeHTML(util.serializeRawMeta(desc)).replace(/\n/g, '<br>');
 
 				// Update UI
 				$form.find('#post-btns').attr('disabled', false).removeClass('hidden');
-				$form.find('.fetch-result').removeClass('hidden').text('Meta: ' + desc);
+				$form.find('.fetch-result').removeClass('hidden').html(desc);
 			} else {
 				// Failure
 				$form.find('#post-btns').attr('disabled', 'disabled').addClass('hidden');
