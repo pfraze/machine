@@ -301,7 +301,7 @@ function renderMetaFeed() {
 
 		// add item
 		var title = util.escapeHTML(link.title || link.id || 'Untitled');
-		$list.append('<div id="slot-'+i+'" class="directory-item-slot"><span class="title">'+title+'</span></div>');
+		$list.append('<div id="slot-'+index+'" class="directory-item-slot"><span class="title">'+title+'</span></div>');
 	}
 }
 
