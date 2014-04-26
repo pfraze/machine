@@ -1,6 +1,6 @@
 html, body { height: 100%; }
 iframe[seamless] { background-color: transparent; border: 0 none transparent; padding: 0; }
 .container-fluid { padding: 0 15px; }
-
+a[target="_blank"]:before { content: ''; display: inline-block; width: 13px; height: 10px; background: url(../img/external-link.png) no-repeat 0 0; }
 .profile-btn, .show-on-authed, .show-on-admin { display: none; }
 .align-right { text-align: right; }
