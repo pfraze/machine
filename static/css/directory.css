@@ -1,9 +1,11 @@
 h1 { color: #808080; }
 a { text-decoration: underline; }
 
-.addlink-panel { position: fixed; left: 10px; bottom: 0; z-index: 1; box-shadow: none; }
+.addlink-panel { position: fixed; top: 0; left: 0; z-index: 1; box-shadow: none; }
 .fetch-result { margin: 15px 0 0 0; }
 #post-btns { margin: 10px 0 0 0; }
+
+.container { margin-top: 70px; }
 
 /*.directory-links-list { border-bottom: 1px solid #ccc; }*/
 .directory-time { margin-top: 18px; font-size: 11px; color: #aaa; }
@@ -14,7 +16,7 @@ a { text-decoration: underline; }
 .directory-item-slot .time { color: #aaa; float: right; font-size: 11px; }
 .directory-item-slot.selected .type { color: white; }
 
-#plugin-guis { margin-top: 26px; }
+#plugin-guis { position: fixed; top: 0; overflow: auto; height: 100%; padding-top: 26px; }
 .plugin-gui { margin-bottom: 18px; }
 .plugin-gui-title { color: #aaa; }
 .plugin-gui-inner { margin: 6px; }
