@@ -10,7 +10,7 @@ a { text-decoration: underline; }
 
 /*.directory-links-list { border-bottom: 1px solid #ccc; }*/
 .directory-time { margin-top: 18px; font-size: 11px; color: #aaa; }
-.directory-item-slot { padding: 3px; }
+.directory-item-slot { padding: 3px 6px; }
 .directory-item-slot:hover { background: #FFFDF4; }
 .directory-item-slot.selected { background: #3087B8; font-weight: bold; color: white; }
 .directory-item-slot .time { color: #aaa; float: right; font-size: 11px; }

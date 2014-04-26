@@ -11,32 +11,48 @@ module.exports = {
 
 var _mediaLinks;
 var _activeGuis;
+var _sortReversed; // chronological or reverse-chrono?
 function setup(mediaLinks) {
 	_mediaLinks = mediaLinks;
 	_activeGuis = null;
+	_sortReversed = true; // default newest to oldest
 
-	// Active renderers
+	// render
 	renderMetaFeed();
 	renderGuis();
 
-	// Selection
+	// sort btn behaviors
+	var $sortBtn = $('#sort-btn');
+	var getSortBtnClass = function() { return 'glyphicon glyphicon-sort-by-alphabet'+((_sortReversed) ? '-alt' : ''); };
+	var getSortBtnTitle = function() { return 'Sorting: '+((_sortReversed) ? 'newest to oldest' : 'oldest to newest'); };
+	$sortBtn[0].className = getSortBtnClass();
+	$sortBtn[0].title = getSortBtnTitle();
+	$sortBtn.on('click', function() {
+		_sortReversed = !_sortReversed;
+		$sortBtn[0].className = getSortBtnClass();
+		$sortBtn[0].title = getSortBtnTitle();
+		renderMetaFeed();
+	});
+
+	// selection behaviors
 	$(document.body).on('click', feedItemSelectHandler);
 }
 
 function renderMetaFeed() {
-	// Render the medias
+	var $list = $('.directory-links-list');
+	$list.empty(); // clear out
+
 	var lastDate = new Date(0);
 	for (var i = 0; i < _mediaLinks.length; i++) {
-		var link = _mediaLinks[i];
-		var title = util.escapeHTML(link.title || link.id || 'Untitled');
+		var index = (_sortReversed) ? (_mediaLinks.length - i - 1) : i;
+		var link = _mediaLinks[index];
 
 		var then = new Date(+link.created_at);
 		if (isNaN(then.valueOf())) then = lastDate;
 
-		$('#slot-'+i).html('<span class="title">'+title+'</span>');
-
 		if (then.getDay() != lastDate.getDay() || (lastDate.getYear() == 69 && then.getYear() != 69)) {
-			$('#slot-'+i).before(
+			// add date entry
+			$list.append(
 				'<div class="directory-time">'+
 				then.getFullYear()+'/'+(then.getMonth()+1)+'/'+then.getDate()+
 				'</div>'
@@ -44,6 +60,9 @@ function renderMetaFeed() {
 		}
 		lastDate = then;
 
+		// add item
+		var title = util.escapeHTML(link.title || link.id || 'Untitled');
+		$list.append('<div id="slot-'+i+'" class="directory-item-slot"><span class="title">'+title+'</span></div>');
 	}
 }
 

@@ -47,7 +47,7 @@
       <div class="row">
         <div class="col-sm-1 align-right">
           <h1><a href="/" title="Back to Home" target="_top"><b class="glyphicon glyphicon-chevron-left"></b></a></h1>
-          <p><a href="#"><b class="glyphicon glyphicon-sort-by-alphabet" title="Sorting: oldest to newest"></b></a></p>
+          <p><a href="#" id="sort-btn" title="Sorting: oldest to newest"></a></p>
           <!-- <p><a href="#"><b class="glyphicon glyphicon-lock" title="Put a password on this feed"></b></a></p> -->
           <!-- <p><a href="#"><b class="glyphicon glyphicon-eye-close" title="Set who can see this feed"></b></a></p> -->
           <!-- <a href="#"><b class="glyphicon glyphicon-cog" title="Configure feed"></b></a> -->
@@ -55,9 +55,7 @@
         </div>
         <div class="col-sm-3 center-pane">
           <h1>{{DIRNAME}}<!-- <small>created {{DIRAGE}}</small>--></h1>
-          <div class="directory-links-list">
-            {{SLOTS_HTML}}
-          </div>
+          <div class="directory-links-list"></div>
         </div>
         <div class="col-sm-8">
           <div id="plugin-guis"></div>
