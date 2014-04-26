@@ -18,6 +18,13 @@ function stripScripts (html) {
 	return html.replace(sanitizeHtmlRegexp, '');
 }
 
+function pad0(n, width, z) {
+	// all glory to the hypnotoad
+	z = z || '0';
+	n = n + '';
+	return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+}
+
 function renderResponse(req, res) {
 	if (res.body !== '') {
 		if (typeof res.body == 'string') {
@@ -157,6 +164,7 @@ module.exports = {
 	renderResponse: renderResponse,
 
 	table: table,
+	pad0: pad0,
 
 	serializeRawMeta: serializeRawMeta,
 	parseRawMeta: parseRawMeta,

@@ -23,13 +23,13 @@ module.exports = {
 },{"./globals":8}],2:[function(require,module,exports){
 module.exports = {
 	setup: setup,
-	get: getExecution,
+	get: getAction,
 	dispatch: dispatch
 };
 
-// Executor
-// ========
-var _executions = {};
+// Actions Executor
+// ================
+var _actions = {};
 var _mediaLinks; // links to items in the feed
 
 // EXPORTED
@@ -38,15 +38,15 @@ function setup(mediaLinks) {
 }
 
 // EXPORTED
-// execution lookup, validates against domain
-function getExecution(domain, id) {
-	var exec = _executions[id];
-	if (exec && (exec.domain === domain || domain === true))
-		return exec;
+// action lookup, validates against domain
+function getAction(domain, id) {
+	var act = _actions[id];
+	if (act && (act.domain === domain || domain === true))
+		return act;
 }
 
 // EXPORTED
-// create an execution for the request
+// start an action with the given request
 // - req: obj, the request
 // - pluginMeta: obj, the link to the plugin
 // - $el: jquery element, the plugin's GUI
@@ -60,8 +60,8 @@ function dispatch(req, pluginMeta, $el) {
 	// :TODO:
 
 	// allocate execution and gui space
-	var execid = allocId();
-	var exec = createExecution(execid, pluginDomain, pluginMeta, $el);
+	var actid = allocId();
+	var act = createAction(actid, pluginDomain, pluginMeta, $el);
 
 	// prep request
 	var body = req.body;
@@ -71,28 +71,28 @@ function dispatch(req, pluginMeta, $el) {
 
 	if (!req.headers) { req.headers = {}; }
 	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
-	req.headers.authorization = 'ID '+execid; // attach execid
+	req.headers.authorization = 'Action '+actid; // attach actid
 
 	if (!local.isAbsUri(req.url)) {
 		req.url = local.joinUri(pluginDomain, req.url);
 	}
 
 	// dispatch
-	exec.req = (req instanceof local.Request) ? req : (new local.Request(req));
-	exec.res_ = local.dispatch(req).always(handleExecRes(execid));
-	exec.req.end(body);
-	return exec;
+	act.req = (req instanceof local.Request) ? req : (new local.Request(req));
+	act.res_ = local.dispatch(req).always(handleActRes(actid));
+	act.req.end(body);
+	return act;
 }
 
 // produces callback to handle the response of an action
-function handleExecRes(execid) {
+function handleActRes(actid) {
 	return function(res) {
-		var exec = _executions[execid];
-		if (!exec) { return console.error('Execution not in masterlist when handling response', execid, res); }
+		var act = _actions[actid];
+		if (!act) { return console.error('Action not in masterlist when handling response', actid, res); }
 
 		if (res.header('Content-Type') == 'text/event-stream') {
 			// stream update events into the GUI
-			streamGui(res, exec);
+			streamGui(res, act);
 		} else {
 			// output final response to GUI
 			res.on('end', function() {
@@ -105,38 +105,41 @@ function handleExecRes(execid) {
 					else if (res.status >= 500 && res.status < 600) { reason = 'error'; }
 					gui = reason + ' <small>'+res.status+'</small>';
 				}
-				exec.setGui(gui);
+				act.setGui(gui);
 			});
 		}
 
 		// end on response close
-		res.on('close', exec.end.bind(exec));
+		res.on('close', act.stop.bind(act));
 	};
 }
 
 // allocate unused id
 function allocId() {
-	var execid;
+	var actid;
 	do {
-		execid = Math.round(Math.random()*1000000000); // :TODO: pretty weak PNRG, is that a problem?
-	} while(execid in _executions);
-	return execid;
+		actid = Math.round(Math.random()*1000000000); // :TODO: pretty weak PNRG, is that a problem?
+	} while(actid in _actions);
+	return actid;
 }
 
-// create execution base-structure, store in masterlist
-function createExecution(execid, domain, meta, $el) {
-	_executions[execid] = {
+// create action base-structure, store in masterlist
+function createAction(actid, domain, meta, $el) {
+	_actions[actid] = {
 		meta: meta,
 		domain: domain,
-		id: execid,
+		id: actid,
 		$el: $el,
 		selection: captureSelection(),
 
-		end: endExecution,
-		setGui: setExecutionGui,
-		getSelectedLinks: getExecutionSelectedLinks
+		req: null,
+		res_: null,
+
+		stop: stopAction,
+		setGui: setActionGui,
+		getSelectedLinks: getActionSelectedLinks
 	};
-	return _executions[execid];
+	return _actions[actid];
 }
 
 // helper to get the items selected currently
@@ -149,8 +152,8 @@ function captureSelection() {
 	return arr;
 }
 
-// helper to update an execution using an event-stream
-function streamGui(res, exec) {
+// helper to update an action's gui using an event-stream
+function streamGui(res, act) {
 	var buffer = '', eventDelimIndex;
 	res.on('data', function(chunk) {
 		chunk = buffer + chunk;
@@ -159,7 +162,7 @@ function streamGui(res, exec) {
 			var e = chunk.slice(0, eventDelimIndex);
 			e = local.contentTypes.deserialize('text/event-stream', e);
 			if (e.event == 'update') {
-				exec.setGui(e.data);
+				act.setGui(e.data);
 			}
 			chunk = chunk.slice(eventDelimIndex+4);
 		}
@@ -169,26 +172,26 @@ function streamGui(res, exec) {
 }
 
 
-// Execution-object Methods
-// ========================
+// Action-object Methods
+// =====================
 
 // closes request, removes self from masterlist
-function endExecution() {
-	if (this.id in _executions) {
+function stopAction() {
+	if (this.id in _actions) {
 		this.req.close();
-		delete _executions[this.id];
+		delete _actions[this.id];
 	}
 }
 
 // updates self's gui
-function setExecutionGui(doc) {
+function setActionGui(doc) {
 	var html = (doc && typeof doc == 'object') ? JSON.stringify(doc) : (''+doc);
 	if (html && this.$el)
-		this.$el.find('.plugingui-inner').html(html);
+		this.$el.find('.plugin-gui-inner').html(html);
 }
 
 // helper gives a list of links for the selected items captured on the execution
-function getExecutionSelectedLinks() {
+function getActionSelectedLinks() {
 	return this.selection.map(function(id) {
 		return _mediaLinks[id];
 	});
@@ -256,24 +259,42 @@ function setup(mediaLinks) {
 	renderGuis();
 
 	// Selection
-	$('.center-pane').on('click', onClickCenterpane);
+	$(document.body).on('click', feedItemSelectHandler);
 }
 
 function renderMetaFeed() {
 	// Render the medias
+	var lastDate = new Date(0);
 	for (var i = 0; i < _mediaLinks.length; i++) {
 		var link = _mediaLinks[i];
 		var title = util.escapeHTML(link.title || link.id || 'Untitled');
 		var type = util.escapeHTML(link.type || '');
 		var types = type ? type.split('/') : ['', ''];
 
+		var then = new Date(+link.created_at);
+		if (isNaN(then.valueOf())) then = lastDate;
+
 		$('#slot-'+i).html(
-			'<span class="type '+types[0]+'">'+types[1]+'</span> <span class="title">'+title+'</span>'
+			'<span class="type '+types[0]+'">'+types[1]+'</span> '+
+			'<span class="title">'+title+'</span>'
 		);
+
+		if (then.getDay() != lastDate.getDay() || (lastDate.getYear() == 69 && then.getYear() != 69)) {
+			$('#slot-'+i).before(
+				'<div class="directory-time">'+
+				then.getFullYear()+'/'+(then.getMonth()+1)+'/'+then.getDate()+
+				'</div>'
+			);
+		}
+		lastDate = then;
+
 	}
 }
 
-function onClickCenterpane(e) {
+function feedItemSelectHandler(e) {
+	if (local.util.findParentNode.byElement(e.target, document.getElementById('plugin-guis')))
+		return; // do nothing if a click in the GUIs
+
 	if (!e.ctrlKey) {
 		// unselect current selection if ctrl isnot held down
 		$('.directory-links-list .selected').removeClass('selected');
@@ -328,9 +349,9 @@ function renderGuis() {
 function createPluginGuiEl(meta) {
 	var title = util.escapeHTML(meta.title || meta.id || meta.href);
 	return $(
-		'<div class="plugingui" data-plugin="'+meta.href+'">'+
-			'<div class="plugingui-title"><small>'+title+' <a href="#" class="glyphicon glyphicon-remove"></a></small></div>'+
-			'<div class="plugingui-inner">Loading...</div>'+
+		'<div class="plugin-gui" data-plugin="'+meta.href+'">'+
+			'<div class="plugin-gui-title"><small>'+title+'</small></div>'+//+' <a href="#" class="glyphicon glyphicon-remove"></a></small></div>'+
+			'<div class="plugin-gui-inner">Loading...</div>'+
 		'</div>'
 	);
 }
@@ -432,7 +453,7 @@ module.exports = function(mediaLinks) {
 		var convLink = function(uri, i) { return '/selection/'+i; };
 
 		var headerLinks;
-		var selLinks = req.exec.getSelectedLinks();
+		var selLinks = req.act.getSelectedLinks();
 
 		if (itemid) {
 			if (!selLinks[itemid]) { return res.writeHead(404).end(); }
@@ -573,26 +594,26 @@ module.exports = function(mediaLinks) {
 	}
 
 	// helper
-	function extractExecId(req) {
+	function extractActId(req) {
 		var auth = req.header('Authorization');
 		if (!auth) return false;
 
 		var parts = auth.split(' ');
-		if (parts[0] != 'ID' || !parts[1]) return false;
+		if (parts[0] != 'Action' || !parts[1]) return false;
 
 		return +parts[1] || false;
 	}
 
 	// server starting-point
 	return function(req, res, worker) {
-		// check execution id
-		req.execid = extractExecId(req);
-		if (req.execid === false) {
+		// check action id
+		req.actid = extractActId(req);
+		if (req.actid === false) {
 			return res.writeHead(401, 'must reuse Authorization header in incoming request for all outgoing requests').end();
 		}
-		req.exec = executor.get(worker ? worker.getUrl() : true, req.execid); // worker DNE, req came from page so allow
-		if (!req.exec) {
-			return res.writeHead(403, 'invalid execid - expired or not assigned to this worker').end();
+		req.act = executor.get(worker ? worker.getUrl() : true, req.actid); // worker DNE, req came from page so allow
+		if (!req.act) {
+			return res.writeHead(403, 'invalid actid - expired or not assigned to this worker').end();
 		}
 
 		// route
@@ -1544,6 +1565,13 @@ function stripScripts (html) {
 	return html.replace(sanitizeHtmlRegexp, '');
 }
 
+function pad0(n, width, z) {
+	// all glory to the hypnotoad
+	z = z || '0';
+	n = n + '';
+	return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+}
+
 function renderResponse(req, res) {
 	if (res.body !== '') {
 		if (typeof res.body == 'string') {
@@ -1683,6 +1711,7 @@ module.exports = {
 	renderResponse: renderResponse,
 
 	table: table,
+	pad0: pad0,
 
 	serializeRawMeta: serializeRawMeta,
 	parseRawMeta: parseRawMeta,

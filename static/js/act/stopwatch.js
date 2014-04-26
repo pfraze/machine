@@ -1,10 +1,6 @@
 importScripts('/js/local.js');
 
 function main(req, res) {
-	if (req.path != '/') {
-		return run(req, res, req.path.slice(1));
-	}
-
 	res.header('Link', [{ href: '/', rel: 'self layer1.io/gui', title: 'Stopwatch' }]);
 	res.header('Content-Type', 'text/event-stream');
 
@@ -22,6 +18,7 @@ function main(req, res) {
 	}, 1000);
 
 	req.on('close', function() {
+		res.end();
 		clearInterval(intId);
 	});
 }

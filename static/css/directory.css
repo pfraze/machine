@@ -4,14 +4,16 @@ h1 { color: #808080; }
 .fetch-result { margin: 15px 0 0 0; }
 #post-btns { margin: 10px 0 0 0; }
 
-.directory-links-list { border-top: 1px solid #ccc; }
-.directory-item-slot { background: #fff; cursor: pointer; padding: 3px; border-bottom: 1px solid #ccc; }
+/*.directory-links-list { border-bottom: 1px solid #ccc; }*/
+.directory-time { margin-top: 18px; font-size: 11px; color: #aaa; }
+.directory-item-slot { background: #fff; cursor: pointer; padding: 3px; /*border-top: 1px solid #ccc;*/ }
 .directory-item-slot:hover { background: #ffe; }
 .directory-item-slot.selected { background: #3087B8; font-weight: bold; color: white; }
 .directory-item-slot .type { display: inline-block; font-size: 11px; color: #333; padding: 3px; font-family: consolas; }
+.directory-item-slot .time { color: #aaa; float: right; font-size: 11px; }
 .directory-item-slot.selected .type { color: white; }
 
-.popover { max-width: 600px; }
-.popover textarea { width: 570px; font-family: consolas; margin-bottom: 10px; }
-
-.actiongui { background: #fff; box-shadow: 0 2px 3px rgba(0,0,0,0.15); display: inline-block; padding: 5px 10px; margin: 5px 5px 5px 0; }
+#plugin-guis { margin-top: 26px; }
+.plugin-gui { margin-bottom: 18px; }
+.plugin-gui-title { color: #aaa; }
+.plugin-gui-inner { margin: 6px; }

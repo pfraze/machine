@@ -25,7 +25,7 @@ module.exports = function(mediaLinks) {
 		var convLink = function(uri, i) { return '/selection/'+i; };
 
 		var headerLinks;
-		var selLinks = req.exec.getSelectedLinks();
+		var selLinks = req.act.getSelectedLinks();
 
 		if (itemid) {
 			if (!selLinks[itemid]) { return res.writeHead(404).end(); }
@@ -166,26 +166,26 @@ module.exports = function(mediaLinks) {
 	}
 
 	// helper
-	function extractExecId(req) {
+	function extractActId(req) {
 		var auth = req.header('Authorization');
 		if (!auth) return false;
 
 		var parts = auth.split(' ');
-		if (parts[0] != 'ID' || !parts[1]) return false;
+		if (parts[0] != 'Action' || !parts[1]) return false;
 
 		return +parts[1] || false;
 	}
 
 	// server starting-point
 	return function(req, res, worker) {
-		// check execution id
-		req.execid = extractExecId(req);
-		if (req.execid === false) {
+		// check action id
+		req.actid = extractActId(req);
+		if (req.actid === false) {
 			return res.writeHead(401, 'must reuse Authorization header in incoming request for all outgoing requests').end();
 		}
-		req.exec = executor.get(worker ? worker.getUrl() : true, req.execid); // worker DNE, req came from page so allow
-		if (!req.exec) {
-			return res.writeHead(403, 'invalid execid - expired or not assigned to this worker').end();
+		req.act = executor.get(worker ? worker.getUrl() : true, req.actid); // worker DNE, req came from page so allow
+		if (!req.act) {
+			return res.writeHead(403, 'invalid actid - expired or not assigned to this worker').end();
 		}
 
 		// route

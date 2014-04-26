@@ -20,24 +20,42 @@ function setup(mediaLinks) {
 	renderGuis();
 
 	// Selection
-	$('.center-pane').on('click', onClickCenterpane);
+	$(document.body).on('click', feedItemSelectHandler);
 }
 
 function renderMetaFeed() {
 	// Render the medias
+	var lastDate = new Date(0);
 	for (var i = 0; i < _mediaLinks.length; i++) {
 		var link = _mediaLinks[i];
 		var title = util.escapeHTML(link.title || link.id || 'Untitled');
 		var type = util.escapeHTML(link.type || '');
 		var types = type ? type.split('/') : ['', ''];
 
+		var then = new Date(+link.created_at);
+		if (isNaN(then.valueOf())) then = lastDate;
+
 		$('#slot-'+i).html(
-			'<span class="type '+types[0]+'">'+types[1]+'</span> <span class="title">'+title+'</span>'
+			'<span class="type '+types[0]+'">'+types[1]+'</span> '+
+			'<span class="title">'+title+'</span>'
 		);
+
+		if (then.getDay() != lastDate.getDay() || (lastDate.getYear() == 69 && then.getYear() != 69)) {
+			$('#slot-'+i).before(
+				'<div class="directory-time">'+
+				then.getFullYear()+'/'+(then.getMonth()+1)+'/'+then.getDate()+
+				'</div>'
+			);
+		}
+		lastDate = then;
+
 	}
 }
 
-function onClickCenterpane(e) {
+function feedItemSelectHandler(e) {
+	if (local.util.findParentNode.byElement(e.target, document.getElementById('plugin-guis')))
+		return; // do nothing if a click in the GUIs
+
 	if (!e.ctrlKey) {
 		// unselect current selection if ctrl isnot held down
 		$('.directory-links-list .selected').removeClass('selected');
@@ -92,9 +110,9 @@ function renderGuis() {
 function createPluginGuiEl(meta) {
 	var title = util.escapeHTML(meta.title || meta.id || meta.href);
 	return $(
-		'<div class="plugingui" data-plugin="'+meta.href+'">'+
-			'<div class="plugingui-title"><small>'+title+' <a href="#" class="glyphicon glyphicon-remove"></a></small></div>'+
-			'<div class="plugingui-inner">Loading...</div>'+
+		'<div class="plugin-gui" data-plugin="'+meta.href+'">'+
+			'<div class="plugin-gui-title"><small>'+title+'</small></div>'+//+' <a href="#" class="glyphicon glyphicon-remove"></a></small></div>'+
+			'<div class="plugin-gui-inner">Loading...</div>'+
 		'</div>'
 	);
 }
