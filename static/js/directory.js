@@ -418,32 +418,38 @@ local.addServer('thing-renderer', function(req, res) {
 
 // Default renderer
 local.addServer('about-renderer', function(req, res) {
-	local.HEAD({ url: 'local://host.env/selection/0', Authorization: req.header('Authorization') })
+	var method = (req.path == '/view') ? 'GET' : 'HEAD';
+	local.dispatch({ method: method, url: 'local://host.env/selection/0', Authorization: req.header('Authorization') })
 		.always(function(res2) {
 			var selfLink = local.queryLinks(res2, 'self')[0];
 			res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
 			var html = '';
 			if (req.path == '/config') {
-				html += '<p><a href="/">details</a> config</p>';
-				html += '<div class="panel panel-default"><div class="panel-body">';
+				var nrows = (selfLink) ? Object.keys(selfLink).length : 1;
+				html += '<p><a href="/">details</a> config <a href="/view">view</a></p>';
 				html += '<form method="POST" action="/config">'+
-					'<div class="form-group"><textarea class="form-control" rows="8" name="meta">'+
+					'<div class="form-group"><textarea class="form-control" rows="'+nrows+'" name="meta">'+
 						util.escapeHTML(util.serializeRawMeta(selfLink))+
 					'</textarea></div>'+
 					'<button type="submit" class="btn btn-primary">Update</button>'+
 					' <button type="submit" class="btn btn-default">Defeed</button>'+
 				'</form>';
-				html += '</div></div>';
+			} else if (req.path == '/view') {
+				var doc = (res2.body && typeof res2.body == 'object') ? JSON.stringify(res2.body) : res2.body;
+				html += '<p><a href="/">details</a> <a href="/config">config</a> view</p>';
+				html += '<pre>'+util.escapeHTML(doc)+'</pre>';
 			} else {
-				html += '<p>details <a href="/config">config</a></p>';
-				html += '<div class="panel panel-default"><div class="panel-body">';
+				// html += '<p>details <a href="/config">config</a> <a href="/view">view</a></p>';
 				if (selfLink) {
-					if (selfLink.id) { html += 'ID is '+util.escapeHTML(selfLink.id)+'<br>'; }
-					if (selfLink.rel) { html += 'Is a '+util.decorateReltype(selfLink.rel)+'<br>'; }
-					if (selfLink.created_at) { html += 'Created '+((new Date(+selfLink.created_at)).toLocaleTimeString())+'<br>'; }
-					if (selfLink.href) { html += '<a href="'+util.escapeHTML(selfLink.href)+'" target=_blank>URL</a>'; }
+					if (selfLink.id) { html += '<small class="text-muted">ID</small> '+util.escapeHTML(selfLink.id)+'<br>'; }
+					if (selfLink.rel) {
+						html += '<small class="text-muted">TYPE</small> '+util.decorateReltype(selfLink.rel);
+						if (selfLink.type) { html += ' '+util.escapeHTML(selfLink.type); }
+						html += '<br>';
+					}
+					if (selfLink.href) { html += '<small class="text-muted">HREF</small> <a href="'+util.escapeHTML(selfLink.href)+'" target=_blank>'+util.escapeHTML(selfLink.href)+'</a><br>'; }
+					if (selfLink.created_at) { html += '<small class="text-muted">CREATED</small> '+((new Date(+selfLink.created_at)).toLocaleTimeString())+'<br>'; }
 				}
-				html += '</div></div>';
 			}
 			res.end(html);
 		});
