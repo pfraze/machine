@@ -22,7 +22,6 @@ module.exports = function(mediaLinks) {
 	function selection(req, res, worker) {
 		var pathd = req.path.split('/');
 		var itemid = pathd[2];
-		var convLink = function(uri, i) { return '/selection/'+i; };
 
 		var headerLinks;
 		var selLinks = req.act.getSelectedLinks();
@@ -35,7 +34,7 @@ module.exports = function(mediaLinks) {
 				'/',          undefined,   'via',                            'Host Page',
 				'/selection', 'selection', 'up service layer1.io/selection', 'Selected Items at Time of Execution'
 			);
-			serveItem(req, res, headerLinks, link, { conv: function(uri) { return '/selection/'+itemid; } });
+			serveItem(req, res, headerLinks, link);
 		}
 		else {
 			var links = local.util.deepClone(selLinks);
@@ -44,7 +43,7 @@ module.exports = function(mediaLinks) {
 				'/',          undefined,   'up service via',                   'Host Page',
 				'/selection', 'selection', 'self service layer1.io/selection', 'Selected Items at Time of Execution'
 			);
-			serveCollection(req, res, headerLinks, links, { noPost: true, conv: convLink });
+			serveCollection(req, res, headerLinks, links, { noPost: true });
 		}
 	}
 
@@ -52,7 +51,6 @@ module.exports = function(mediaLinks) {
 	function feed(req, res, worker) {
 		var pathd = req.path.split('/');
 		var itemid = pathd[2];
-		var convLink = function(uri) { return '/feed/'+getPathEnd(uri); };
 
 		if (itemid) {
 			if (!mediaLinks[itemid]) { return res.writeHead(404).end(); }
@@ -62,7 +60,7 @@ module.exports = function(mediaLinks) {
 				'/',     undefined, 'service via',               'Host Page',
 				'/feed', 'feed',    'up service layer1.io/feed', 'Current Feed'
 			);
-			serveItem(req, res, headerLinks, link, { conv: convLink });
+			serveItem(req, res, headerLinks, link);
 		}
 		else {
 			var links = local.util.deepClone(mediaLinks);
@@ -71,7 +69,7 @@ module.exports = function(mediaLinks) {
 				'/',     undefined, 'up service via',              'Host Page',
 				'/feed', 'feed',    'self service layer1.io/feed', 'Current Feed'
 			);
-			serveCollection(req, res, headerLinks, links, { conv: convLink });
+			serveCollection(req, res, headerLinks, links);
 		}
 	}
 
@@ -85,11 +83,6 @@ module.exports = function(mediaLinks) {
 	function serveCollection(req, res, headerLinks, links, opts) {
 		opts = opts || {};
 		var uris = {};
-		links.forEach(function(link, i) {
-			// update link references to point to this service
-			uris[i] = link.href;
-			link.href = opts.conv(link.href, i);
-		});
 
 		// set headers
 		res.header('Link', headerLinks.concat(links));
@@ -110,7 +103,7 @@ module.exports = function(mediaLinks) {
 						Content_Type: req.header('Content-Type'),
 						query: req.query
 					}).then(function(res2) {
-						res.header('Location', opts.conv(res2.header('Location')));
+						res.header('Location', res2.header('Location'));
 						res.writeHead(201, 'created').end();
 					}, function(res2) {
 						res.writeHead(res2.status, res2.reason).end(res2.body);
@@ -128,7 +121,6 @@ module.exports = function(mediaLinks) {
 		opts = opts || {};
 		// update link references to point to this service
 		var uri = link.href;
-		link.href = opts.conv(uri);
 		link.rel = 'self '+link.rel;
 
 		// set headers
@@ -157,12 +149,6 @@ module.exports = function(mediaLinks) {
 				res.header('Allow', 'HEAD, GET');
 				res.writeHead(405, 'bad method').end();
 		}
-	}
-
-	// helper
-	function getPathEnd(url) {
-		var parts = url.split('/');
-		return parts[parts.length - 1];
 	}
 
 	// helper
