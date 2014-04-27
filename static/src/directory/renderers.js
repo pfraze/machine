@@ -31,6 +31,15 @@ local.addServer('about-renderer', function(req, res) {
 			res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
 			var html = '';
 			if (selfLink) {
+				if (selfLink.rel == 'self stdrel.com/media') {
+					var mime = selfLink.type || 'text/plain';
+					if (mime == 'text/plain') mime = 'plain-text';
+					else mime = mime.split('/')[1];
+					html += '<p>Raw media ('+mime+') - nothing else is known about this file.</p>';
+				} else if (/stdrel.com\/rel/.test(selfLink.rel)) {
+					html += '<p>This is a "relation type." It explains how a location on the Web behaves, and is the basis of Layer1\'s structure.</p>';
+				}
+
 				if (selfLink.id) { html += '<small class="text-muted">ID</small> '+util.escapeHTML(selfLink.id)+'<br>'; }
 				if (selfLink.rel) {
 					html += '<small class="text-muted">TYPE</small> '+util.decorateReltype(selfLink.rel);
@@ -38,7 +47,7 @@ local.addServer('about-renderer', function(req, res) {
 					html += '<br>';
 				}
 				if (selfLink.href) { html += '<small class="text-muted">HREF</small> <a href="'+util.escapeHTML(selfLink.href)+'" target=_blank>'+util.escapeHTML(selfLink.href)+'</a><br>'; }
-				if (selfLink.created_at) { html += '<small class="text-muted">CREATED</small> '+((new Date(+selfLink.created_at)).toLocaleTimeString())+'<br>'; }
+				if (selfLink.created_at) { html += '<small class="text-muted">ADDED</small> '+((new Date(+selfLink.created_at)).toLocaleTimeString())+'<br>'; }
 			}
 			res.end(html);
 		});

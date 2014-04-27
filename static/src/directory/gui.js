@@ -22,17 +22,17 @@ function setup(mediaLinks) {
 	renderGuis();
 
 	// sort btn behaviors
-	var $sortBtn = $('#sort-btn');
-	var getSortBtnClass = function() { return 'glyphicon glyphicon-sort-by-alphabet'+((_sortReversed) ? '-alt' : ''); };
-	var getSortBtnTitle = function() { return 'Sorting: '+((_sortReversed) ? 'newest to oldest' : 'oldest to newest'); };
-	$sortBtn[0].className = getSortBtnClass();
-	$sortBtn[0].title = getSortBtnTitle();
-	$sortBtn.on('click', function() {
-		_sortReversed = !_sortReversed;
-		$sortBtn[0].className = getSortBtnClass();
-		$sortBtn[0].title = getSortBtnTitle();
-		renderMetaFeed();
-	});
+	// var $sortBtn = $('#sort-btn');
+	// var getSortBtnClass = function() { return 'glyphicon glyphicon-sort-by-alphabet'+((_sortReversed) ? '-alt' : ''); };
+	// var getSortBtnTitle = function() { return 'Sorting: '+((_sortReversed) ? 'newest to oldest' : 'oldest to newest'); };
+	// $sortBtn[0].className = getSortBtnClass();
+	// $sortBtn[0].title = getSortBtnTitle();
+	// $sortBtn.on('click', function() {
+	// 	_sortReversed = !_sortReversed;
+	// 	$sortBtn[0].className = getSortBtnClass();
+	// 	$sortBtn[0].title = getSortBtnTitle();
+	// 	renderMetaFeed();
+	// });
 
 	// selection behaviors
 	$(document.body).on('click', feedItemSelectHandler);
