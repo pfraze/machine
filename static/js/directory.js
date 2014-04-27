@@ -1828,24 +1828,24 @@ function fetchLinkCB(url, $form) {
 				}
 			}
 
-			// Try to establish the mimetype
-			var mimeType = res.header('Content-Type');
-			if (!mimeType) {
-				mimeType = mimetypes.lookup(url) || 'application/octet-stream';
-			}
-			var semicolonIndex = mimeType.indexOf(';');
-			if (semicolonIndex !== -1) {
-				mimeType = mimeType.slice(0, semicolonIndex); // strip the charset
-			}
-
-			// Do basic re-classification
-			if (!curLink.type) { curLink.type = mimeType; }
-			if (!curLink.rel) { curLink.rel = 'stdrel.com/media'; }
-			else if (!local.queryLink(curLink, { rel: 'stdrel.com/media' })) {
-				curLink.rel += ' stdrel.com/media';
-			}
-
 			if (curLink) {
+				// Try to establish the mimetype
+				var mimeType = res.header('Content-Type');
+				if (!mimeType) {
+					mimeType = mimetypes.lookup(url) || 'application/octet-stream';
+				}
+				var semicolonIndex = mimeType.indexOf(';');
+				if (semicolonIndex !== -1) {
+					mimeType = mimeType.slice(0, semicolonIndex); // strip the charset
+				}
+
+				// Do basic re-classification
+				if (!curLink.type) { curLink.type = mimeType; }
+				if (!curLink.rel) { curLink.rel = 'stdrel.com/media'; }
+				else if (!local.queryLink(curLink, { rel: 'stdrel.com/media' })) {
+					curLink.rel += ' stdrel.com/media';
+				}
+
 				// Success, build description
 				var desc = local.util.deepClone(curLink);
 				delete desc.href;
