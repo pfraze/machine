@@ -2,12 +2,12 @@ body { background: #F8F6EB; }
 h1 { color: #808080; }
 a { text-decoration: underline; }
 
-.addlink-panel { position: fixed; top: 0; left: 0; z-index: 1; box-shadow: none; background: #F3EFE0; border-radius: 0; border-bottom-right-radius: 4px; }
-.addlink-panel input { background: #F8F6EB; }
+.addlink-panel { position: fixed; top: 0; z-index: 1; margin-left: -10px; min-width: 280px; box-shadow: none; background: #F3EFE0; border-radius: 0; border-bottom-right-radius: 4px; }
+.addlink-panel input { background: #FDFCF6 }
 .addlink-panel button { margin: 10px 0 0 0; }
 .fetch-result { margin: 15px 0 0 0; }
 
-.container { margin-top: 70px; }
+.container { margin-top: 60px; }
 
 /*.directory-links-list { border-bottom: 1px solid #ccc; }*/
 .directory-time { margin-top: 18px; font-size: 11px; color: #aaa; }
@@ -18,5 +18,5 @@ a { text-decoration: underline; }
 
 #plugin-guis { position: fixed; top: 0; overflow: auto; height: 100%; padding-top: 26px; }
 .plugin-gui { margin-bottom: 18px; }
-.plugin-gui-title { color: #aaa; }
-.plugin-gui-inner { margin: 6px; }
+/*.plugin-gui-title { color: #aaa; }*/
+/*.plugin-gui-inner { margin: 6px; }*/

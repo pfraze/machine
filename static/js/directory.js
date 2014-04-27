@@ -364,7 +364,7 @@ function createPluginGuiEl(meta) {
 	var title = util.escapeHTML(meta.title || meta.id || meta.href);
 	return $(
 		'<div class="plugin-gui" data-plugin="'+meta.href+'">'+
-			'<div class="plugin-gui-title"><small>'+title+'</small></div>'+//+' <a href="#" class="glyphicon glyphicon-remove"></a></small></div>'+
+			// '<div class="plugin-gui-title"><small>'+title+'</small></div>'+//+' <a href="#" class="glyphicon glyphicon-remove"></a></small></div>'+
 			'<div class="plugin-gui-inner">Loading...</div>'+
 		'</div>'
 	);

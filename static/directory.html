@@ -23,16 +23,6 @@
 
   <body data-user="{{USER}}" data-user-is-admin="{{USER_IS_ADMIN}}">
 
-    <div class="addlink-panel panel panel-default">
-      <div class="panel-body">
-        <form class="show-on-admin form" role="form">
-          <input type="url" class="form-control" id="url-input" placeholder="Enter URL">
-          <p class="fetch-result text-muted hidden"></p>
-          <button id="post-doc-btn" type="button" class="btn btn-primary">Post</button>
-        </form>
-      </div>
-    </div>
-
     <div class="container">
       <div class="row">
         <div class="col-sm-1 align-right">
@@ -44,6 +34,15 @@
           <!-- <a href="#" class="directory-delete-btn label label-default show-on-admin">delete</a> -->
         </div>
         <div class="col-sm-3 center-pane">
+          <div class="addlink-panel panel panel-default">
+            <div class="panel-body">
+              <form class="show-on-admin form" role="form">
+                <input type="url" class="form-control" id="url-input" placeholder="Enter URL">
+                <p class="fetch-result text-muted hidden"></p>
+                <button id="post-doc-btn" type="button" class="btn btn-primary">Post</button>
+              </form>
+            </div>
+          </div>
           <h1>{{DIRNAME}}<!-- <small>created {{DIRAGE}}</small>--></h1>
           <div class="directory-links-list"></div>
         </div>
