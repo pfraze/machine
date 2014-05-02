@@ -43,21 +43,18 @@ function dispatch(req, pluginMeta, $el) {
 	// prep request
 	var body = req.body;
 	delete req.body;
+	req = new local.Request(req);
 
-	req.stream = true;
+	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
+	req.Authorization('Action '+actid); // attach actid
 
-	if (!req.headers) { req.headers = {}; }
-	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
-	req.headers.authorization = 'Action '+actid; // attach actid
-
-	if (!local.isAbsUri(req.url)) {
-		req.url = local.joinUri(pluginDomain, req.url);
+	if (!local.isAbsUri(req.headers.url)) {
+		req.headers.url = local.joinUri(pluginDomain, req.headers.url);
 	}
 
 	// dispatch
-	act.req = (req instanceof local.Request) ? req : (new local.Request(req));
-	act.res_ = local.dispatch(req).always(handleActRes(actid));
-	act.req.end(body);
+	req.end(body).always(handleActRes(actid));
+	act.req = req;
 	return act;
 }
 
@@ -67,12 +64,12 @@ function handleActRes(actid) {
 		var act = _actions[actid];
 		if (!act) { return console.error('Action not in masterlist when handling response', actid, res); }
 
-		if (res.header('Content-Type') == 'text/event-stream') {
+		if (res.ContentType == 'text/event-stream') {
 			// stream update events into the GUI
 			streamGui(res, act);
 		} else {
 			// output final response to GUI
-			res.on('end', function() {
+			res.buffer(function() {
 				var gui = res.body;
 				if (!gui) {
 					var reason;
@@ -108,9 +105,7 @@ function createAction(actid, domain, meta, $el) {
 		id: actid,
 		$el: $el,
 		selection: captureSelection(),
-
 		req: null,
-		res_: null,
 
 		stop: stopAction,
 		setGui: setActionGui,

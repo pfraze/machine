@@ -3,10 +3,11 @@ var util = require('../util');
 // :TODO: remove all of this, replace with standard GUIs
 
 // Thing renderer
-local.addServer('thing-renderer', function(req, res) {
-	local.GET({ url: 'local://host.env/selection/0', Authorization: req.header('Authorization') })
+local.at('#thing-renderer', function(req, res) {
+	GET('#selection/0')
+		.Authorization(req.Authorization)
 		.always(function(res2) {
-			res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
+			res.s200().ContentType('html');
 			var desc = [];
 			var url = (res2.body.url) ? util.escapeHTML(res2.body.url) : '#';
 			if (res2.body.description) { desc.push(util.escapeHTML(res2.body.description)); }
@@ -24,11 +25,12 @@ local.addServer('thing-renderer', function(req, res) {
 });
 
 // Default renderer
-local.addServer('about-renderer', function(req, res) {
-	local.HEAD({ url: 'local://host.env/selection/0', Authorization: req.header('Authorization') })
+local.at('#about-renderer', function(req, res) {
+	HEAD('#selection/0')
+		.Authorization(req.Authorization)
 		.always(function(res2) {
-			var selfLink = local.queryLinks(res2, 'self')[0];
-			res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
+			var selfLink = res2.links.first('self');
+			res.s200().ContentType('html');
 			var html = '';
 			if (selfLink) {
 				if (selfLink.rel == 'self stdrel.com/media') {
@@ -36,7 +38,7 @@ local.addServer('about-renderer', function(req, res) {
 					if (mime == 'text/plain') mime = 'plain-text';
 					else mime = mime.split('/')[1];
 					html += '<p>Raw media ('+mime+') - nothing else is known about this file.</p>';
-				} else if (/stdrel.com\/rel/.test(selfLink.rel)) {
+				} else if (selfLink.is('stdrel.com/rel')) {
 					html += '<p>This is a "relation type." It explains how a location on the Web behaves, and is the basis of Layer1\'s structure.</p>';
 				}
 

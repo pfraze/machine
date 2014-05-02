@@ -20,7 +20,7 @@ module.exports = {
 		}
 	}
 };
-},{"./globals":8}],2:[function(require,module,exports){
+},{"./globals":7}],2:[function(require,module,exports){
 module.exports = {
 	setup: setup,
 	get: getAction,
@@ -66,21 +66,18 @@ function dispatch(req, pluginMeta, $el) {
 	// prep request
 	var body = req.body;
 	delete req.body;
+	req = new local.Request(req);
 
-	req.stream = true;
+	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
+	req.Authorization('Action '+actid); // attach actid
 
-	if (!req.headers) { req.headers = {}; }
-	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
-	req.headers.authorization = 'Action '+actid; // attach actid
-
-	if (!local.isAbsUri(req.url)) {
-		req.url = local.joinUri(pluginDomain, req.url);
+	if (!local.isAbsUri(req.headers.url)) {
+		req.headers.url = local.joinUri(pluginDomain, req.headers.url);
 	}
 
 	// dispatch
-	act.req = (req instanceof local.Request) ? req : (new local.Request(req));
-	act.res_ = local.dispatch(req).always(handleActRes(actid));
-	act.req.end(body);
+	req.end(body).always(handleActRes(actid));
+	act.req = req;
 	return act;
 }
 
@@ -90,12 +87,12 @@ function handleActRes(actid) {
 		var act = _actions[actid];
 		if (!act) { return console.error('Action not in masterlist when handling response', actid, res); }
 
-		if (res.header('Content-Type') == 'text/event-stream') {
+		if (res.ContentType == 'text/event-stream') {
 			// stream update events into the GUI
 			streamGui(res, act);
 		} else {
 			// output final response to GUI
-			res.on('end', function() {
+			res.buffer(function() {
 				var gui = res.body;
 				if (!gui) {
 					var reason;
@@ -131,9 +128,7 @@ function createAction(actid, domain, meta, $el) {
 		id: actid,
 		$el: $el,
 		selection: captureSelection(),
-
 		req: null,
-		res_: null,
 
 		stop: stopAction,
 		setGui: setActionGui,
@@ -213,11 +208,11 @@ module.exports = {
 
 // The active feed config
 var _cfg = {
-	guis: util.table(
-		['href',                                          'rel',           'title',     'for'],
-		'local://thing-renderer',                         'layer1.io/gui', 'Thing',     'schema.org/Thing',
-		'local://about-renderer',                         'layer1.io/gui', 'About',     'stdrel.com/media'
-		// 'local://grimwire.com:8000(js/act/stopwatch.js)', 'layer1.io/gui', 'Stopwatch', 'stdrel.com/media'
+	guis: local.util.table(
+		['href',                    'rel',           'title',     'for'],
+		'#thing-renderer',          'layer1.io/gui', 'Thing',     'schema.org/Thing',
+		'#about-renderer',          'layer1.io/gui', 'About',     'stdrel.com/media'
+		// '/js/act/stopwatch.js#', 'layer1.io/gui', 'Stopwatch', 'stdrel.com/media'
 	)
 };
 
@@ -236,7 +231,7 @@ function queryGuis(targetLink) {
 	}
 	return matches;
 }
-},{"../util":13}],4:[function(require,module,exports){
+},{"../util":12}],4:[function(require,module,exports){
 var sec = require('../security');
 var util = require('../util');
 var feedcfg = require('./feedcfg');
@@ -375,7 +370,13 @@ function onPluginGuiRequest(e) {
 	var href = $gui.data('plugin');
 	executor.dispatch(e.detail, _activeGuis[href], $gui);
 }
-},{"../security":12,"../util":13,"./executor":2,"./feedcfg":3}],5:[function(require,module,exports){
+},{"../security":11,"../util":12,"./executor":2,"./feedcfg":3}],5:[function(require,module,exports){
+var globals = require('../globals');
+var util = require('../util');
+var executor = require('./executor');
+var gui = require('./gui');
+var mediaLinks = local.queryLinks(document, 'stdrel.com/media');
+
 // Environment Setup
 // =================
 local.logAllExceptions = true;
@@ -384,11 +385,6 @@ require('../auth').setup();
 require('../http-headers').setup();
 require('./feedcfg').setup();
 require('./renderers'); // :DEBUG:
-var executor = require('./executor');
-var gui = require('./gui');
-
-var mediaLinks = local.queryLinks(document, { rel: 'stdrel.com/media' });
-
 
 // ui
 require('../widgets/addlink-panel').setup();
@@ -396,24 +392,173 @@ require('../widgets/directory-delete-btn').setup();
 gui.setup(mediaLinks);
 
 // plugin execution
-var hostEnvServer = require('./worker-bridge')(mediaLinks);
-local.addServer('worker-bridge', hostEnvServer);
-local.addServer('host.env', hostEnvServer);
 executor.setup(mediaLinks);
 
 // :TEMP:
-local.addServer('todo', function(req, res) { alert('Todo'); res.writeHead(204).end(); });
+local.at('#todo', function(req, res) { alert('Todo'); res.s204().end(); });
 
-},{"../auth":1,"../http-headers":9,"../pagent":11,"../widgets/addlink-panel":14,"../widgets/directory-delete-btn":15,"./executor":2,"./feedcfg":3,"./gui":4,"./renderers":6,"./worker-bridge":7}],6:[function(require,module,exports){
+
+// server starting-point
+function auth(req, res, worker) {
+	// check action id
+	req.actid = extractActId(req);
+	if (req.actid === false) {
+		res.s401('must reuse Authorization header in incoming request for all outgoing requests').end();
+		return false;
+	}
+	req.act = executor.get(worker ? worker.getUrl() : true, req.actid); // worker DNE, req came from page so allow
+	if (!req.act) {
+		res.s403('invalid actid - expired or not assigned to this worker').end();
+		return false;
+	}
+	return true;
+}
+
+// toplevel
+local.at('#', function (req, res, worker) {
+	res.link(
+		['href',      'id',        'rel',                         'title'],
+		'#',          undefined,   'self service via',            'Host Page',
+		'#selection', 'selection', 'service layer1.io/selection', 'Selected Items at Time of Execution',
+		'#feed',      'feed',      'service layer1.io/feed',      'Current Feed',
+		'#service',   'service',   'service layer1.io/service',   'Layer1 Toplevel Service'
+	);
+	res.s204().end();
+});
+
+// selected items
+local.at('#selection/?(.*)', function (req, res, worker) {
+	if (!auth(req, res, worker)) return;
+	var itemid = req.pathd[1];
+	var selLinks = req.act.getSelectedLinks();
+
+	if (itemid) {
+		if (!selLinks[itemid]) { return res.s404().end(); }
+		var link = local.util.deepClone(selLinks[itemid]);
+		res.link(
+			['href',      'id',        'rel',                            'title'],
+			'/',          undefined,   'via',                            'Host Page',
+			'/selection', 'selection', 'up service layer1.io/selection', 'Selected Items at Time of Execution'
+		);
+		serveItem(req, res, link);
+	}
+	else {
+		var links = local.util.deepClone(selLinks);
+		res.link(
+			['href',      'id',        'rel',                              'title'],
+			'/',          undefined,   'up service via',                   'Host Page',
+			'/selection', 'selection', 'self service layer1.io/selection', 'Selected Items at Time of Execution'
+		);
+		serveCollection(req, res, links, { noPost: true });
+	}
+});
+
+// feed items
+local.at('#feed/?(.*)', function (req, res, worker) {
+	if (!auth(req, res, worker)) return;
+	var itemid = req.pathd[1];
+
+	if (itemid) {
+		if (!mediaLinks[itemid]) { return res.s404().end(); }
+		var link = local.util.deepClone(mediaLinks[itemid]);
+		res.link(
+			['href', 'id',      'rel',                       'title'],
+			'/',     undefined, 'service via',               'Host Page',
+			'/feed', 'feed',    'up service layer1.io/feed', 'Current Feed'
+		);
+		serveItem(req, res, link);
+	}
+	else {
+		var links = local.util.deepClone(mediaLinks);
+		res.link(
+			['href', 'id',      'rel',                         'title'],
+			'/',     undefined, 'up service via',              'Host Page',
+			'/feed', 'feed',    'self service layer1.io/feed', 'Current Feed'
+		);
+		serveCollection(req, res, links);
+	}
+});
+
+// service proxy
+local.at('#service', function (req, res, worker) {
+	if (!auth(req, res, worker)) return;
+	// :TODO:
+	res.s501().end();
+});
+
+// collection behavior
+function serveCollection(req, res, links, opts) {
+	opts = opts || {};
+	var uris = {};
+
+	// set headers
+	res.link(links);
+
+	// :TODO: check permissions
+
+	// route method
+	if (req.HEAD) return res.s204().end();
+	if (req.GET)  return res.s204().end(); // :TODO:
+	if (req.POST) {
+		if (opts.noPost) {
+			res.Allow('HEAD, GET');
+			return res.s405('bad method').end();
+		}
+		var post = globals.pageClient
+			.POST(req.params)
+			.ContentType(req.ContentType)
+			.then(function(res2) {
+				res.Location(res2.Location);
+				res.s201('created').end();
+			}, function(res2) { res2.pipe(res); });
+		req.pipe(post);
+		return;
+	}
+
+	res.Allow('HEAD, GET'+((!opts.noPost)?', POST':''));
+	res.s405('bad method').end();
+}
+
+// item behavior
+function serveItem(req, res, link, opts) {
+	opts = opts || {};
+	// update link references to point to this service
+	var url = link.href;
+	link.rel = 'self '+link.rel;
+
+	// set headers
+	res.link(link);
+
+	// :TODO: check permissions
+
+	// route method
+	if (req.HEAD) return res.s204().end();
+	if (req.GET) return GET(url, req.params).Accept(req.Accept).pipe(res);
+	res.Allow('HEAD, GET');
+	res.s405('bad method').end();
+}
+
+// helper
+function extractActId(req) {
+	var auth = req.Authorization;
+	if (!auth) return false;
+
+	var parts = auth.split(' ');
+	if (parts[0] != 'Action' || !parts[1]) return false;
+
+	return +parts[1] || false;
+}
+},{"../auth":1,"../globals":7,"../http-headers":8,"../pagent":10,"../util":12,"../widgets/addlink-panel":13,"../widgets/directory-delete-btn":14,"./executor":2,"./feedcfg":3,"./gui":4,"./renderers":6}],6:[function(require,module,exports){
 var util = require('../util');
 
 // :TODO: remove all of this, replace with standard GUIs
 
 // Thing renderer
-local.addServer('thing-renderer', function(req, res) {
-	local.GET({ url: 'local://host.env/selection/0', Authorization: req.header('Authorization') })
+local.at('#thing-renderer', function(req, res) {
+	GET('#selection/0')
+		.Authorization(req.Authorization)
 		.always(function(res2) {
-			res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
+			res.s200().ContentType('html');
 			var desc = [];
 			var url = (res2.body.url) ? util.escapeHTML(res2.body.url) : '#';
 			if (res2.body.description) { desc.push(util.escapeHTML(res2.body.description)); }
@@ -431,11 +576,12 @@ local.addServer('thing-renderer', function(req, res) {
 });
 
 // Default renderer
-local.addServer('about-renderer', function(req, res) {
-	local.HEAD({ url: 'local://host.env/selection/0', Authorization: req.header('Authorization') })
+local.at('#about-renderer', function(req, res) {
+	HEAD('#selection/0')
+		.Authorization(req.Authorization)
 		.always(function(res2) {
-			var selfLink = local.queryLinks(res2, 'self')[0];
-			res.writeHead(200, 'OK', {'Content-Type': 'text/html'});
+			var selfLink = res2.links.first('self');
+			res.s200().ContentType('html');
 			var html = '';
 			if (selfLink) {
 				if (selfLink.rel == 'self stdrel.com/media') {
@@ -443,7 +589,7 @@ local.addServer('about-renderer', function(req, res) {
 					if (mime == 'text/plain') mime = 'plain-text';
 					else mime = mime.split('/')[1];
 					html += '<p>Raw media ('+mime+') - nothing else is known about this file.</p>';
-				} else if (/stdrel.com\/rel/.test(selfLink.rel)) {
+				} else if (selfLink.is('stdrel.com/rel')) {
 					html += '<p>This is a "relation type." It explains how a location on the Web behaves, and is the basis of Layer1\'s structure.</p>';
 				}
 
@@ -459,208 +605,20 @@ local.addServer('about-renderer', function(req, res) {
 			res.end(html);
 		});
 });
-},{"../util":13}],7:[function(require,module,exports){
-var util = require('../util');
-var executor = require('./executor');
-var globals = require('../globals');
-
-module.exports = function(mediaLinks) {
-	// toplevel
-	function root(req, res, worker) {
-		var links = util.table(
-			['href',      'id',        'rel',                         'title'],
-			'/',          undefined,   'self service via',            'Host Page',
-			'/selection', 'selection', 'service layer1.io/selection', 'Selected Items at Time of Execution',
-			'/feed',      'feed',      'service layer1.io/feed',      'Current Feed',
-			'/service',   'service',   'service layer1.io/service',   'Layer1 Toplevel Service'
-		);
-
-		// Respond
-		res.setHeader('Link', links);
-		res.writeHead(204).end();
-	}
-
-	// selected items
-	function selection(req, res, worker) {
-		var pathd = req.path.split('/');
-		var itemid = pathd[2];
-
-		var headerLinks;
-		var selLinks = req.act.getSelectedLinks();
-
-		if (itemid) {
-			if (!selLinks[itemid]) { return res.writeHead(404).end(); }
-			var link = local.util.deepClone(selLinks[itemid]);
-			headerLinks = util.table(
-				['href',      'id',        'rel',                            'title'],
-				'/',          undefined,   'via',                            'Host Page',
-				'/selection', 'selection', 'up service layer1.io/selection', 'Selected Items at Time of Execution'
-			);
-			serveItem(req, res, headerLinks, link);
-		}
-		else {
-			var links = local.util.deepClone(selLinks);
-			headerLinks = util.table(
-				['href',      'id',        'rel',                              'title'],
-				'/',          undefined,   'up service via',                   'Host Page',
-				'/selection', 'selection', 'self service layer1.io/selection', 'Selected Items at Time of Execution'
-			);
-			serveCollection(req, res, headerLinks, links, { noPost: true });
-		}
-	}
-
-	// feed items
-	function feed(req, res, worker) {
-		var pathd = req.path.split('/');
-		var itemid = pathd[2];
-
-		if (itemid) {
-			if (!mediaLinks[itemid]) { return res.writeHead(404).end(); }
-			var link = local.util.deepClone(mediaLinks[itemid]);
-			headerLinks = util.table(
-				['href', 'id',      'rel',                       'title'],
-				'/',     undefined, 'service via',               'Host Page',
-				'/feed', 'feed',    'up service layer1.io/feed', 'Current Feed'
-			);
-			serveItem(req, res, headerLinks, link);
-		}
-		else {
-			var links = local.util.deepClone(mediaLinks);
-			headerLinks = util.table(
-				['href', 'id',      'rel',                         'title'],
-				'/',     undefined, 'up service via',              'Host Page',
-				'/feed', 'feed',    'self service layer1.io/feed', 'Current Feed'
-			);
-			serveCollection(req, res, headerLinks, links);
-		}
-	}
-
-	// service proxy
-	function service(req, res, worker) {
-		// :TODO:
-		res.writeHead(501).end();
-	}
-
-	// collection behavior
-	function serveCollection(req, res, headerLinks, links, opts) {
-		opts = opts || {};
-		var uris = {};
-
-		// set headers
-		res.header('Link', headerLinks.concat(links));
-
-		// :TODO: check permissions
-
-		// route method
-		switch (req.method) {
-			case 'HEAD': return res.writeHead(204).end();
-			case 'GET':  return res.writeHead(204).end(); // :TODO:
-			case 'POST':
-				if (opts.noPost) {
-					res.header('Allow', 'HEAD, GET');
-					return res.writeHead(405, 'bad method').end();
-				}
-				req.on('end', function() {
-					globals.pageAgent.POST(req.body, {
-						Content_Type: req.header('Content-Type'),
-						query: req.query
-					}).then(function(res2) {
-						res.header('Location', res2.header('Location'));
-						res.writeHead(201, 'created').end();
-					}, function(res2) {
-						res.writeHead(res2.status, res2.reason).end(res2.body);
-					});
-				});
-				break;
-			default:
-				res.header('Allow', 'HEAD, GET'+((!opts.noPost)?', POST':''));
-				res.writeHead(405, 'bad method').end();
-		}
-	}
-
-	// item behavior
-	function serveItem(req, res, headerLinks, link, opts) {
-		opts = opts || {};
-		// update link references to point to this service
-		var uri = link.href;
-		link.rel = 'self '+link.rel;
-
-		// set headers
-		res.header('Link', headerLinks.concat(link));
-
-		// :TODO: check permissions
-
-		// route method
-		switch (req.method) {
-			case 'HEAD': return res.writeHead(204).end();
-			case 'GET':
-				local.GET({
-					url: uri,
-					Accept: req.header('Accept'),
-					query: req.query,
-					stream: true
-				}).then(function(res2) {
-					res.writeHead(200, 'ok', {'Content-Type': res2.header('Content-Type')});
-					local.pipe(res, res2);
-				}, function(res2) {
-					res.writeHead(res2.status, res2.reason);
-					local.pipe(res, res2);
-				});
-				break;
-			default:
-				res.header('Allow', 'HEAD, GET');
-				res.writeHead(405, 'bad method').end();
-		}
-	}
-
-	// helper
-	function extractActId(req) {
-		var auth = req.header('Authorization');
-		if (!auth) return false;
-
-		var parts = auth.split(' ');
-		if (parts[0] != 'Action' || !parts[1]) return false;
-
-		return +parts[1] || false;
-	}
-
-	// server starting-point
-	return function(req, res, worker) {
-		// check action id
-		req.actid = extractActId(req);
-		if (req.actid === false) {
-			return res.writeHead(401, 'must reuse Authorization header in incoming request for all outgoing requests').end();
-		}
-		req.act = executor.get(worker ? worker.getUrl() : true, req.actid); // worker DNE, req came from page so allow
-		if (!req.act) {
-			return res.writeHead(403, 'invalid actid - expired or not assigned to this worker').end();
-		}
-
-		// route
-		var pathbase = '/'+req.path.split('/')[1];
-		switch (pathbase) {
-			case '/':          return root(req, res, worker);
-			case '/selection': return selection(req, res, worker);
-			case '/feed':      return feed(req, res, worker);
-			case '/service':   return service(req, res, worker);
-			default: res.writeHead(404).end();
-		}
-	};
-};
-},{"../globals":8,"../util":13,"./executor":2}],8:[function(require,module,exports){
-var hostAgent = local.agent(window.location.protocol + '//' + window.location.host);
+},{"../util":12}],7:[function(require,module,exports){
+var hostClient = local.client(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
 		user: $('body').data('user') || null,
 		isPageAdmin: $('body').data('user-is-admin') == '1'
 	},
-	hostAgent: hostAgent,
-	pageAgent: local.agent(window.location.toString()),
-	authAgent: hostAgent.follow({ rel: 'service', id: 'auth' }),
-	meAgent: hostAgent.follow({ rel: 'item', id: '.me' }),
-	fetchProxyAgent: hostAgent.follow({ rel: 'service', id: '.fetch' }),
+	pageClient:       local.client(window.location.toString()),
+	hostClient:       hostClient,
+	authClient:       hostClient.service('auth'),
+	meClient:         hostClient.item('.me'),
+	fetchProxyClient: hostClient.service('.fetch'),
 };
-},{}],9:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 module.exports = { setup: setup };
 function setup() {
 	local.httpHeaders.register('pragma',
@@ -687,7 +645,7 @@ function setup() {
 		}
 	);
 }
-},{}],10:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 //
 // mimetype.js - A catalog object of mime types based on file extensions
 //
@@ -1442,22 +1400,13 @@ function setup() {
 	self.MimeType = MimeType;
 	return self;
 }(this));
-},{"path":17}],11:[function(require,module,exports){
+},{"path":16}],10:[function(require,module,exports){
 // Page Agent (PAgent)
 // ===================
 // Standard page behaviors
 var util = require('./util');
 
 function setup() {
-	// Traffic logging
-	local.setDispatchWrapper(function(req, res, dispatch) {
-		var res_ = dispatch(req, res);
-		res_.then(
-			function() { console.log(req, res); },
-			function() { console.error(req, res); }
-		);
-	});
-
 	// Request events
 	try { local.bindRequestEvents(document.body); }
 	catch (e) { console.error('Failed to bind body request events.', e); }
@@ -1470,19 +1419,16 @@ function setup() {
 function dispatchRequest(req, $region, $target) {
 	var body = req.body; delete req.body;
 
-	if (!req.headers) { req.headers = {}; }
-	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
-	req = (req instanceof local.Request) ? req : (new local.Request(req));
+	req = new local.Request(req);
+	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
 
 	// Relative link? Make absolute
-	if (!local.isAbsUri(req.url)) {
+	if (!local.isAbsUri(req.headers.url)) {
 		var baseurl = (window.location.protocol + '//' + window.location.host);
-		req.url = local.joinUri(baseurl, req.url);
+		req.headers.url = local.joinUri(baseurl, req.headers.url);
 	}
 
-	var res_ = local.dispatch(req);
-	req.end(body);
-	return res_;
+	return local.dispatch(req).end(body);
 }
 
 
@@ -1490,7 +1436,7 @@ module.exports = {
 	setup: setup,
 	dispatchRequest: dispatchRequest
 };
-},{"./util":13}],12:[function(require,module,exports){
+},{"./util":12}],11:[function(require,module,exports){
 // Items rendered in the directory by plugins
 var renderedItem = {
 	allowedTags: [ // https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/HTML5/HTML5_element_list
@@ -1564,7 +1510,7 @@ module.exports = {
 		return window.html.sanitizeWithPolicy(html, renderedItem.policy);
 	}
 };
-},{}],13:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 var globals = require('./globals');
 
 var lbracket_regex = /</g;
@@ -1603,7 +1549,7 @@ function decorateReltype(str) {
 	}).join(' ');
 }
 
-function renderResponse(req, res) {
+/*function renderResponse(req, res) {
 	if (res.body !== '') {
 		if (typeof res.body == 'string') {
 			if (res.header('Content-Type').indexOf('text/html') !== -1)
@@ -1623,7 +1569,7 @@ function renderResponse(req, res) {
 		}
 	}
 	return res.status + ' ' + res.reason;
-}
+}*/
 
 function serializeRawMeta(obj) {
 	var parts = [];
@@ -1677,8 +1623,7 @@ function fetch(url, useHead) {
 			return;
 		}
 		lookupReq = attempts.shift();
-		local.dispatch(lookupReq).always(handleAttempt);
-		lookupReq.end();
+		lookupReq.end().always(handleAttempt);
 	}
 	makeAttempt();
 
@@ -1688,23 +1633,23 @@ function fetch(url, useHead) {
 		} else if (!attempts.length && res.status === 0 && !triedProxy) {
 			// May be a CORS issue, try the proxy
 			triedProxy = true;
-			globals.fetchProxyAgent.resolve({ nohead: true }).always(function(proxyUrl) {
+			globals.fetchProxyClient.resolve({ nohead: true }).always(function(proxyUrl) {
 				if (!urld.protocol) {
 					if (useHead) {
-						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }));
-						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, params: { url: 'https://'+urld.authority+urld.relative } }));
+						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, params: { url: 'http://'+urld.authority+urld.relative } }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
 					} else {
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
 					}
 				} else {
 					if (useHead) {
-						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: url } }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: url }, binary: true }));
+						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, params: { url: url } }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: url }, binary: true }));
 					} else {
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: url }, binary: true }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: url }, binary: true }));
 					}
 				}
 				makeAttempt();
@@ -1722,27 +1667,14 @@ function fetch(url, useHead) {
 	return p;
 }
 
-// helper to make an array of objects
-function table(keys) {
-	var obj, i, j=-1;
-	var arr = [];
-	for (i=1, j; i < arguments.length; i++, j++) {
-		if (!keys[j]) { if (obj) { arr.push(obj); } obj = {}; j = 0; } // new object
-		obj[keys[j]] = arguments[i];
-	}
-	arr.push(obj); // dont forget the last one
-	return arr;
-}
-
 module.exports = {
 	escapeHTML: escapeHTML,
 	makeSafe: escapeHTML,
 	escapeQuotes: escapeQuotes,
 	stripScripts: stripScripts,
 	decorateReltype: decorateReltype,
-	renderResponse: renderResponse,
+	// renderResponse: renderResponse,
 
-	table: table,
 	pad0: pad0,
 
 	serializeRawMeta: serializeRawMeta,
@@ -1751,7 +1683,7 @@ module.exports = {
 	fetch: fetch,
 	fetchMeta: function(url) { return fetch(url, true); }
 };
-},{"./globals":8}],14:[function(require,module,exports){
+},{"./globals":7}],13:[function(require,module,exports){
 var globals   = require('../globals');
 var util      = require('../util');
 var mimetypes = require('../mimetypes');
@@ -1792,7 +1724,9 @@ function onPostDoc(e) {
 	// Add to dir's docs
 	var link = local.util.deepClone(curLink);
 	delete link.href;
-	globals.pageAgent.POST(curResponse.body, { query: link, Content_Type: curLink.type })
+	globals.pageClient.POST(link)
+		.ContentType(curLink.type)
+		.end(curResponse.body)
 		.always(handlePostResponse);
 }
 
@@ -1801,7 +1735,8 @@ function onPostLink(e) {
 	if (!curLink) return;
 
 	// Add to dir's links
-	globals.pageAgent.POST(null, { query: curLink })
+	globals.pageClient.POST(curLink)
+		.end()
 		.always(handlePostResponse);
 }
 
@@ -1829,7 +1764,7 @@ function fetchLinkCB(url, $form) {
 			curResponse = res;
 
 			// Try to get the self link
-			curLink = local.queryLinks(res, { rel: 'self' })[0];
+			curLink = res.links.first('self');
 			if (!curLink) {
 				// Create a meta-less stand-in if the URL is good
 				if (res.status >= 200 && res.status < 300) {
@@ -1839,7 +1774,7 @@ function fetchLinkCB(url, $form) {
 
 			if (curLink) {
 				// Try to establish the mimetype
-				var mimeType = res.header('Content-Type');
+				var mimeType = res.ContentType;
 				if (!mimeType) {
 					mimeType = mimetypes.lookup(url) || 'application/octet-stream';
 				}
@@ -1851,7 +1786,7 @@ function fetchLinkCB(url, $form) {
 				// Do basic re-classification
 				if (!curLink.type) { curLink.type = mimeType; }
 				if (!curLink.rel) { curLink.rel = 'stdrel.com/media'; }
-				else if (!local.queryLink(curLink, { rel: 'stdrel.com/media' })) {
+				else if (!curLink.is('stdrel.com/media')) {
 					curLink.rel += ' stdrel.com/media';
 				}
 
@@ -1882,7 +1817,7 @@ module.exports = {
 		reset();
 	}
 };
-},{"../globals":8,"../mimetypes":10,"../util":13}],15:[function(require,module,exports){
+},{"../globals":7,"../mimetypes":9,"../util":12}],14:[function(require,module,exports){
 var globals = require('../globals');
 
 module.exports = {
@@ -1890,7 +1825,7 @@ module.exports = {
 		if (globals.session.isPageAdmin) {
 			$('.directory-delete-btn').on('click', function() {
 				if (!confirm('Delete this directory. Are you sure?')) return false;
-				globals.pageAgent.DELETE()
+				globals.pageClient.DELETE()
 					.then(function(res) {
 						window.location = '/';
 					})
@@ -1902,7 +1837,7 @@ module.exports = {
 		}
 	}
 };
-},{"../globals":8}],16:[function(require,module,exports){
+},{"../globals":7}],15:[function(require,module,exports){
 
 
 //
@@ -2120,7 +2055,7 @@ if (typeof Object.getOwnPropertyDescriptor === 'function') {
   exports.getOwnPropertyDescriptor = valueObject;
 }
 
-},{}],17:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 var process=require("__browserify_process");// Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2331,7 +2266,7 @@ exports.extname = function(path) {
   return splitPath(path)[3];
 };
 
-},{"__browserify_process":19,"_shims":16,"util":18}],18:[function(require,module,exports){
+},{"__browserify_process":18,"_shims":15,"util":17}],17:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2876,7 +2811,7 @@ function hasOwnProperty(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
 
-},{"_shims":16}],19:[function(require,module,exports){
+},{"_shims":15}],18:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};

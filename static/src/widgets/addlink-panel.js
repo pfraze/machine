@@ -38,7 +38,9 @@ function onPostDoc(e) {
 	// Add to dir's docs
 	var link = local.util.deepClone(curLink);
 	delete link.href;
-	globals.pageAgent.POST(curResponse.body, { query: link, Content_Type: curLink.type })
+	globals.pageClient.POST(link)
+		.ContentType(curLink.type)
+		.end(curResponse.body)
 		.always(handlePostResponse);
 }
 
@@ -47,7 +49,8 @@ function onPostLink(e) {
 	if (!curLink) return;
 
 	// Add to dir's links
-	globals.pageAgent.POST(null, { query: curLink })
+	globals.pageClient.POST(curLink)
+		.end()
 		.always(handlePostResponse);
 }
 
@@ -75,7 +78,7 @@ function fetchLinkCB(url, $form) {
 			curResponse = res;
 
 			// Try to get the self link
-			curLink = local.queryLinks(res, { rel: 'self' })[0];
+			curLink = res.links.first('self');
 			if (!curLink) {
 				// Create a meta-less stand-in if the URL is good
 				if (res.status >= 200 && res.status < 300) {
@@ -85,7 +88,7 @@ function fetchLinkCB(url, $form) {
 
 			if (curLink) {
 				// Try to establish the mimetype
-				var mimeType = res.header('Content-Type');
+				var mimeType = res.ContentType;
 				if (!mimeType) {
 					mimeType = mimetypes.lookup(url) || 'application/octet-stream';
 				}
@@ -97,7 +100,7 @@ function fetchLinkCB(url, $form) {
 				// Do basic re-classification
 				if (!curLink.type) { curLink.type = mimeType; }
 				if (!curLink.rel) { curLink.rel = 'stdrel.com/media'; }
-				else if (!local.queryLink(curLink, { rel: 'stdrel.com/media' })) {
+				else if (!curLink.is('stdrel.com/media')) {
 					curLink.rel += ' stdrel.com/media';
 				}
 

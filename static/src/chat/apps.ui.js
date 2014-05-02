@@ -32,7 +32,7 @@ server.route('/:app', function(link, method) {
 
 function onLinksAdded(entry) {
 	// Check for applications
-	var appLink = local.queryLinks(entry.links, { rel: 'todo.com/rel/agent/app' })[0];
+	var appLink = local.queryLinks(entry.links, 'todo.com/rel/agent/app')[0];
 	if (appLink) {
 		activeApps[entry.id] = { link: appLink };
 		if (currentAppId === false) {

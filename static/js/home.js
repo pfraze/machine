@@ -21,17 +21,17 @@ module.exports = {
 	}
 };
 },{"./globals":2}],2:[function(require,module,exports){
-var hostAgent = local.agent(window.location.protocol + '//' + window.location.host);
+var hostClient = local.client(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
 		user: $('body').data('user') || null,
 		isPageAdmin: $('body').data('user-is-admin') == '1'
 	},
-	hostAgent: hostAgent,
-	pageAgent: local.agent(window.location.toString()),
-	authAgent: hostAgent.follow({ rel: 'service', id: 'auth' }),
-	meAgent: hostAgent.follow({ rel: 'item', id: '.me' }),
-	fetchProxyAgent: hostAgent.follow({ rel: 'service', id: '.fetch' }),
+	pageClient:       local.client(window.location.toString()),
+	hostClient:       hostClient,
+	authClient:       hostClient.service('auth'),
+	meClient:         hostClient.item('.me'),
+	fetchProxyClient: hostClient.service('.fetch'),
 };
 },{}],3:[function(require,module,exports){
 // Environment Setup
@@ -49,15 +49,6 @@ require('../widgets/user-directories-panel').setup();
 var util = require('./util');
 
 function setup() {
-	// Traffic logging
-	local.setDispatchWrapper(function(req, res, dispatch) {
-		var res_ = dispatch(req, res);
-		res_.then(
-			function() { console.log(req, res); },
-			function() { console.error(req, res); }
-		);
-	});
-
 	// Request events
 	try { local.bindRequestEvents(document.body); }
 	catch (e) { console.error('Failed to bind body request events.', e); }
@@ -70,19 +61,16 @@ function setup() {
 function dispatchRequest(req, $region, $target) {
 	var body = req.body; delete req.body;
 
-	if (!req.headers) { req.headers = {}; }
-	if (req.headers && !req.headers.accept) { req.headers.accept = 'text/html, */*'; }
-	req = (req instanceof local.Request) ? req : (new local.Request(req));
+	req = new local.Request(req);
+	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
 
 	// Relative link? Make absolute
-	if (!local.isAbsUri(req.url)) {
+	if (!local.isAbsUri(req.headers.url)) {
 		var baseurl = (window.location.protocol + '//' + window.location.host);
-		req.url = local.joinUri(baseurl, req.url);
+		req.headers.url = local.joinUri(baseurl, req.headers.url);
 	}
 
-	var res_ = local.dispatch(req);
-	req.end(body);
-	return res_;
+	return local.dispatch(req).end(body);
 }
 
 
@@ -129,7 +117,7 @@ function decorateReltype(str) {
 	}).join(' ');
 }
 
-function renderResponse(req, res) {
+/*function renderResponse(req, res) {
 	if (res.body !== '') {
 		if (typeof res.body == 'string') {
 			if (res.header('Content-Type').indexOf('text/html') !== -1)
@@ -149,7 +137,7 @@ function renderResponse(req, res) {
 		}
 	}
 	return res.status + ' ' + res.reason;
-}
+}*/
 
 function serializeRawMeta(obj) {
 	var parts = [];
@@ -203,8 +191,7 @@ function fetch(url, useHead) {
 			return;
 		}
 		lookupReq = attempts.shift();
-		local.dispatch(lookupReq).always(handleAttempt);
-		lookupReq.end();
+		lookupReq.end().always(handleAttempt);
 	}
 	makeAttempt();
 
@@ -214,23 +201,23 @@ function fetch(url, useHead) {
 		} else if (!attempts.length && res.status === 0 && !triedProxy) {
 			// May be a CORS issue, try the proxy
 			triedProxy = true;
-			globals.fetchProxyAgent.resolve({ nohead: true }).always(function(proxyUrl) {
+			globals.fetchProxyClient.resolve({ nohead: true }).always(function(proxyUrl) {
 				if (!urld.protocol) {
 					if (useHead) {
-						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative } }));
-						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative } }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, params: { url: 'https://'+urld.authority+urld.relative } }));
+						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, params: { url: 'http://'+urld.authority+urld.relative } }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
 					} else {
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
 					}
 				} else {
 					if (useHead) {
-						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, query: { url: url } }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: url }, binary: true }));
+						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, params: { url: url } }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: url }, binary: true }));
 					} else {
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, query: { url: url }, binary: true }));
+						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: url }, binary: true }));
 					}
 				}
 				makeAttempt();
@@ -248,27 +235,14 @@ function fetch(url, useHead) {
 	return p;
 }
 
-// helper to make an array of objects
-function table(keys) {
-	var obj, i, j=-1;
-	var arr = [];
-	for (i=1, j; i < arguments.length; i++, j++) {
-		if (!keys[j]) { if (obj) { arr.push(obj); } obj = {}; j = 0; } // new object
-		obj[keys[j]] = arguments[i];
-	}
-	arr.push(obj); // dont forget the last one
-	return arr;
-}
-
 module.exports = {
 	escapeHTML: escapeHTML,
 	makeSafe: escapeHTML,
 	escapeQuotes: escapeQuotes,
 	stripScripts: stripScripts,
 	decorateReltype: decorateReltype,
-	renderResponse: renderResponse,
+	// renderResponse: renderResponse,
 
-	table: table,
 	pad0: pad0,
 
 	serializeRawMeta: serializeRawMeta,
@@ -284,7 +258,7 @@ module.exports = {
 	setup: function() {
 		if (globals.session.user) {
 			// Populate "my dirs"
-			globals.meAgent.GET().then(function(res) {
+			globals.meClient.GET().then(function(res) {
 				var html = res.body.directories.map(function(dir) {
 					return '<a href="/'+dir.id+'" class="list-group-item"><h4 class="list-group-item-heading">'+dir.name+'</h4></a>';
 				}).join('');
@@ -295,9 +269,10 @@ module.exports = {
 			$('.user-directories-panel .btn').on('click', function(req, res) {
 				var id = prompt('Enter the name of your new directory');
 				if (!id) return false;
-				globals.hostAgent.POST({ id: id })
+				globals.hostClient.POST()
+					.end({ id: id })
 					.then(function(res) {
-						window.location = res.headers.location;
+						window.location = res.Location;
 					})
 					.fail(function(res) {
 						if (res.status == 422 && res.body && res.body.id) {
