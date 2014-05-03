@@ -67,7 +67,7 @@ function renderMetaFeed() {
 }
 
 function feedItemSelectHandler(e) {
-	if (local.util.findParentNode.byElement(e.target, document.getElementById('plugin-guis')))
+	if (local.util.findParentNode.byElement(e.target, document.getElementById('views')))
 		return; // do nothing if a click in the GUIs
 
 	if (!e.ctrlKey) {
@@ -86,6 +86,8 @@ function feedItemSelectHandler(e) {
 }
 
 function renderGuis() {
+	var i;
+
 	// gather applicable actions
 	var $sel = $('.directory-links-list .selected');
 	_activeGuis = {};
@@ -97,7 +99,7 @@ function renderGuis() {
 		});
 	} else {
 		// matching actions
-		for (var i=0; i < $sel.length; i++) {
+		for (i=0; i < $sel.length; i++) {
 			var id = $sel[i].id.slice(5);
 			var link = _mediaLinks[id];
 			if (!link) continue;
@@ -110,29 +112,38 @@ function renderGuis() {
 	}
 
 	// create gui spaces
-	var $guis = $('#plugin-guis');
+	i=0;
+	var $guis = $('#untrusted1');
+	var $nav = $('#views .nav');
 	$guis.empty();
+	$nav.empty();
 	for (var href in _activeGuis) {
-		var $gui = createPluginGuiEl(_activeGuis[href]);
+		$nav.append(createNavEl(_activeGuis[href], i++));
+
+		var $gui = createViewEl(_activeGuis[href]);
 		$guis.append($gui);
-		$gui[0].addEventListener('request', onPluginGuiRequest);
+		$gui.on('request', onViewRequest);
 		executor.dispatch({ method: 'GET', url: href }, _activeGuis[href], $gui);
 	}
 }
 
-// create gui-segment for a plugin to use
-function createPluginGuiEl(meta) {
-	var title = util.escapeHTML(meta.title || meta.id || meta.href);
-	return $(
-		'<div class="plugin-gui" data-plugin="'+meta.href+'">'+
-			// '<div class="plugin-gui-title"><small>'+title+'</small></div>'+//+' <a href="#" class="glyphicon glyphicon-remove"></a></small></div>'+
-			'<div class="plugin-gui-inner">Loading...</div>'+
-		'</div>'
-	);
+// create div for view
+function createViewEl(meta) {
+	return $('<div class="view" data-view="'+meta.href+'">Loading...</div>');
 }
 
-function onPluginGuiRequest(e) {
+// create div for view
+function createNavEl(meta, i) {
+	var title = meta.title || meta.id || meta.href;
+	if (i===0) {
+		return $('<li class="active"><a method="SHOW" href="#views/0">'+title+'</div>');
+	} else {
+		return $('<li class="active"><a method="SHOW" href="#views/'+i+'">'+title+'</div>');
+	}
+}
+
+function onViewRequest(e) {
 	var $gui = $(this);
-	var href = $gui.data('plugin');
+	var href = $gui.data('view');
 	executor.dispatch(e.detail, _activeGuis[href], $gui);
 }

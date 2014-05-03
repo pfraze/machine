@@ -191,7 +191,7 @@ function fetch(url, useHead) {
 			return;
 		}
 		lookupReq = attempts.shift();
-		lookupReq.end().always(handleAttempt);
+		lookupReq.bufferResponse().end().always(handleAttempt);
 	}
 	makeAttempt();
 
@@ -269,8 +269,7 @@ module.exports = {
 			$('.user-directories-panel .btn').on('click', function(req, res) {
 				var id = prompt('Enter the name of your new directory');
 				if (!id) return false;
-				globals.hostClient.POST()
-					.end({ id: id })
+				POST(globals.hostClient.context.url).ContentType('json').end({ id: id })
 					.then(function(res) {
 						window.location = res.Location;
 					})

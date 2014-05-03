@@ -1,11 +1,17 @@
-body { background: #F8F6EB; }
 h1 { color: #808080; }
 a { text-decoration: underline; }
 
-.addlink-panel { position: fixed; top: 0; z-index: 1; margin-left: -10px; min-width: 280px; box-shadow: none; background: #F3EFE0; border-radius: 0; }
+.addlink-panel { position: fixed; top: 0; z-index: 1; margin-left: -10px; min-width: 280px; box-shadow: none; background: #fff; border-radius: 0; border: 0; }
 .addlink-panel input { background: #FDFCF6 }
 .addlink-panel button { margin: 10px 0 0 0; }
 .fetch-result { margin: 15px 0 0 0; }
+
+.nav-tabs,
+.nav-tabs > li > a,
+.nav-tabs > li.active > a,
+.nav-tabs > li.active > a:hover,
+.nav-tabs > li.active > a:focus { border: 0; border-radius: 0; }
+.nav-tabs > li.active > a { text-decoration: none; }
 
 .container { margin-top: 60px; }
 
@@ -16,7 +22,5 @@ a { text-decoration: underline; }
 .directory-item-slot.selected { background: #3087B8; font-weight: bold; color: white; }
 .directory-item-slot .time { color: #aaa; float: right; font-size: 11px; }
 
-#plugin-guis { position: fixed; top: 0; overflow: auto; height: 100%; padding-top: 26px; }
-.plugin-gui { margin-bottom: 18px; }
-/*.plugin-gui-title { color: #aaa; }*/
-/*.plugin-gui-inner { margin: 6px; }*/
+#views { position: fixed; top: 0; overflow: auto; width: 100%; height: 100%; padding-top: 26px; }
+.view { padding: 1em; background: #fff; }

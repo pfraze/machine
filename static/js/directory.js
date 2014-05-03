@@ -48,20 +48,20 @@ function getAction(domain, id) {
 // EXPORTED
 // start an action with the given request
 // - req: obj, the request
-// - pluginMeta: obj, the link to the plugin
+// - originMeta: obj, the link to the origin
 // - $el: jquery element, the plugin's GUI
-function dispatch(req, pluginMeta, $el) {
+function dispatch(req, originMeta, $el) {
 	var reqUrld      = local.parseUri(req.url);
 	var reqDomain    = reqUrld.protocol + '://' + reqUrld.authority;
-	var pluginUrld   = local.parseUri(pluginMeta.href);
-	var pluginDomain = pluginUrld.protocol + '://' + pluginUrld.authority;
+	var originUrld   = local.parseUri(originMeta.href);
+	var originDomain = originUrld.protocol + '://' + originUrld.authority;
 
 	// audit request
 	// :TODO:
 
 	// allocate execution and gui space
 	var actid = allocId();
-	var act = createAction(actid, pluginDomain, pluginMeta, $el);
+	var act = createAction(actid, originDomain, originMeta, $el);
 
 	// prep request
 	var body = req.body;
@@ -72,7 +72,7 @@ function dispatch(req, pluginMeta, $el) {
 	req.Authorization('Action '+actid); // attach actid
 
 	if (!local.isAbsUri(req.headers.url)) {
-		req.headers.url = local.joinUri(pluginDomain, req.headers.url);
+		req.headers.url = local.joinUri(originDomain, req.headers.url);
 	}
 
 	// dispatch
@@ -182,7 +182,7 @@ function stopAction() {
 function setActionGui(doc) {
 	var html = (doc && typeof doc == 'object') ? JSON.stringify(doc) : (''+doc);
 	if (html && this.$el)
-		this.$el.find('.plugin-gui-inner').html(html);
+		this.$el.html(html);
 }
 
 // helper gives a list of links for the selected items captured on the execution
@@ -213,6 +213,8 @@ var _cfg = {
 		'#thing-renderer',       'layer1.io/gui', 'Thing',     'schema.org/Thing',
 		'#about-renderer',       'layer1.io/gui', 'About',     'stdrel.com/media',
 		'/js/act/stopwatch.js#', 'layer1.io/gui', 'Stopwatch', 'stdrel.com/media'
+		// rel(contains)stdrel.com/media,type(starts)text(or)application
+		// href(protocol_is)https,href(domain_is)
 	)
 };
 
@@ -301,7 +303,7 @@ function renderMetaFeed() {
 }
 
 function feedItemSelectHandler(e) {
-	if (local.util.findParentNode.byElement(e.target, document.getElementById('plugin-guis')))
+	if (local.util.findParentNode.byElement(e.target, document.getElementById('views')))
 		return; // do nothing if a click in the GUIs
 
 	if (!e.ctrlKey) {
@@ -320,6 +322,8 @@ function feedItemSelectHandler(e) {
 }
 
 function renderGuis() {
+	var i;
+
 	// gather applicable actions
 	var $sel = $('.directory-links-list .selected');
 	_activeGuis = {};
@@ -331,7 +335,7 @@ function renderGuis() {
 		});
 	} else {
 		// matching actions
-		for (var i=0; i < $sel.length; i++) {
+		for (i=0; i < $sel.length; i++) {
 			var id = $sel[i].id.slice(5);
 			var link = _mediaLinks[id];
 			if (!link) continue;
@@ -344,30 +348,39 @@ function renderGuis() {
 	}
 
 	// create gui spaces
-	var $guis = $('#plugin-guis');
+	i=0;
+	var $guis = $('#untrusted1');
+	var $nav = $('#views .nav');
 	$guis.empty();
+	$nav.empty();
 	for (var href in _activeGuis) {
-		var $gui = createPluginGuiEl(_activeGuis[href]);
+		$nav.append(createNavEl(_activeGuis[href], i++));
+
+		var $gui = createViewEl(_activeGuis[href]);
 		$guis.append($gui);
-		$gui[0].addEventListener('request', onPluginGuiRequest);
+		$gui.on('request', onViewRequest);
 		executor.dispatch({ method: 'GET', url: href }, _activeGuis[href], $gui);
 	}
 }
 
-// create gui-segment for a plugin to use
-function createPluginGuiEl(meta) {
-	var title = util.escapeHTML(meta.title || meta.id || meta.href);
-	return $(
-		'<div class="plugin-gui" data-plugin="'+meta.href+'">'+
-			// '<div class="plugin-gui-title"><small>'+title+'</small></div>'+//+' <a href="#" class="glyphicon glyphicon-remove"></a></small></div>'+
-			'<div class="plugin-gui-inner">Loading...</div>'+
-		'</div>'
-	);
+// create div for view
+function createViewEl(meta) {
+	return $('<div class="view" data-view="'+meta.href+'">Loading...</div>');
 }
 
-function onPluginGuiRequest(e) {
+// create div for view
+function createNavEl(meta, i) {
+	var title = meta.title || meta.id || meta.href;
+	if (i===0) {
+		return $('<li class="active"><a method="SHOW" href="#views/0">'+title+'</div>');
+	} else {
+		return $('<li class="active"><a method="SHOW" href="#views/'+i+'">'+title+'</div>');
+	}
+}
+
+function onViewRequest(e) {
 	var $gui = $(this);
-	var href = $gui.data('plugin');
+	var href = $gui.data('view');
 	executor.dispatch(e.detail, _activeGuis[href], $gui);
 }
 },{"../security":11,"../util":12,"./executor":2,"./feedcfg":3}],5:[function(require,module,exports){
@@ -1623,7 +1636,7 @@ function fetch(url, useHead) {
 			return;
 		}
 		lookupReq = attempts.shift();
-		lookupReq.end().always(handleAttempt);
+		lookupReq.bufferResponse().end().always(handleAttempt);
 	}
 	makeAttempt();
 
@@ -1724,7 +1737,7 @@ function onPostDoc(e) {
 	// Add to dir's docs
 	var link = local.util.deepClone(curLink);
 	delete link.href;
-	globals.pageClient.POST(link)
+	POST(globals.pageClient.context.url, link)
 		.ContentType(curLink.type)
 		.end(curResponse.body)
 		.always(handlePostResponse);

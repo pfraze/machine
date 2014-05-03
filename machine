@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 var argv = require('optimist').argv;
-var fs = require('fs');
+var fs = require('fs'), path = require('path');
 var pid;
 try {
-	pid = fs.readFileSync('./pid');
+	pid = fs.readFileSync(path.normalize('./pid'));
 } catch (e) {
 	pid = null;
 }
@@ -16,7 +16,7 @@ switch (process.argv[2]) {
 				return;
 			} else {
 				console.log('Cleaning stale pidfile...');
-				fs.unlinkSync('./pid');
+				fs.unlinkSync(path.normalize('./pid'));
 			}
 		}
 		require('./main.js');
@@ -29,7 +29,7 @@ switch (process.argv[2]) {
 				process.kill(pid, 'SIGINT');
 			} else {
 				console.log('Cleaning stale pidfile...');
-				fs.unlinkSync('./pid');
+				fs.unlinkSync(path.normalize('./pid'));
 			}
 		}
 		break;
@@ -45,8 +45,6 @@ switch (process.argv[2]) {
 		console.log('(Edit these files to admin the server.)');
 		mkDefaultFile('config.json');
 		// mkDefaultFile('motd.html');
-		console.log('>> Installing .js dependencies.');
-		require('child_process').spawn('npm', ['install', '-d'], { stdio: 'inherit' });
 		break;
 
 	case 'test':
@@ -114,9 +112,10 @@ switch (process.argv[2]) {
 }
 
 function mkDefaultFile(name) {
-	try { fs.statSync('./'+name); }
+	try { fs.statSync(path.normalize('./'+name)); }
 	catch (e) {
-		fs.createReadStream('./default/'+name).pipe(fs.createWriteStream('./'+name));
+		fs.createReadStream(path.normalize(('./default/'+name)))
+			.pipe(fs.createWriteStream(path.normalize('./'+name)));
 	}
 }
 

@@ -110,7 +110,7 @@ function fetch(url, useHead) {
 			return;
 		}
 		lookupReq = attempts.shift();
-		lookupReq.end().always(handleAttempt);
+		lookupReq.bufferResponse().end().always(handleAttempt);
 	}
 	makeAttempt();
 
