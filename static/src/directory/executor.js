@@ -25,20 +25,20 @@ function getAction(domain, id) {
 // EXPORTED
 // start an action with the given request
 // - req: obj, the request
-// - pluginMeta: obj, the link to the plugin
+// - originMeta: obj, the link to the origin
 // - $el: jquery element, the plugin's GUI
-function dispatch(req, pluginMeta, $el) {
+function dispatch(req, originMeta, $el) {
 	var reqUrld      = local.parseUri(req.url);
 	var reqDomain    = reqUrld.protocol + '://' + reqUrld.authority;
-	var pluginUrld   = local.parseUri(pluginMeta.href);
-	var pluginDomain = pluginUrld.protocol + '://' + pluginUrld.authority;
+	var originUrld   = local.parseUri(originMeta.href);
+	var originDomain = originUrld.protocol + '://' + originUrld.authority;
 
 	// audit request
 	// :TODO:
 
 	// allocate execution and gui space
 	var actid = allocId();
-	var act = createAction(actid, pluginDomain, pluginMeta, $el);
+	var act = createAction(actid, originDomain, originMeta, $el);
 
 	// prep request
 	var body = req.body;
@@ -49,7 +49,7 @@ function dispatch(req, pluginMeta, $el) {
 	req.Authorization('Action '+actid); // attach actid
 
 	if (!local.isAbsUri(req.headers.url)) {
-		req.headers.url = local.joinUri(pluginDomain, req.headers.url);
+		req.headers.url = local.joinUri(originDomain, req.headers.url);
 	}
 
 	// dispatch
@@ -159,7 +159,7 @@ function stopAction() {
 function setActionGui(doc) {
 	var html = (doc && typeof doc == 'object') ? JSON.stringify(doc) : (''+doc);
 	if (html && this.$el)
-		this.$el.find('.plugin-gui-inner').html(html);
+		this.$el.html(html);
 }
 
 // helper gives a list of links for the selected items captured on the execution
