@@ -26,7 +26,16 @@ module.exports = function(server) {
 				return res.send(500);
 			}
 			res.setHeader('Content-Type', meta.type);
-			// :TODO: link header
+			var links = [
+				'</>; rel="via service"; title="'+config.hostname+'"',
+				'</'+req.param('dir')+'>; rel="up collection"; id="'+req.param('dir')+'"', // :TODO: more specific reltype
+			];
+			meta.rel = 'self '+meta.rel;
+			if (!meta.href) { // No href? Then this is a document we host
+				meta.href = '/' + req.param('dir') + '/' + req.param('doc'); // Link to the hosted document
+			}
+			links.push(util.serializeLinkObject(meta));
+			res.setHeader(links.join(','));
 
 			db.getDirDocsDB(req.param('dir')).get(req.param('doc'), { valueEncoding: 'binary' }, function(err, doc) {
 				if (err && !err.notFound) {
