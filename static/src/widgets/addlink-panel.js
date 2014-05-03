@@ -38,7 +38,7 @@ function onPostDoc(e) {
 	// Add to dir's docs
 	var link = local.util.deepClone(curLink);
 	delete link.href;
-	globals.pageClient.POST(link)
+	POST(globals.pageClient.context.url, link)
 		.ContentType(curLink.type)
 		.end(curResponse.body)
 		.always(handlePostResponse);
