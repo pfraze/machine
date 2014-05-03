@@ -209,10 +209,10 @@ module.exports = {
 // The active feed config
 var _cfg = {
 	guis: local.util.table(
-		['href',                    'rel',           'title',     'for'],
-		'#thing-renderer',          'layer1.io/gui', 'Thing',     'schema.org/Thing',
-		'#about-renderer',          'layer1.io/gui', 'About',     'stdrel.com/media'
-		// '/js/act/stopwatch.js#', 'layer1.io/gui', 'Stopwatch', 'stdrel.com/media'
+		['href',                 'rel',           'title',     'for'],
+		'#thing-renderer',       'layer1.io/gui', 'Thing',     'schema.org/Thing',
+		'#about-renderer',       'layer1.io/gui', 'About',     'stdrel.com/media',
+		'/js/act/stopwatch.js#', 'layer1.io/gui', 'Stopwatch', 'stdrel.com/media'
 	)
 };
 
