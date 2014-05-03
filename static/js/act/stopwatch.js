@@ -1,14 +1,11 @@
 importScripts('/js/local.js');
 
-function main(req, res) {
-	res.header('Link', [{ href: '/', rel: 'self layer1.io/gui', title: 'Stopwatch' }]);
-	res.header('Content-Type', 'text/event-stream');
+local.at('#', function (req, res) {
+	res.link('#', 'self layer1.io/gui', {title: 'Stopwatch'});
+	res.ContentType('events');
+	if (req.HEAD) return res.s204().end();
 
-	if (req.method == 'HEAD') {
-		return res.writeHead(204).end();
-	}
-
-	res.writeHead(200, 'ok');
+	res.s200('ok');
 	render(res, 0);
 
 	res.start = Date.now();
@@ -21,7 +18,7 @@ function main(req, res) {
 		res.end();
 		clearInterval(intId);
 	});
-}
+});
 
 function render(res, elapsed) {
 	var html = '<strong>'+elapsed+'</strong>';
