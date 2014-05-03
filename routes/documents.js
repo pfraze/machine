@@ -35,7 +35,7 @@ module.exports = function(server) {
 				meta.href = '/' + req.param('dir') + '/' + req.param('doc'); // Link to the hosted document
 			}
 			links.push(util.serializeLinkObject(meta));
-			res.setHeader(links.join(','));
+			res.setHeader('Link', links.join(','));
 
 			db.getDirDocsDB(req.param('dir')).get(req.param('doc'), { valueEncoding: 'binary' }, function(err, doc) {
 				if (err && !err.notFound) {
