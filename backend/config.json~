@@ -1,0 +1,5 @@
+{
+	"hostname": "grimwire.com",
+	"port": 8000,
+	"dbpath": "./db"
+}

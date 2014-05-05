@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-var argv = require('optimist').argv;
+var argv = require('./backend/node_modules/optimist/index.js').argv;
 var fs = require('fs'), path = require('path');
 var pid;
 try {
@@ -19,7 +19,7 @@ switch (process.argv[2]) {
 				fs.unlinkSync(path.normalize('./pid'));
 			}
 		}
-		require('./main.js');
+		require('./backend/main.js');
 		break;
 
 	case 'stop':
@@ -43,13 +43,12 @@ switch (process.argv[2]) {
 	case 'setup':
 		console.log('>> Creating ./config.json.');//, ./motd.html.');
 		console.log('(Edit these files to admin the server.)');
-		mkDefaultFile('config.json');
-		// mkDefaultFile('motd.html');
+		mkDefaultFile('backend/config.json');
 		break;
 
 	case 'test':
 		var port = argv.p || argv.port || 9000; // tests are hard-coded to this, so probably not useful to change
-		var dbpath = argv.dbpath || './testdb';
+		var dbpath = argv.dbpath || './backend/testdb';
 
 		// Clear test db
 		console.log('Running rm on', dbpath, 'enter "y" to clear data');
@@ -70,7 +69,7 @@ switch (process.argv[2]) {
 				if (data.toString() == 'DB Initialized\n') {
 					console.log('Test server ready');
 					// Run tests
-					var mochaProc = require('child_process').spawn('mocha', ['./tests'], { stdio: 'inherit' });
+					var mochaProc = require('child_process').spawn('mocha', ['./backend/tests'], { stdio: 'inherit' });
 					mochaProc.on('close', function() {
 						console.log('Killing test server');
 						serverProc.kill('SIGINT');
@@ -93,11 +92,11 @@ switch (process.argv[2]) {
 		}
 		require('child_process').spawn('browserify',
 			[
-				path.normalize('./static/src/feed/main.js'),
-				'-o', path.normalize('./static/js/feed.js')
+				path.normalize('./frontend/src/feed/main.js'),
+				'-o', path.normalize('./frontend/js/feed.js')
 			],
 			{ stdio: 'inherit' })
-			.on('close', report('static/js/directory.js'));
+			.on('close', report('frontend/js/feed.js'));
 		break;
 
 	default:
@@ -118,7 +117,7 @@ switch (process.argv[2]) {
 function mkDefaultFile(name) {
 	try { fs.statSync(path.normalize('./'+name)); }
 	catch (e) {
-		fs.createReadStream(path.normalize(('./default/'+name)))
+		fs.createReadStream(path.normalize(('./backend/default/'+name)))
 			.pipe(fs.createWriteStream(path.normalize('./'+name)));
 	}
 }

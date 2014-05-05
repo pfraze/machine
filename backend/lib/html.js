@@ -1,9 +1,10 @@
+
 var fs = require('fs');
 module.exports = {
 	feed: '',
 	load: function(config) {
 		var port = config.downstream_port || config.port;
-		this.feed = fs.readFileSync('./static/feed.html').toString()
+		this.feed = fs.readFileSync('./frontend/feed.html').toString()
 			.replace(/\{\{HOSTLABEL\}\}/g, ucfirst(config.hostname)+((port != 80 && port != 443)?':'+port:''))
 			.replace(/\{\{HOSTURL\}\}/g, config.url);
 	},
