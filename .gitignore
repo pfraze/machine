@@ -1,8 +1,6 @@
-npm-debug.log
-node_modules
-server.log
-/config.json
-/motd.html
-static/tmp
-/db
-/testdb
+/backend/npm-debug.log
+/backend/node_modules
+/backend/server.log
+/backend/config.json
+/backend/db
+/backend/testdb

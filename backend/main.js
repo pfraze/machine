@@ -114,15 +114,15 @@ server.options('*', function(req, res) {
 // Routes
 // ======
 // Status page
-server.all('/status', function(req, res, next) {
+server.all('/.status', function(req, res, next) {
 	res.setHeader('Link', [
 		'</>; rel="up via service"; title="'+config.hostname+'"',
-		'</status>; rel="self service"; id="status"; title="Network Host Stats"'
+		'</.status>; rel="self service"; id="status"; title="Network Host Stats"'
 	].join(', '));
 	next();
 });
-server.head('/status', function(req, res) { res.send(204); });
-server.get('/status', function(req, res) {
+server.head('/.status', function(req, res) { res.send(204); });
+server.get('/.status', function(req, res) {
 	var uptime = (new Date() - server.startTime);
 	var stats = require('./lib/metrics').toJSON();
 	stats.started_at = server.startTime.toLocaleString();
@@ -135,6 +135,7 @@ server.use('/js', express.static(__dirname + '/../frontend/js', { maxAge: 1000*6
 server.use('/css', express.static(__dirname + '/../frontend/css', { maxAge: 1000*60*60*24 }));
 server.use('/img', express.static(__dirname + '/../frontend/img', { maxAge: 1000*60*60*24 }));
 server.use('/fonts', express.static(__dirname + '/../frontend/fonts', { maxAge: 1000*60*60*24 }));
+server.use('/user', express.static(__dirname + '/../user'));
 // Program routes
 require('./routes/auth')(server);
 require('./routes/me')(server);
