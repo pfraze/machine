@@ -24,10 +24,11 @@
   <body data-user="{{USER}}" data-user-is-admin="{{USER_IS_ADMIN}}">
     <div class="container">
       <div class="row">
-        <div class="col-sm-1 align-right">
+        <div class="col-xs-1 align-right">
           <h1><a href="/" title="Back to Home" target="_top"><b class="glyphicon glyphicon-chevron-left"></b></a></h1>
           <!-- <a href="#" id="sort-btn" title="Sorting: oldest to newest"></a> -->
-          <br>
+          <h2>{{DIRNAME}}<!-- <small>created {{DIRAGE}}</small>--></h2>
+          <p><a href="#" id="toggle-layout">toggle view</a></p>
           <p>
             <a href="#" class="glyphicon glyphicon-wrench" title="Tools"></a><br>
             About<br>
@@ -35,7 +36,7 @@
             Addresses<br>
           </p>
         </div>
-        <div class="col-sm-3 center-pane">
+        <div id="content-views" class="col-xs-3">
           <div class="addlink-panel panel panel-default">
             <div class="panel-body">
               <form class="show-on-admin form" role="form">
@@ -45,18 +46,9 @@
               </form>
             </div>
           </div>
-          <h1>{{DIRNAME}}<!-- <small>created {{DIRAGE}}</small>--></h1>
           <div class="directory-links-list"></div>
         </div>
-        <div class="col-sm-8">
-          <div id="views">
-            <ul class="nav nav-tabs">
-              <li class="active"><a href="#fat">@fat</a></li>
-              <li class=""><a href="#mdo">@mdo</a></li>
-            </ul>
-            <div id="untrusted1"></div>
-          </div>
-        </div>
+        <div id="meta-views" class="col-xs-8"></div>
       </div>
     </div>
 

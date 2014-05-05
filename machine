@@ -91,14 +91,25 @@ switch (process.argv[2]) {
 				}
 			};
 		}
-		require('child_process').spawn('browserify', ['./static/src/directory/main.js', '-o', './static/js/directory.js'], { stdio: 'inherit' })
+		require('child_process').spawn('browserify',
+			[
+				path.normalize('./static/src/directory/main.js'),
+				'-o', path.normalize('./static/js/directory.js')
+			],
+			{ stdio: 'inherit' })
 			.on('close', report('static/js/directory.js'));
-		require('child_process').spawn('browserify', ['./static/src/home/main.js', '-o', './static/js/home.js'], { stdio: 'inherit' })
+		require('child_process').spawn('browserify',
+			[
+				path.normalize('./static/src/home/main.js'),
+				'-o', path.normalize('./static/js/home.js')
+			],
+			{ stdio: 'inherit' })
 			.on('close', report('static/js/home.js'));
 		break;
 
 	default:
-		console.log('Unknown command, "'+process.argv[2]+'"');
+		if (!!progress.argv[2])
+			console.log('Unknown command, "'+process.argv[2]+'"');
 		console.log('  Usage: machine [start|stop|reload|setup|test|build]');
 		console.log('  Flags:');
 		console.log('   -p/--port [port] (default 8000)');

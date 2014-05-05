@@ -1,6 +1,5 @@
 var globals = require('../globals');
 var util = require('../util');
-var executor = require('./executor');
 var gui = require('./gui');
 var mediaLinks = local.queryLinks(document, 'stdrel.com/media');
 
@@ -18,9 +17,6 @@ require('../widgets/addlink-panel').setup();
 require('../widgets/directory-delete-btn').setup();
 gui.setup(mediaLinks);
 
-// plugin execution
-executor.setup(mediaLinks);
-
 // :TEMP:
 local.at('#todo', function(req, res) { alert('Todo'); res.s204().end(); });
 
@@ -33,7 +29,8 @@ function auth(req, res, worker) {
 		res.s401('must reuse Authorization header in incoming request for all outgoing requests').end();
 		return false;
 	}
-	req.act = executor.get(worker ? worker.getUrl() : true, req.actid); // worker DNE, req came from page so allow
+	// :TODO:
+	req.act = null;// executor.get(worker ? worker.getUrl() : true, req.actid); // worker DNE, req came from page so allow
 	if (!req.act) {
 		res.s403('invalid actid - expired or not assigned to this worker').end();
 		return false;
@@ -44,45 +41,19 @@ function auth(req, res, worker) {
 // toplevel
 local.at('#', function (req, res, worker) {
 	res.link(
-		['href',      'id',        'rel',                         'title'],
-		'#',          undefined,   'self service via',            'Host Page',
-		'#selection', 'selection', 'service layer1.io/selection', 'Selected Items at Time of Execution',
-		'#feed',      'feed',      'service layer1.io/feed',      'Current Feed',
-		'#service',   'service',   'service layer1.io/service',   'Layer1 Toplevel Service'
+		['href',    'id',      'rel',                       'title'],
+		'#',        undefined, 'self service via',          'Host Page',
+		'#target',  'target',  'service layer1.io/target',  'Target for Rendering',
+		'#feed',    'feed',    'service layer1.io/feed',    'Current Feed',
+		'#service', 'service', 'service layer1.io/service', 'Layer1 Toplevel Service'
 	);
 	res.s204().end();
 });
 
-// selected items
-local.at('#selection/?(.*)', function (req, res, worker) {
-	if (!auth(req, res, worker)) return;
-	var itemid = req.pathd[1];
-	var selLinks = req.act.getSelectedLinks();
-
-	if (itemid) {
-		if (!selLinks[itemid]) { return res.s404().end(); }
-		var link = local.util.deepClone(selLinks[itemid]);
-		res.link(
-			['href',      'id',        'rel',                            'title'],
-			'/',          undefined,   'via',                            'Host Page',
-			'/selection', 'selection', 'up service layer1.io/selection', 'Selected Items at Time of Execution'
-		);
-		serveItem(req, res, link);
-	}
-	else {
-		var links = local.util.deepClone(selLinks);
-		res.link(
-			['href',      'id',        'rel',                              'title'],
-			'/',          undefined,   'up service via',                   'Host Page',
-			'/selection', 'selection', 'self service layer1.io/selection', 'Selected Items at Time of Execution'
-		);
-		serveCollection(req, res, links, { noPost: true });
-	}
-});
-
 // feed items
 local.at('#feed/?(.*)', function (req, res, worker) {
-	if (!auth(req, res, worker)) return;
+	// :TODO:
+	// if (!auth(req, res, worker)) return;
 	var itemid = req.pathd[1];
 
 	if (itemid) {
@@ -127,10 +98,6 @@ function serveCollection(req, res, links, opts) {
 	if (req.HEAD) return res.s204().end();
 	if (req.GET)  return res.s204().end(); // :TODO:
 	if (req.POST) {
-		if (opts.noPost) {
-			res.Allow('HEAD, GET');
-			return res.s405('bad method').end();
-		}
 		var post = globals.pageClient
 			.POST(req.params)
 			.ContentType(req.ContentType)
@@ -142,7 +109,7 @@ function serveCollection(req, res, links, opts) {
 		return;
 	}
 
-	res.Allow('HEAD, GET'+((!opts.noPost)?', POST':''));
+	res.Allow('HEAD, GET, POST');
 	res.s405('bad method').end();
 }
 

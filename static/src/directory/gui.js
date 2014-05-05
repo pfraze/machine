@@ -1,41 +1,104 @@
 var sec = require('../security');
 var util = require('../util');
 var feedcfg = require('./feedcfg');
-var executor = require('./executor');
 
 module.exports = {
 	setup: setup,
 	renderMetaFeed: renderMetaFeed,
-	renderGuis: renderGuis
+	renderSelectionViews: renderSelectionViews
 };
 
 var _mediaLinks;
-var _activeGuis;
+var _activeRendererLinks;
+var _layout; // meta: titles on left, selected item renders views on right
+             // content: views are rendered in a vertical stack
 var _sortReversed; // chronological or reverse-chrono?
 function setup(mediaLinks) {
 	_mediaLinks = mediaLinks;
-	_activeGuis = null;
+	_activeRendererLinks = null;
 	_sortReversed = true; // default newest to oldest
+	render('content'); // default show content inline
 
-	// render
-	renderMetaFeed();
-	renderGuis();
+	// :DEBUG:
+	$('#toggle-layout').on('click',function() {
+		render(_layout == 'content' ? 'meta' : 'content');
+	});
+}
 
-	// sort btn behaviors
-	// var $sortBtn = $('#sort-btn');
-	// var getSortBtnClass = function() { return 'glyphicon glyphicon-sort-by-alphabet'+((_sortReversed) ? '-alt' : ''); };
-	// var getSortBtnTitle = function() { return 'Sorting: '+((_sortReversed) ? 'newest to oldest' : 'oldest to newest'); };
-	// $sortBtn[0].className = getSortBtnClass();
-	// $sortBtn[0].title = getSortBtnTitle();
-	// $sortBtn.on('click', function() {
-	// 	_sortReversed = !_sortReversed;
-	// 	$sortBtn[0].className = getSortBtnClass();
-	// 	$sortBtn[0].title = getSortBtnTitle();
-	// 	renderMetaFeed();
-	// });
+function render(layout) {
+	_layout = layout;
+	switch (_layout) {
+		case 'content':
+			// tear down meta view
+			$(document.body).off('click', onClickMetaView);
+			$('#meta-views').hide();
 
-	// selection behaviors
-	$(document.body).on('click', feedItemSelectHandler);
+			// setup content view
+			$('#content-views').removeClass('col-xs-3').addClass('col-xs-11');
+			renderContentFeed();
+			break;
+
+		case 'meta':
+			// tear down content view
+			$('#content-views').removeClass('col-xs-11').addClass('col-xs-3');
+
+			// setup meta view
+			$('#meta-views').show();
+			$(document.body).on('click', onClickMetaView);
+			renderMetaFeed();
+
+			// select first item
+			$('.directory-links-list .directory-item-slot:first-child').addClass('selected');
+			renderSelectionViews();
+			break;
+	}
+}
+
+function renderContentFeed() {
+	var $list = $('.directory-links-list');
+	$list.empty(); // clear out
+
+	var lastDate = new Date(0);
+	function renderDateLine(mediaLink) {
+		var then = new Date(+mediaLink.created_at);
+		if (isNaN(then.valueOf())) then = lastDate;
+
+		if (then.getDay() != lastDate.getDay() || (lastDate.getYear() == 69 && then.getYear() != 69)) {
+			// add date entry
+			$list.append(
+				'<div class="directory-time">'+
+					then.getFullYear()+'/'+(then.getMonth()+1)+'/'+then.getDate()+
+				'</div>'
+			);
+		}
+		lastDate = then;
+	}
+
+	function renderView(mediaLinkIndex, mediaLink, rendererLink) {
+		var title = util.escapeHTML(mediaLink.title || mediaLink.id || 'Untitled');
+		var $slot =  $(
+			'<div id="slot-'+mediaLinkIndex+'" class="directory-item-slot">'+
+				'<span class="title">'+title+'</span>'+
+				'<div class="view" data-view="'+rendererLink.href+'">Loading...</div>'+
+			'</div>'
+		);
+		$list.append($slot);
+		$slot.on('request', onViewRequest);
+		_activeRendererLinks[rendererLink.href] = rendererLink;
+
+		var renderRequest = { method: 'GET', url: rendererLink.href, params: { target: '#feed/'+mediaLinkIndex } };
+		rendererDispatch(renderRequest, rendererLink, $slot.find('.view'));
+	}
+
+	_activeRendererLinks = {};
+	for (var i = 0; i < _mediaLinks.length; i++) {
+		var mediaLinkIndex = (_sortReversed) ? (_mediaLinks.length - i - 1) : i;
+		var mediaLink = _mediaLinks[mediaLinkIndex];
+		var rendererLink = feedcfg.findRenderer(mediaLink);
+
+		renderDateLine(rendererLink);
+		renderView(mediaLinkIndex, mediaLink, rendererLink);
+	}
 }
 
 function renderMetaFeed() {
@@ -43,107 +106,132 @@ function renderMetaFeed() {
 	$list.empty(); // clear out
 
 	var lastDate = new Date(0);
-	for (var i = 0; i < _mediaLinks.length; i++) {
-		var index = (_sortReversed) ? (_mediaLinks.length - i - 1) : i;
-		var link = _mediaLinks[index];
-
-		var then = new Date(+link.created_at);
+	function renderDateLine(mediaLink) {
+		var then = new Date(+mediaLink.created_at);
 		if (isNaN(then.valueOf())) then = lastDate;
 
 		if (then.getDay() != lastDate.getDay() || (lastDate.getYear() == 69 && then.getYear() != 69)) {
 			// add date entry
 			$list.append(
 				'<div class="directory-time">'+
-				then.getFullYear()+'/'+(then.getMonth()+1)+'/'+then.getDate()+
+					then.getFullYear()+'/'+(then.getMonth()+1)+'/'+then.getDate()+
 				'</div>'
 			);
 		}
 		lastDate = then;
+	}
 
-		// add item
-		var title = util.escapeHTML(link.title || link.id || 'Untitled');
-		$list.append('<div id="slot-'+index+'" class="directory-item-slot"><span class="title">'+title+'</span></div>');
+	function renderView(mediaLinkIndex, mediaLink, rendererLink) {
+		var title = util.escapeHTML(mediaLink.title || mediaLink.id || 'Untitled');
+		$list.append('<div id="slot-'+mediaLinkIndex+'" class="directory-item-slot"><span class="title">'+title+'</span></div>');
+	}
+
+	for (var i = 0; i < _mediaLinks.length; i++) {
+		var mediaLinkIndex = (_sortReversed) ? (_mediaLinks.length - i - 1) : i;
+		var mediaLink = _mediaLinks[mediaLinkIndex];
+		var rendererLink = feedcfg.findRenderer(mediaLink);
+
+		renderDateLine(rendererLink);
+		renderView(mediaLinkIndex, mediaLink, rendererLink);
 	}
 }
 
-function feedItemSelectHandler(e) {
-	if (local.util.findParentNode.byElement(e.target, document.getElementById('views')))
-		return; // do nothing if a click in the GUIs
-
-	if (!e.ctrlKey) {
-		// unselect current selection if ctrl isnot held down
-		$('.directory-links-list .selected').removeClass('selected');
-	}
-
-	var slotEl = local.util.findParentNode.byClass(e.target, 'directory-item-slot');
-	if (slotEl) {
-		slotEl.classList.add('selected');
-	}
-
-	// redraw actions based on the selection
-	renderGuis();
-	return false;
-}
-
-function renderGuis() {
-	var i;
-
-	// gather applicable actions
+function renderSelectionViews() {
+	// Get selected item
 	var $sel = $('.directory-links-list .selected');
-	_activeGuis = {};
-	if ($sel.length === 0) {
-		// no-target actions
-		feedcfg.get().guis.forEach(function(gui) {
-			if (!gui.for)
-				_activeGuis[gui.href] = gui;
-		});
-	} else {
-		// matching actions
-		for (i=0; i < $sel.length; i++) {
-			var id = $sel[i].id.slice(5);
-			var link = _mediaLinks[id];
-			if (!link) continue;
+	var mediaLinkIndex = $sel[0].id.slice(5);
+	var mediaLink = _mediaLinks[mediaLinkIndex];
+	if (!mediaLink) { console.error('Media link not found for selection'); return; }
 
-			var matches = feedcfg.queryGuis(link);
-			for (var j=0; j < matches.length; j++) {
-				_activeGuis[matches[j].href] = matches[j];
-			}
-		}
+	// Gather views for the selection
+	_activeRendererLinks = {};
+	var matches = feedcfg.findRenderers(mediaLink);
+	for (var j=0; j < matches.length; j++) {
+		_activeRendererLinks[matches[j].href] = matches[j];
 	}
 
-	// create gui spaces
-	i=0;
-	var $guis = $('#untrusted1');
-	var $nav = $('#views .nav');
-	$guis.empty();
-	$nav.empty();
-	for (var href in _activeGuis) {
-		$nav.append(createNavEl(_activeGuis[href], i++));
+	// Create view spaces
+	var $views = $('#meta-views');
+	$views.empty();
+	var i = 0;
+	for (var href in _activeRendererLinks) {
+		var rendererLink = _activeRendererLinks[href];
 
-		var $gui = createViewEl(_activeGuis[href]);
-		$guis.append($gui);
-		$gui.on('request', onViewRequest);
-		executor.dispatch({ method: 'GET', url: href }, _activeGuis[href], $gui);
+		var $view = createViewEl(rendererLink);
+		$views.append($view);
+		$view.on('request', onViewRequest);
+
+		var renderRequest = { method: 'GET', url: href, params: { target: '#feed/'+mediaLinkIndex } };
+		rendererDispatch(renderRequest, rendererLink, $view);
 	}
 }
 
 // create div for view
-function createViewEl(meta) {
-	return $('<div class="view" data-view="'+meta.href+'">Loading...</div>');
-}
-
-// create div for view
-function createNavEl(meta, i) {
-	var title = meta.title || meta.id || meta.href;
-	if (i===0) {
-		return $('<li class="active"><a method="SHOW" href="#views/0">'+title+'</div>');
-	} else {
-		return $('<li class="active"><a method="SHOW" href="#views/'+i+'">'+title+'</div>');
-	}
+function createViewEl(rendererLink) {
+	return $('<div class="view" data-view="'+rendererLink.href+'">Loading...</div>');
 }
 
 function onViewRequest(e) {
-	var $gui = $(this);
-	var href = $gui.data('view');
-	executor.dispatch(e.detail, _activeGuis[href], $gui);
+	var $view = $(this);
+	var href = $view.data('view');
+	rendererDispatch(e.detail, _activeRendererLinks[href], $view);
+}
+
+function onClickMetaView(e) {
+	if (_layout != 'meta')
+		return; // only applies to meta view
+
+	// select slot if target is a slot
+	var slotEl = local.util.findParentNode.byClass(e.target, 'directory-item-slot');
+	if (slotEl) {
+		$('.directory-links-list .selected').removeClass('selected');
+		slotEl.classList.add('selected');
+
+		renderSelectionViews();
+	}
+	return false;
+}
+
+// Helper to send requests to a renderer or from its rendered views
+// - req: obj, the request
+// - rendererLink: obj, the link to the renderer
+// - $view: jquery element, the view element
+function rendererDispatch(req, rendererLink, $view) {
+	var reqUrld      = local.parseUri(req.url);
+	var reqDomain    = reqUrld.protocol + '://' + reqUrld.authority;
+	var rendererUrld   = local.parseUri(rendererLink.href);
+	var rendererDomain = rendererUrld.protocol + '://' + rendererUrld.authority;
+
+	// audit request
+	// :TODO: must be to renderer
+
+	// prep request
+	var body = req.body;
+	delete req.body;
+	req = new local.Request(req);
+
+	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
+
+	if (!local.isAbsUri(req.headers.url)) {
+		req.headers.url = local.joinUri(rendererDomain, req.headers.url);
+	}
+
+	// dispatch
+	req.bufferResponse();
+	req.end(body).always(function(res) {
+		// output final response to GUI
+		var view = res.body;
+		if (view) {
+			view = (view && typeof view == 'object') ? JSON.stringify(view) : (''+view);
+		} else {
+			var reason;
+			if (res.reason) { reason = res.reason; }
+			else if (res.status >= 200 && res.status < 400) { reason = 'success'; }
+			else if (res.status >= 400 && res.status < 500) { reason = 'bad request'; }
+			else if (res.status >= 500 && res.status < 600) { reason = 'error'; }
+			view = reason + ' <small>'+res.status+'</small>';
+		}
+		$view.html(view);
+	});
+	return req;
 }

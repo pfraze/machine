@@ -25,20 +25,20 @@ function getAction(domain, id) {
 // EXPORTED
 // start an action with the given request
 // - req: obj, the request
-// - originMeta: obj, the link to the origin
-// - $el: jquery element, the plugin's GUI
-function dispatch(req, originMeta, $el) {
+// - rendererLink: obj, the link to the renderer
+// - $view: jquery element, the view element
+function dispatch(req, rendererLink, $view) {
 	var reqUrld      = local.parseUri(req.url);
 	var reqDomain    = reqUrld.protocol + '://' + reqUrld.authority;
-	var originUrld   = local.parseUri(originMeta.href);
-	var originDomain = originUrld.protocol + '://' + originUrld.authority;
+	var rendererUrld   = local.parseUri(rendererLink.href);
+	var rendererDomain = rendererUrld.protocol + '://' + rendererUrld.authority;
 
 	// audit request
 	// :TODO:
 
 	// allocate execution and gui space
 	var actid = allocId();
-	var act = createAction(actid, originDomain, originMeta, $el);
+	var act = createAction(actid, rendererDomain, rendererLink, $view);
 
 	// prep request
 	var body = req.body;
@@ -49,7 +49,7 @@ function dispatch(req, originMeta, $el) {
 	req.Authorization('Action '+actid); // attach actid
 
 	if (!local.isAbsUri(req.headers.url)) {
-		req.headers.url = local.joinUri(originDomain, req.headers.url);
+		req.headers.url = local.joinUri(rendererDomain, req.headers.url);
 	}
 
 	// dispatch
@@ -98,18 +98,18 @@ function allocId() {
 }
 
 // create action base-structure, store in masterlist
-function createAction(actid, domain, meta, $el) {
+function createAction(actid, domain, meta, $view) {
 	_actions[actid] = {
 		meta: meta,
 		domain: domain,
 		id: actid,
-		$el: $el,
-		selection: captureSelection(),
+		$view: $view,
+		targetLinks: null,
 		req: null,
 
 		stop: stopAction,
 		setGui: setActionGui,
-		getSelectedLinks: getActionSelectedLinks
+		getTargetLinks: getActionTargetLinks
 	};
 	return _actions[actid];
 }
@@ -158,15 +158,13 @@ function stopAction() {
 // updates self's gui
 function setActionGui(doc) {
 	var html = (doc && typeof doc == 'object') ? JSON.stringify(doc) : (''+doc);
-	if (html && this.$el)
-		this.$el.html(html);
+	if (html && this.$view)
+		this.$view.html(html);
 }
 
 // helper gives a list of links for the selected items captured on the execution
-function getActionSelectedLinks() {
-	return this.selection.map(function(id) {
-		return _mediaLinks[id];
-	});
+function getActionTargetLinks() {
+	return this.targetLinks;
 }
 
 // :TODO: ?
