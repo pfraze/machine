@@ -93,18 +93,11 @@ switch (process.argv[2]) {
 		}
 		require('child_process').spawn('browserify',
 			[
-				path.normalize('./static/src/directory/main.js'),
-				'-o', path.normalize('./static/js/directory.js')
+				path.normalize('./static/src/feed/main.js'),
+				'-o', path.normalize('./static/js/feed.js')
 			],
 			{ stdio: 'inherit' })
 			.on('close', report('static/js/directory.js'));
-		require('child_process').spawn('browserify',
-			[
-				path.normalize('./static/src/home/main.js'),
-				'-o', path.normalize('./static/js/home.js')
-			],
-			{ stdio: 'inherit' })
-			.on('close', report('static/js/home.js'));
 		break;
 
 	default:

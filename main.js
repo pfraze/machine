@@ -136,12 +136,10 @@ server.use('/css', express.static(__dirname + '/static/css', { maxAge: 1000*60*6
 server.use('/img', express.static(__dirname + '/static/img', { maxAge: 1000*60*60*24 }));
 server.use('/fonts', express.static(__dirname + '/static/fonts', { maxAge: 1000*60*60*24 }));
 // Program routes
-require('./routes/home')(server);
 require('./routes/auth')(server);
 require('./routes/me')(server);
 require('./routes/fetchProxy')(server);
-require('./routes/directories')(server);
-require('./routes/documents')(server);
+require('./routes/feed')(server);
 
 // Reload signal
 // =============
