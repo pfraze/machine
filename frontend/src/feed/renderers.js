@@ -31,6 +31,10 @@ local.at('#about-renderer', function(req, res) {
 			res.s200().ContentType('html');
 			var html = '';
 
+			// :DEBUG:
+			html += '<style>.foo { font-weight: bold }</style>';
+			html += '<p class="foo" style="color: orange">foo!</p>';
+
 			if (selfLink.rel == 'self stdrel.com/media') {
 				var mime = selfLink.type || 'text/plain';
 				if (mime == 'text/plain') mime = 'plain-text';

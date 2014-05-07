@@ -231,10 +231,9 @@ function rendererDispatch(req, rendererLink, $view) {
 			else if (res.status >= 500 && res.status < 600) { reason = 'error'; }
 			view = reason + ' <small>'+res.status+'</small>';
 		}
-        
+
         // sanitize
-        view = '<style>p { color: red; }</style>' + view;
-		$view.html(sec.sanitizeRendererView(view, '#'+$view.attr('id')));
+		$view.html(sec.sanitizeHtml(view, '#'+$view.attr('id')));
 	});
 	return req;
 }
