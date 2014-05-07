@@ -65,7 +65,7 @@ html.load(config);
 // Server Creation
 // ===============
 var server = express();
-winston.add(winston.transports.File, { filename: 'server.log', handleExceptions: false });
+winston.add(winston.transports.File, { filename: './backend/server.log', handleExceptions: false });
 winston.remove(winston.transports.Console); // its console logging is too ugly
 db.setup(config.dbpath);
 
