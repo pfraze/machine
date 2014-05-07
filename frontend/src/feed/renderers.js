@@ -33,7 +33,7 @@ local.at('#about-renderer', function(req, res) {
 
 			// :DEBUG:
 			html += '<style>.foo { font-weight: bold }</style>';
-			html += '<p class="foo" style="color: orange">foo!</p>';
+			html += '<p class="foo" style="color: orange; margin-top: -10px">foo!</p>';
 
 			if (selfLink.rel == 'self stdrel.com/media') {
 				var mime = selfLink.type || 'text/plain';

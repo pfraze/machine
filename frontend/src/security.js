@@ -15,7 +15,9 @@ module.exports = {
 		var outputArray = [];
 		sanitize(html, outputArray);
 		return outputArray.join('');
-	}
+	},
+	sanitizeHtmlAttribs: sanitizeHtmlAttribs,
+	sanitizeStyles: sanitizeStyles
 };
 
 // HTML sanitation
@@ -170,13 +172,94 @@ function makeHtmlSanitizer(tagPolicy, styleSanitizer) {
 	});
 }
 
-// CSS Sanitiation
-// ===============
+// Sanitizers attributes on an HTML tag.
+// - tagName: string, the HTML tag name in lowercase.
+// - attribs: [string], an array of alternating names and values
+// - uriPolicy: function(string) -> string, a transform to apply to URI attributes.
+//   - Can return a new string value, or null to delete the attribute.
+//   - If unspecified, URI attributes are deleted.
+// - tokenPolicy: function(string) -> string, A transform to apply to attributes.
+//   - Applied to names, IDs, and classes.
+//   - Can return a new string value, or null to delete the attribute.
+//   - If unspecified, these attributes are kept unchanged.
+// - `cssPropertyPolicy`: function(decl) -> bool, return false to strip the declaration
+// - `cssValuePolicy`: function(dec;) -> bool, return false to strip the declaration
+// - returns [string], The sanitized attributes as a list of alternating names and values,
+//                     where a null value means to omit the attribute.
+function sanitizeHtmlAttribs(tagName, attribs, uriPolicy, tokenPolicy, cssPropertyPolicy, cssValuePolicy) {
+	for (var i = 0; i < attribs.length; i += 2) {
+		var attribName = attribs[i];
+		var value = attribs[i + 1];
+		var oldValue = value;
+
+		// Look up the attribute key
+		var atype = null;
+		var attribKey = tagName + '::' + attribName;
+		if (!html4.ATTRIBS.hasOwnProperty(attribKey)) {
+			attribKey = '*::' + attribName;
+			if (!html4.ATTRIBS.hasOwnProperty(attribKey)) {
+				attribKey = null;
+			}
+		}
+
+		// Look up attribute type by key
+		if (attribKey) {
+			atype = html4.ATTRIBS[attribKey];
+		} else {
+			// Type not known, scrub
+			attribs[i + 1] = null;
+			console.warn('Removed disallowed attribute', attribName);
+			continue;
+		}
+
+		// Sanitize by type
+		switch (atype) {
+				// sanitize with style policy
+			case html4.atype['STYLE']:
+				value = '* {\n'+value+'\n}';
+				value = sanitizeStyles(null, cssPropertyPolicy, cssValuePolicy, value);
+				value = value.slice(3,-1);
+				break;
+
+				// sanitize with token policy
+			case html4.atype['GLOBAL_NAME']:
+			case html4.atype['LOCAL_NAME']:
+			case html4.atype['CLASSES']:
+				value = tokenPolicy ? tokenPolicy(value) : value;
+				break;
+
+				// sanitize with uri policy
+			case html4.atype['URI']:
+				value = uriPolicy(value);
+				break;
+
+				// allowed
+			case html4.atype['FRAME_TARGET']:
+				break;
+
+				// disallowed
+			case html4.atype['NONE']:
+			case html4.atype['SCRIPT']:
+			case html4.atype['ID']:
+			case html4.atype['IDREF']:
+			case html4.atype['IDREFS']:
+			default:
+				console.warn('Removed disallowed attribute', attribName);
+				value = null;
+				break;
+		}
+		attribs[i + 1] = value;
+	}
+	return attribs;
+}
+
+// CSS Sanitation
+// ==============
 
 // Scopes all styles under a selector prefix and strips rules deemed unsafe
 // - `selectorPrefix`: optional string, selector to scope the output selectors with
 // - `propertyPolicy`: function(decl) -> bool, return false to strip the declaration
-// - `valuePolicy`: function(dec) -> bool, return false to strip the declaration
+// - `valuePolicy`: function(decl) -> bool, return false to strip the declaration
 // - `styles`: string, the styles to sanitize
 // - returns string, the sanitized styles
 function sanitizeStyles(selectorPrefix, propertyPolicy, valuePolicy, styles) {
@@ -202,12 +285,13 @@ function prefixSelectors(ast, prefix) {
 function removeUnsafeRules(ast, propertyPolicy, valuePolicy) {
 	ast.stylesheet.rules.forEach(function(rule) {
 		rule.declarations = rule.declarations.filter(function(decl) {
+			var description = '"'+decl.property+': '+decl.value+'"';
 			if (!propertyPolicy(decl)) {
-				console.warn('Stripping',decl,'due to unsafe property');
+				console.warn('Removed disallowed style', description, 'due to unsafe property', '('+decl.property+')');
 				return false;
 			}
 			if (!valuePolicy(decl)) {
-				console.warn('Stripping',decl,'due to unsafe value');
+				console.warn('Removed disallowed style', description, 'due to unsafe value', '('+decl.value+')');
 				return false;
 			}
 			return true;

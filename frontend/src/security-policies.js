@@ -64,7 +64,14 @@ var policies = {
 	htmlTagPolicy: function(tagName, attribs) {
 		if (policies.allowedHtmlTags.indexOf(tagName) !== -1) {
 			return {
-				attribs: window.html.sanitizeAttribs(tagName, attribs, policies.urlsPolicy, policies.tokensPolicy)
+				attribs: require('./security').sanitizeHtmlAttribs(
+					tagName,
+					attribs,
+					policies.urlsPolicy,
+					policies.tokensPolicy,
+					policies.cssPropertyPolicy,
+					policies.cssValuePolicy
+				)
 			};
 		} else {
 			console.warn('Removed disallowed tag:', tagName);
