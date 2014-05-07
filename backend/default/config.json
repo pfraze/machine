@@ -2,5 +2,5 @@
 	"hostname": "localhost",
     "port": 8000,
     "public": false,
-	"dbpath": "./db"
+	"dbpath": "./backend/db"
 }
