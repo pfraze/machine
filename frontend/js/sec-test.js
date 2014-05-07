@@ -7,7 +7,7 @@ $(document.body).append('<style>'+presetStyles+'</style>');
 
 // Load and sanitize test styles
 var testStyles = document.getElementById('test-styles').innerHTML;
-testStyles = sec.sanitizeStyles(testStyles, '#sandbox');
+testStyles = sec.sanitizeStyles('#sandbox', testStyles);
 document.getElementById('sanitized-styles').innerHTML = testStyles;
 $(document.body).append('<style>'+testStyles+'</style>');
 },{"../security":2}],2:[function(require,module,exports){
@@ -16,7 +16,8 @@ module.exports = {
         var outputArray = [];
         makeHtmlSanitizer(rendererView.policy, sanitizeStyles.bind(null, selectorPrefix))(html, outputArray);
         return outputArray.join('');
-	}
+	},
+    sanitizeStyles: sanitizeStyles
 };
 
 // Views rendered by plugins

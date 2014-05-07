@@ -3,7 +3,8 @@ module.exports = {
         var outputArray = [];
         makeHtmlSanitizer(rendererView.policy, sanitizeStyles.bind(null, selectorPrefix))(html, outputArray);
         return outputArray.join('');
-	}
+	},
+    sanitizeStyles: sanitizeStyles
 };
 
 // Views rendered by plugins
