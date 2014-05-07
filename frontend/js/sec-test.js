@@ -1,3 +1,16 @@
+(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+var sec = require('../security');
+
+// Load preset styles
+var presetStyles = document.getElementById('preset-styles').innerHTML;
+$(document.body).append('<style>'+presetStyles+'</style>');
+
+// Load and sanitize test styles
+var testStyles = document.getElementById('test-styles').innerHTML;
+testStyles = sec.sanitizeStyles(testStyles, '#sandbox');
+document.getElementById('sanitized-styles').innerHTML = testStyles;
+$(document.body).append('<style>'+testStyles+'</style>');
+},{"../security":2}],2:[function(require,module,exports){
 module.exports = {
 	sanitizeRendererView: function(html) {
 		return window.html.sanitizeWithPolicy(html, rendererView.policy);
@@ -157,3 +170,4 @@ function isValueSafe(decl) {
 
 	return true;
 }
+},{}]},{},[1])

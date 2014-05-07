@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>layer1 css sandboxing test</title>
+  </head>
+
+  <body>
+    <p>If you see red on the page, the sanitization has failed.</p>
+
+    <p class="other">Above sandbox</p>
+    <div id="sandbox">
+      <em>Should not be above or below</em>
+      <strong>This should not be above or below the sandbox.</strong>
+    </div>
+    <p id="foo" class="other">Below sandbox</p>
+
+    <p><strong>Pre-set styles:</strong></p>
+    <pre id="preset-styles">
+#sandbox { overflow: hidden; border: 3px dashed green; min-height: 50px }
+    </pre>
+
+    <p><strong>Testing these styles:</strong></p>
+    <pre id="test-styles">
+@font-face {
+  font-family: "Foobar";
+  src: url("/foobar.ttf");
+}
+#foo, .other { color: red }
+body { background: red }
+document { background: red }
+strong {
+  font-family: "Foobar";
+  position: absolute; top: 0; left: 0;
+  background: '/user/sandbox-kitty.jpg';
+  background: url(/user/sandbox-kitty.jpg);
+  background: url (/user/sandbox-kitty.jpg);
+}
+em { display: block; margin-top: -50px; padding-bottom: 50px; color: red }
+    </pre>
+
+    <p><strong>After sanitization:</strong></p>
+    <pre id="sanitized-styles">
+.other { color: red }
+body { background: red }
+document { background: red }
+    </pre>
+
+    <script src="/js/jquery-2.0.3.min.js"></script>
+    <script src="/js/rework-css-1.6.1.js"></script>
+    <script src="/user/css-sandboxing-test.js"></script>
+  </body>
+</html>

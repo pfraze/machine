@@ -130,6 +130,11 @@ server.get('/.status', function(req, res) {
 	stats.uptime_days = uptime/(24*60*60*1000);
 	res.json(stats);
 });
+// Security test route
+server.get('/sec-test', function(req, res) {
+	res.setHeader('Content-Security-Policy', ''); // turn off CSP for the test
+	res.send(html.render('secTest'));
+});
 // Static content
 server.use('/js', express.static(__dirname + '/../frontend/js', { maxAge: 1000*60*60*24 }));
 server.use('/css', express.static(__dirname + '/../frontend/css', { maxAge: 1000*60*60*24 }));

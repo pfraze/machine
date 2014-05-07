@@ -13,8 +13,6 @@ require('./feedcfg').setup();
 require('./renderers'); // :DEBUG:
 
 // ui
-require('../widgets/addlink-panel').setup();
-require('../widgets/directory-delete-btn').setup();
 gui.setup(mediaLinks);
 
 // :TEMP:

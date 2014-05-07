@@ -2,9 +2,13 @@
 var fs = require('fs');
 module.exports = {
 	feed: '',
+	secTest: '',
 	load: function(config) {
 		var port = config.downstream_port || config.port;
 		this.feed = fs.readFileSync('./frontend/feed.html').toString()
+			.replace(/\{\{HOSTLABEL\}\}/g, ucfirst(config.hostname)+((port != 80 && port != 443)?':'+port:''))
+			.replace(/\{\{HOSTURL\}\}/g, config.url);
+		this.secTest = fs.readFileSync('./frontend/sec-test.html').toString()
 			.replace(/\{\{HOSTLABEL\}\}/g, ucfirst(config.hostname)+((port != 80 && port != 443)?':'+port:''))
 			.replace(/\{\{HOSTURL\}\}/g, config.url);
 	},
