@@ -12,7 +12,7 @@ module.exports = function(server) {
 	server.post('/', addDocument);
     server.head('/:doc', padDocId, getDocument);
     server.get('/:doc', padDocId, getDocument);
-    server.get('/:doc', padDocId, deleteDocument);
+    server.del('/:doc', padDocId, deleteDocument);
 
 	function requireSession(req, res, next) {
 		if (!req.session.user) {
