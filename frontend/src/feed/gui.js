@@ -79,7 +79,7 @@ function renderContentFeed() {
 		var $slot =  $(
 			'<div id="slot-'+mediaLinkIndex+'" class="directory-item-slot">'+
 				'<span class="title">'+title+'</span>'+
-				'<div class="view" data-view="'+rendererLink.href+'">Loading...</div>'+
+				'<div id="view-'+mediaLinkIndex+'" class="view" data-view="'+rendererLink.href+'">Loading...</div>'+
 			'</div>'
 		);
 		$list.append($slot);
@@ -231,7 +231,10 @@ function rendererDispatch(req, rendererLink, $view) {
 			else if (res.status >= 500 && res.status < 600) { reason = 'error'; }
 			view = reason + ' <small>'+res.status+'</small>';
 		}
-		$view.html(view);
+        
+        // sanitize
+        view = '<style>p { color: red; }</style>' + view;
+		$view.html(sec.sanitizeRendererView(view, '#'+$view.attr('id')));
 	});
 	return req;
 }

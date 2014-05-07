@@ -22,7 +22,7 @@ module.exports.setCspHeaders = function(req, res, next) {
 		"img-src 'self'",
 		"font-src 'self'",
 		"script-src 'self' blob:",
-		"style-src 'self'",
+		"style-src 'self' 'unsafe-inline'",
 		"connect-src *"
 	].join('; '));
 	next();

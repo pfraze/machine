@@ -97,6 +97,13 @@ switch (process.argv[2]) {
 			],
 			{ stdio: 'inherit' })
 			.on('close', report('frontend/js/feed.js'));
+		require('child_process').spawn('browserify',
+			[
+				path.normalize('./frontend/src/sec-test/main.js'),
+				'-o', path.normalize('./frontend/js/sec-test.js')
+			],
+			{ stdio: 'inherit' })
+			.on('close', report('frontend/js/sec-test.js'));
 		break;
 
 	default:
