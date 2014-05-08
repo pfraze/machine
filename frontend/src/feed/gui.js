@@ -85,7 +85,7 @@ function renderContentFeed() {
 	}
 
 	function renderView(mediaLinkIndex, mediaLink, rendererLink) {
-		var title = util.escapeHTML(mediaLink.title || mediaLink.id || 'Untitled');
+		var title = util.escapeHTML(mediaLink.title || mediaLink.id || prettyHref(mediaLink.href));
 		var $slot =  $(
 			'<div id="slot-'+mediaLinkIndex+'" class="directory-item-slot">'+
 				'<a class="title" href="#feed/'+mediaLinkIndex+'" method="SELECT">'+title+'</a>'+
@@ -132,7 +132,7 @@ function renderMetaFeed() {
 	}
 
 	function renderView(mediaLinkIndex, mediaLink, rendererLink) {
-		var title = util.escapeHTML(mediaLink.title || mediaLink.id || 'Untitled');
+		var title = util.escapeHTML(mediaLink.title || mediaLink.id || prettyHref(mediaLink.href));
 		$list.append('<div id="slot-'+mediaLinkIndex+'" class="directory-item-slot"><span class="title">'+title+'</span></div>');
 	}
 
@@ -247,4 +247,10 @@ function rendererDispatch(req, rendererLink, $view) {
 		$view.html(sec.sanitizeHtml(view, '#'+$view.attr('id')));
 	});
 	return req;
+}
+
+// helper
+function prettyHref(href) {
+	var hrefd = local.parseUri(href);
+	return hrefd.authority + hrefd.relative;
 }
