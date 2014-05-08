@@ -6,7 +6,6 @@ var mediaLinks = local.queryLinks(document, 'stdrel.com/media');
 // Environment Setup
 // =================
 local.logAllExceptions = true;
-require('../pagent').setup();
 require('../auth').setup();
 require('../http-headers').setup();
 require('./feedcfg').setup();
@@ -14,6 +13,16 @@ require('./renderers'); // :DEBUG:
 
 // ui
 gui.setup(mediaLinks);
+
+local.bindRequestEvents(document);
+$(document).on('request', function(e) {
+	// dispatch and log
+	var req = new local.Request(e.originalEvent.detail);
+	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
+	req.bufferResponse();
+	req.end(e.originalEvent.detail.body).always(console.log.bind(console, req.headers));
+	return req;
+});
 
 // :TEMP:
 local.at('#todo', function(req, res) { alert('Todo'); res.s204().end(); });
@@ -62,7 +71,7 @@ local.at('#feed/?(.*)', function (req, res, worker) {
 			'/',     undefined, 'service via',               'Host Page',
 			'/feed', 'feed',    'up service layer1.io/feed', 'Current Feed'
 		);
-		serveItem(req, res, link);
+		serveItem(req, res, worker, link);
 	}
 	else {
 		var links = local.util.deepClone(mediaLinks);
@@ -71,7 +80,7 @@ local.at('#feed/?(.*)', function (req, res, worker) {
 			'/',     undefined, 'up service via',              'Host Page',
 			'/feed', 'feed',    'self service layer1.io/feed', 'Current Feed'
 		);
-		serveCollection(req, res, links);
+		serveCollection(req, res, worker, links);
 	}
 });
 
@@ -83,8 +92,7 @@ local.at('#service', function (req, res, worker) {
 });
 
 // collection behavior
-function serveCollection(req, res, links, opts) {
-	opts = opts || {};
+function serveCollection(req, res, worker, links) {
 	var uris = {};
 
 	// set headers
@@ -112,8 +120,7 @@ function serveCollection(req, res, links, opts) {
 }
 
 // item behavior
-function serveItem(req, res, link, opts) {
-	opts = opts || {};
+function serveItem(req, res, worker, link) {
 	// update link references to point to this service
 	var url = link.href;
 	link.rel = 'self '+link.rel;
@@ -126,6 +133,11 @@ function serveItem(req, res, link, opts) {
 	// route method
 	if (req.HEAD) return res.s204().end();
 	if (req.GET) return GET(url, req.params).Accept(req.Accept).pipe(res);
+	if (req.SELECT) {
+		if (worker) return res.s403('forbidden').end();
+		gui.selectItem(req.pathd[1]);
+		return res.s204().end();
+	}
 	res.Allow('HEAD, GET');
 	res.s405('bad method').end();
 }

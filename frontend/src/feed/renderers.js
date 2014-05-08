@@ -19,6 +19,7 @@ local.at('#thing-renderer', function(req, res) {
 		res.end(html);
 	});
 });
+
 // Default renderer
 local.at('#about-renderer', function(req, res) {
 	HEAD(req.params.target)
@@ -30,10 +31,6 @@ local.at('#about-renderer', function(req, res) {
 
 			res.s200().ContentType('html');
 			var html = '';
-
-			// :DEBUG:
-			html += '<style>.foo { font-weight: bold }</style>';
-			html += '<p class="foo" style="color: orange; margin-top: -10px">foo!</p>';
 
 			if (selfLink.rel == 'self stdrel.com/media') {
 				var mime = selfLink.type || 'text/plain';
@@ -55,4 +52,9 @@ local.at('#about-renderer', function(req, res) {
 
 			res.end(html);
 		});
+});
+
+// Test renderer
+local.at('#test-renderer', function(req, res) {
+	res.s200().ContentType('html').end('<strong>This renderer does fucking nothing, totally useless.</strong>');
 });

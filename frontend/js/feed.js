@@ -35,7 +35,8 @@ var _cfg = {
 	renderers: local.util.table(
 		['href',           'rel',                'title', 'for'],
 		'#thing-renderer', 'layer1.io/renderer', 'Thing', 'schema.org/Thing',
-		'#about-renderer', 'layer1.io/renderer', 'About', 'stdrel.com/media'
+		'#about-renderer', 'layer1.io/renderer', 'About', 'stdrel.com/media',
+		'#test-renderer',  'layer1.io/renderer', 'Test',  'stdrel.com/media'
 		// rel(contains)stdrel.com/media,type(starts)text(or)application
 		// href(protocol_is)https,href(domain_is)
 	)
@@ -62,15 +63,15 @@ function findRenderers(targetLink, maxMatches) {
 function findRenderer(targetLink) {
 	return findRenderers(targetLink, 1)[0];
 }
-},{"../util":11}],3:[function(require,module,exports){
+},{"../util":10}],3:[function(require,module,exports){
 var sec = require('../security');
 var util = require('../util');
 var feedcfg = require('./feedcfg');
 
 module.exports = {
 	setup: setup,
-	renderMetaFeed: renderMetaFeed,
-	renderSelectionViews: renderSelectionViews
+	render: render,
+	selectItem: selectItem
 };
 
 var _mediaLinks;
@@ -87,10 +88,12 @@ function setup(mediaLinks) {
 	// :DEBUG:
 	$('#toggle-layout').on('click',function() {
 		render(_layout == 'content' ? 'meta' : 'content');
+		return false;
 	});
 }
 
 function render(layout) {
+	if (layout == _layout) return;
 	_layout = layout;
 	switch (_layout) {
 		case 'content':
@@ -99,13 +102,13 @@ function render(layout) {
 			$('#meta-views').hide();
 
 			// setup content view
-			$('#content-views').removeClass('col-xs-3').addClass('col-xs-11');
+			$('#content-views').removeClass('col-xs-3').addClass('col-xs-10');
 			renderContentFeed();
 			break;
 
 		case 'meta':
 			// tear down content view
-			$('#content-views').removeClass('col-xs-11').addClass('col-xs-3');
+			$('#content-views').removeClass('col-xs-10').addClass('col-xs-3');
 
 			// setup meta view
 			$('#meta-views').show();
@@ -113,10 +116,18 @@ function render(layout) {
 			renderMetaFeed();
 
 			// select first item
-			$('.directory-links-list .directory-item-slot:first-child').addClass('selected');
+			if ($('.directory-links-list .directory-item-slot.selected').length === 0) {
+				$('.directory-links-list .directory-item-slot:first-child').addClass('selected');
+			}
 			renderSelectionViews();
 			break;
 	}
+}
+
+function selectItem(index) {
+	$('.directory-links-list .selected').removeClass('selected');
+	$('.directory-links-list .directory-item-slot:nth-child('+index+')').addClass('selected');
+	render('meta');
 }
 
 function renderContentFeed() {
@@ -143,12 +154,12 @@ function renderContentFeed() {
 		var title = util.escapeHTML(mediaLink.title || mediaLink.id || 'Untitled');
 		var $slot =  $(
 			'<div id="slot-'+mediaLinkIndex+'" class="directory-item-slot">'+
-				'<span class="title">'+title+'</span>'+
+				'<a class="title" href="#feed/'+mediaLinkIndex+'" method="SELECT">'+title+'</a>'+
 				'<div id="view-'+mediaLinkIndex+'" class="view" data-view="'+rendererLink.href+'">Loading...</div>'+
 			'</div>'
 		);
 		$list.append($slot);
-		$slot.on('request', onViewRequest);
+		$slot.find('.view').on('request', onViewRequest);
 		_activeRendererLinks[rendererLink.href] = rendererLink;
 
 		var renderRequest = { method: 'GET', url: rendererLink.href, params: { target: '#feed/'+mediaLinkIndex } };
@@ -240,6 +251,7 @@ function onViewRequest(e) {
 	var $view = $(this);
 	var href = $view.data('view');
 	rendererDispatch(e.detail, _activeRendererLinks[href], $view);
+	return false;
 }
 
 function onClickMetaView(e) {
@@ -302,7 +314,7 @@ function rendererDispatch(req, rendererLink, $view) {
 	});
 	return req;
 }
-},{"../security":10,"../util":11,"./feedcfg":2}],4:[function(require,module,exports){
+},{"../security":9,"../util":10,"./feedcfg":2}],4:[function(require,module,exports){
 var globals = require('../globals');
 var util = require('../util');
 var gui = require('./gui');
@@ -311,7 +323,6 @@ var mediaLinks = local.queryLinks(document, 'stdrel.com/media');
 // Environment Setup
 // =================
 local.logAllExceptions = true;
-require('../pagent').setup();
 require('../auth').setup();
 require('../http-headers').setup();
 require('./feedcfg').setup();
@@ -319,6 +330,16 @@ require('./renderers'); // :DEBUG:
 
 // ui
 gui.setup(mediaLinks);
+
+local.bindRequestEvents(document);
+$(document).on('request', function(e) {
+	// dispatch and log
+	var req = new local.Request(e.originalEvent.detail);
+	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
+	req.bufferResponse();
+	req.end(e.originalEvent.detail.body).always(console.log.bind(console, req.headers));
+	return req;
+});
 
 // :TEMP:
 local.at('#todo', function(req, res) { alert('Todo'); res.s204().end(); });
@@ -367,7 +388,7 @@ local.at('#feed/?(.*)', function (req, res, worker) {
 			'/',     undefined, 'service via',               'Host Page',
 			'/feed', 'feed',    'up service layer1.io/feed', 'Current Feed'
 		);
-		serveItem(req, res, link);
+		serveItem(req, res, worker, link);
 	}
 	else {
 		var links = local.util.deepClone(mediaLinks);
@@ -376,7 +397,7 @@ local.at('#feed/?(.*)', function (req, res, worker) {
 			'/',     undefined, 'up service via',              'Host Page',
 			'/feed', 'feed',    'self service layer1.io/feed', 'Current Feed'
 		);
-		serveCollection(req, res, links);
+		serveCollection(req, res, worker, links);
 	}
 });
 
@@ -388,8 +409,7 @@ local.at('#service', function (req, res, worker) {
 });
 
 // collection behavior
-function serveCollection(req, res, links, opts) {
-	opts = opts || {};
+function serveCollection(req, res, worker, links) {
 	var uris = {};
 
 	// set headers
@@ -417,8 +437,7 @@ function serveCollection(req, res, links, opts) {
 }
 
 // item behavior
-function serveItem(req, res, link, opts) {
-	opts = opts || {};
+function serveItem(req, res, worker, link) {
 	// update link references to point to this service
 	var url = link.href;
 	link.rel = 'self '+link.rel;
@@ -431,6 +450,11 @@ function serveItem(req, res, link, opts) {
 	// route method
 	if (req.HEAD) return res.s204().end();
 	if (req.GET) return GET(url, req.params).Accept(req.Accept).pipe(res);
+	if (req.SELECT) {
+		if (worker) return res.s403('forbidden').end();
+		gui.selectItem(req.pathd[1]);
+		return res.s204().end();
+	}
 	res.Allow('HEAD, GET');
 	res.s405('bad method').end();
 }
@@ -445,7 +469,7 @@ function extractActId(req) {
 
 	return +parts[1] || false;
 }
-},{"../auth":1,"../globals":6,"../http-headers":7,"../pagent":8,"../util":11,"./feedcfg":2,"./gui":3,"./renderers":5}],5:[function(require,module,exports){
+},{"../auth":1,"../globals":6,"../http-headers":7,"../util":10,"./feedcfg":2,"./gui":3,"./renderers":5}],5:[function(require,module,exports){
 var util = require('../util');
 
 // Thing renderer
@@ -467,6 +491,7 @@ local.at('#thing-renderer', function(req, res) {
 		res.end(html);
 	});
 });
+
 // Default renderer
 local.at('#about-renderer', function(req, res) {
 	HEAD(req.params.target)
@@ -478,10 +503,6 @@ local.at('#about-renderer', function(req, res) {
 
 			res.s200().ContentType('html');
 			var html = '';
-
-			// :DEBUG:
-			html += '<style>.foo { font-weight: bold }</style>';
-			html += '<p class="foo" style="color: orange; margin-top: -10px">foo!</p>';
 
 			if (selfLink.rel == 'self stdrel.com/media') {
 				var mime = selfLink.type || 'text/plain';
@@ -504,7 +525,12 @@ local.at('#about-renderer', function(req, res) {
 			res.end(html);
 		});
 });
-},{"../util":11}],6:[function(require,module,exports){
+
+// Test renderer
+local.at('#test-renderer', function(req, res) {
+	res.s200().ContentType('html').end('<strong>This renderer does fucking nothing, totally useless.</strong>');
+});
+},{"../util":10}],6:[function(require,module,exports){
 var hostClient = local.client(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
@@ -545,42 +571,6 @@ function setup() {
 	);
 }
 },{}],8:[function(require,module,exports){
-// Page Agent (PAgent)
-// ===================
-// Standard page behaviors
-var util = require('./util');
-
-function setup() {
-	// Request events
-	try { local.bindRequestEvents(document.body); }
-	catch (e) { console.error('Failed to bind body request events.', e); }
-	document.body.addEventListener('request', function(e) {
-		console.log('toplevel request event', e); // :TODO:
-		dispatchRequest(e.detail);
-	});
-}
-
-function dispatchRequest(req, $region, $target) {
-	var body = req.body; delete req.body;
-
-	req = new local.Request(req);
-	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
-
-	// Relative link? Make absolute
-	if (!local.isAbsUri(req.headers.url)) {
-		var baseurl = (window.location.protocol + '//' + window.location.host);
-		req.headers.url = local.joinUri(baseurl, req.headers.url);
-	}
-
-	return local.dispatch(req).end(body);
-}
-
-
-module.exports = {
-	setup: setup,
-	dispatchRequest: dispatchRequest
-};
-},{"./util":11}],9:[function(require,module,exports){
 // Policies for HTML rendered from untrusted sources
 var policies = {
 
@@ -714,7 +704,7 @@ var policies = {
 	}
 };
 module.exports = policies;
-},{"./security":10}],10:[function(require,module,exports){
+},{"./security":9}],9:[function(require,module,exports){
 var policies = require('./security-policies');
 
 module.exports = {
@@ -1015,7 +1005,7 @@ function removeUnsafeRules(ast, propertyPolicy, valuePolicy) {
 		});
 	});
 }
-},{"./security-policies":9}],11:[function(require,module,exports){
+},{"./security-policies":8}],10:[function(require,module,exports){
 var globals = require('./globals');
 
 var lbracket_regex = /</g;

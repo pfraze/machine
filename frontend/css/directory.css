@@ -1,19 +1,7 @@
 h1 { color: #808080; }
 a { text-decoration: underline; }
 
-.addlink-panel { position: fixed; top: 0; z-index: 1; margin-left: -10px; min-width: 280px; box-shadow: none; background: #fff; border-radius: 0; border: 0; }
-.addlink-panel input { background: #FDFCF6 }
-.addlink-panel button { margin: 10px 0 0 0; }
-.fetch-result { margin: 15px 0 0 0; }
-
-.nav-tabs,
-.nav-tabs > li > a,
-.nav-tabs > li.active > a,
-.nav-tabs > li.active > a:hover,
-.nav-tabs > li.active > a:focus { border: 0; border-radius: 0; }
-.nav-tabs > li.active > a { text-decoration: none; }
-
-.container { margin-top: 100px; }
+.layer1-startbar { padding: 10px 0; }
 
 /*.directory-links-list { border-bottom: 1px solid #ccc; }*/
 .directory-time { margin-top: 18px; font-size: 11px; color: #aaa; }

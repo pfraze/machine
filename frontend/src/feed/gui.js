@@ -4,8 +4,8 @@ var feedcfg = require('./feedcfg');
 
 module.exports = {
 	setup: setup,
-	renderMetaFeed: renderMetaFeed,
-	renderSelectionViews: renderSelectionViews
+	render: render,
+	selectItem: selectItem
 };
 
 var _mediaLinks;
@@ -22,10 +22,12 @@ function setup(mediaLinks) {
 	// :DEBUG:
 	$('#toggle-layout').on('click',function() {
 		render(_layout == 'content' ? 'meta' : 'content');
+		return false;
 	});
 }
 
 function render(layout) {
+	if (layout == _layout) return;
 	_layout = layout;
 	switch (_layout) {
 		case 'content':
@@ -34,13 +36,13 @@ function render(layout) {
 			$('#meta-views').hide();
 
 			// setup content view
-			$('#content-views').removeClass('col-xs-3').addClass('col-xs-11');
+			$('#content-views').removeClass('col-xs-3').addClass('col-xs-10');
 			renderContentFeed();
 			break;
 
 		case 'meta':
 			// tear down content view
-			$('#content-views').removeClass('col-xs-11').addClass('col-xs-3');
+			$('#content-views').removeClass('col-xs-10').addClass('col-xs-3');
 
 			// setup meta view
 			$('#meta-views').show();
@@ -48,10 +50,18 @@ function render(layout) {
 			renderMetaFeed();
 
 			// select first item
-			$('.directory-links-list .directory-item-slot:first-child').addClass('selected');
+			if ($('.directory-links-list .directory-item-slot.selected').length === 0) {
+				$('.directory-links-list .directory-item-slot:first-child').addClass('selected');
+			}
 			renderSelectionViews();
 			break;
 	}
+}
+
+function selectItem(index) {
+	$('.directory-links-list .selected').removeClass('selected');
+	$('.directory-links-list .directory-item-slot:nth-child('+index+')').addClass('selected');
+	render('meta');
 }
 
 function renderContentFeed() {
@@ -78,12 +88,12 @@ function renderContentFeed() {
 		var title = util.escapeHTML(mediaLink.title || mediaLink.id || 'Untitled');
 		var $slot =  $(
 			'<div id="slot-'+mediaLinkIndex+'" class="directory-item-slot">'+
-				'<span class="title">'+title+'</span>'+
+				'<a class="title" href="#feed/'+mediaLinkIndex+'" method="SELECT">'+title+'</a>'+
 				'<div id="view-'+mediaLinkIndex+'" class="view" data-view="'+rendererLink.href+'">Loading...</div>'+
 			'</div>'
 		);
 		$list.append($slot);
-		$slot.on('request', onViewRequest);
+		$slot.find('.view').on('request', onViewRequest);
 		_activeRendererLinks[rendererLink.href] = rendererLink;
 
 		var renderRequest = { method: 'GET', url: rendererLink.href, params: { target: '#feed/'+mediaLinkIndex } };
@@ -175,6 +185,7 @@ function onViewRequest(e) {
 	var $view = $(this);
 	var href = $view.data('view');
 	rendererDispatch(e.detail, _activeRendererLinks[href], $view);
+	return false;
 }
 
 function onClickMetaView(e) {
