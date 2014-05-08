@@ -34,6 +34,7 @@ function render(layout) {
 			// tear down meta view
 			$(document.body).off('click', onClickMetaView);
 			$('#meta-views').hide();
+			$('#toggle-layout').css('visibility', 'hidden'); // :DEBUG:
 
 			// setup content view
 			$('#content-views').removeClass('col-xs-3').addClass('col-xs-10');
@@ -46,6 +47,7 @@ function render(layout) {
 
 			// setup meta view
 			$('#meta-views').show();
+			$('#toggle-layout').css('visibility', 'visible'); // :DEBUG:
 			$(document.body).on('click', onClickMetaView);
 			renderMetaFeed();
 
