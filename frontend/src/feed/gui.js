@@ -97,7 +97,7 @@ function renderListViews() {
 		var title = util.escapeHTML(mediaLink.title || mediaLink.id || prettyHref(mediaLink.href));
 		var $slot =  $(
 			'<div id="slot-'+mediaLinkIndex+'" class="directory-item-slot">'+
-				'<a class="title" method="VIEW" href="#gui?url='+mediaLink.href+'">'+title+'</a>'+
+				'<a class="title" method="VIEW" href="#gui?url='+mediaLink.href+'"><b class="glyphicon glyphicon-file"></b>'+title+'</a>'+
 				'<div id="view-'+mediaLinkIndex+'" class="view" data-view="'+rendererLink.href+'">Loading...</div>'+
 			'</div>'
 		);

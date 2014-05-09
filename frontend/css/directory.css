@@ -1,8 +1,8 @@
 h1 { color: #808080; }
 a { text-decoration: underline; }
 
-.nav { padding: 10px 0; }
-.layer1-startbar { padding: 10px 0; }
+.nav { margin: 10px 0; }
+.layer1-startbar { margin: 10px 0; }
 
 /*.directory-links-list { border-bottom: 1px solid #ccc; }*/
 .directory-time { margin-top: 18px; font-size: 11px; color: #aaa; }
