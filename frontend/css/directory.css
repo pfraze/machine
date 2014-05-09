@@ -1,6 +1,7 @@
 h1 { color: #808080; }
 a { text-decoration: underline; }
 
+.nav { padding: 10px 0; }
 .layer1-startbar { padding: 10px 0; }
 
 /*.directory-links-list { border-bottom: 1px solid #ccc; }*/

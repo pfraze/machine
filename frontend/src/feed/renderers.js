@@ -57,5 +57,5 @@ local.at('#about-renderer', function(req, res) {
 
 // Test renderer
 local.at('#test-renderer', function(req, res) {
-	res.s200().ContentType('html').end('<strong>This renderer does fucking nothing, totally useless.</strong>');
+	res.s200().ContentType('html').end('<strong>This renderer does fucking nothing, totally useless.</strong><br><img src=/img/Turkish_Van_Cat.jpg>');
 });

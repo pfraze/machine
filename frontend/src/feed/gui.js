@@ -59,6 +59,7 @@ function render(mode, opts) {
 	case 'list':
 		// tear down item mode
 		$('#item-views').hide();
+        $('.reset-layout').hide();
 
 		// setup list mode
 		$('#list-views').show();
@@ -71,6 +72,7 @@ function render(mode, opts) {
 
 		// setup item mode
 		$('#item-views').show();
+        $('.reset-layout').show();
         _itemModeUrl = opts.url;
         if (_itemModeUrl.indexOf(window.location.origin) === 0) {
             // current host, fetch directly

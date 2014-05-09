@@ -144,6 +144,7 @@ function render(mode, opts) {
 	case 'list':
 		// tear down item mode
 		$('#item-views').hide();
+        $('.reset-layout').hide();
 
 		// setup list mode
 		$('#list-views').show();
@@ -156,6 +157,7 @@ function render(mode, opts) {
 
 		// setup item mode
 		$('#item-views').show();
+        $('.reset-layout').show();
         _itemModeUrl = opts.url;
         if (_itemModeUrl.indexOf(window.location.origin) === 0) {
             // current host, fetch directly
@@ -579,7 +581,7 @@ local.at('#about-renderer', function(req, res) {
 
 // Test renderer
 local.at('#test-renderer', function(req, res) {
-	res.s200().ContentType('html').end('<strong>This renderer does fucking nothing, totally useless.</strong>');
+	res.s200().ContentType('html').end('<strong>This renderer does fucking nothing, totally useless.</strong><br><img src=/img/Turkish_Van_Cat.jpg>');
 });
 },{"../util":12}],8:[function(require,module,exports){
 var hostClient = local.client(window.location.protocol + '//' + window.location.host);
