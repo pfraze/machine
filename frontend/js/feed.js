@@ -31,10 +31,11 @@ function add(url, req) {
     _requests[url] = req;
 }
 
-function respond(url, res) {
+function respond(url, res, isHEAD) {
     var req = _requests[url];
     if (!req) return false;
-    req.pipe(res);
+    var dropBody = function() { return ''; };
+    req.pipe(res, null, (isHEAD) ? dropBody : null);
     return true;
 }
         
@@ -508,7 +509,7 @@ local.at('#(https?://.*)', function(req, res, worker) {
 
     // try the cache
     if (req.HEAD || req.GET) {
-        if (cache.respond(req.pathd[1], res)) {
+        if (cache.respond(req.pathd[1], res, req.HEAD)) {
             return;
         }
     }

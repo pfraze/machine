@@ -6,7 +6,7 @@ local.at('#(https?://.*)', function(req, res, worker) {
 
     // try the cache
     if (req.HEAD || req.GET) {
-        if (cache.respond(req.pathd[1], res)) {
+        if (cache.respond(req.pathd[1], res, req.HEAD)) {
             return;
         }
     }
