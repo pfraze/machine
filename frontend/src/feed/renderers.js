@@ -23,6 +23,7 @@ local.at('#thing-renderer', function(req, res) {
 // Default renderer
 local.at('#about-renderer', function(req, res) {
 	HEAD(req.params.target)
+        .forceLocal()
 		.always(function(res2) {
 			var selfLink = res2.links.first('self');
 			if (!selfLink) {

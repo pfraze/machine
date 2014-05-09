@@ -24,7 +24,7 @@
     <div class="container">
       <div class="row">
         <div class="col-xs-2 align-right">
-          <p><a href="#" id="toggle-layout">deselect</a></p>
+          <p><a href="#" class="reset-layout">history</a></p>
           <ul class="nav nav-pills nav-stacked">
             <li class="active"><a href="#">Unfiltered</a></li>
             <li><a href="#">GitHub</a></li>
@@ -33,13 +33,13 @@
             <li><a href="#">Layer1.io</a></li>
           </ul>
         </div>
-        <div id="content-views" class="col-xs-3">
-          <form class="form layer1-startbar" role="form">
-            <input type="url" class="form-control" id="url-input" placeholder="Enter URL">
+        <div id="content-views" class="col-xs-10">
+          <form class="form layer1-startbar" role="form" action="#gui" method="VIEW">
+            <input type="text" class="form-control" id="url-input" placeholder="Enter URL" name="url">
           </form>
-          <div class="directory-links-list"></div>
+          <div id="list-views" class="directory-links-list"></div>
+          <div id="item-views" class="directory-links-list"></div>
         </div>
-        <div id="meta-views" class="col-xs-7"></div>
       </div>
     </div>
 

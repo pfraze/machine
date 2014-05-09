@@ -1,4 +1,4 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+;(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 var globals = require('./globals');
 
 module.exports = {
@@ -20,7 +20,25 @@ module.exports = {
 		}
 	}
 };
-},{"./globals":6}],2:[function(require,module,exports){
+},{"./globals":8}],2:[function(require,module,exports){
+var _requests = {};
+module.exports = {
+    add: add,
+    respond: respond
+};
+
+function add(url, req) {
+    _requests[url] = req;
+}
+
+function respond(url, res) {
+    var req = _requests[url];
+    if (!req) return false;
+    req.pipe(res);
+    return true;
+}
+        
+},{}],3:[function(require,module,exports){
 var util = require('../util');
 
 module.exports = {
@@ -63,100 +81,105 @@ function findRenderers(targetLink, maxMatches) {
 function findRenderer(targetLink) {
 	return findRenderers(targetLink, 1)[0];
 }
-},{"../util":10}],3:[function(require,module,exports){
+},{"../util":12}],4:[function(require,module,exports){
 var sec = require('../security');
 var util = require('../util');
 var feedcfg = require('./feedcfg');
+var cache = require('./cache');
 
 module.exports = {
 	setup: setup,
-	render: render,
-	selectItem: selectItem
+	render: render
 };
 
 var _mediaLinks;
 var _activeRendererLinks;
-var _layout; // meta: titles on left, selected item renders views on right
-             // content: views are rendered in a vertical stack
+var _mode;/*
+_mode = "list";  // rendering all items with 1 view each
+_mode = "item";  // 1 item in "context," rendering views on right
+*/
+var _itemModeUrl; // target of the item mode
+var _itemReq; // current item - a request
 var _sortReversed; // chronological or reverse-chrono?
 function setup(mediaLinks) {
 	_mediaLinks = mediaLinks;
 	_activeRendererLinks = null;
 	_sortReversed = true; // default newest to oldest
-	render('content'); // default show content inline
+	render('list'); // rendering all items with 1 view each
 
 	// :DEBUG:
-	$('#toggle-layout').on('click',function() {
-		render(_layout == 'content' ? 'meta' : 'content');
+	$('.reset-layout').on('click',function() {
+		render('list');
 		return false;
 	});
 }
 
-function render(layout) {
-	if (layout == _layout) return;
-	_layout = layout;
-	switch (_layout) {
-		case 'content':
-			// tear down meta view
-			$(document.body).off('click', onClickMetaView);
-			$('#meta-views').hide();
-			$('#toggle-layout').css('visibility', 'hidden'); // :DEBUG:
+// VWeb server.
+// 
+local.at('#gui', function(req, res, worker) {
+    if (worker) return res.s403('forbidden').end();
 
-			// setup content view
-			$('#content-views').removeClass('col-xs-3').addClass('col-xs-10');
-			renderContentFeed();
-			break;
+    if (req.VIEW) {
+        return req.buffer(function() {
+            // Check we got a URL
+            var url = req.params.url || req.body.url;
+            if (!url) {
+                return res.s400('`url` required in params or json').end();
+            }
 
-		case 'meta':
-			// tear down content view
-			$('#content-views').removeClass('col-xs-10').addClass('col-xs-3');
+            // Switch into item mode
+            render('item', { url: url });
+            return res.s204().end();
+        });
+    }
+    res.Allow('VIEW');
+    res.s405('bad method').end();
+});
 
-			// setup meta view
-			$('#meta-views').show();
-			$('#toggle-layout').css('visibility', 'visible'); // :DEBUG:
-			$(document.body).on('click', onClickMetaView);
-			renderMetaFeed();
+function render(mode, opts) {
+    opts = opts || {};
+	_mode = mode;
+	switch (_mode) {
+	case 'list':
+		// tear down item mode
+		$('#item-views').hide();
 
-			// select first item
-			if ($('.directory-links-list .directory-item-slot.selected').length === 0) {
-				$('.directory-links-list .directory-item-slot:first-child').addClass('selected');
-			}
-			renderSelectionViews();
-			break;
+		// setup list mode
+		$('#list-views').show();
+		renderListViews();
+		break;
+
+	case 'item':
+		// tear down list mode
+		$('#list-views').hide();
+
+		// setup item mode
+		$('#item-views').show();
+        _itemModeUrl = opts.url;
+        if (_itemModeUrl.indexOf(window.location.origin) === 0) {
+            // current host, fetch directly
+            _itemReq = GET(_itemModeUrl);
+        } else {
+            // public web, use fetch proxy
+            _itemReq = GET(window.location.host + '/.fetch', { url: _itemModeUrl });
+        }
+        _itemReq.Accept('application/json, text/html, */*');
+        cache.add(opts.url, _itemReq);
+		renderItemViews();
+		break;
 	}
 }
 
-function selectItem(index) {
-	$('.directory-links-list .selected').removeClass('selected');
-	$('.directory-links-list .directory-item-slot:nth-child('+index+')').addClass('selected');
-	render('meta');
-}
-
-function renderContentFeed() {
-	var $list = $('.directory-links-list');
+function renderListViews() {
+	var $list = $('#list-views');
 	$list.empty(); // clear out
-
-	var lastDate = new Date(0);
-	function renderDateLine(mediaLink) {
-		var then = new Date(+mediaLink.created_at);
-		if (isNaN(then.valueOf())) then = lastDate;
-
-		if (then.getDay() != lastDate.getDay() || (lastDate.getYear() == 69 && then.getYear() != 69)) {
-			// add date entry
-			$list.append(
-				'<div class="directory-time">'+
-					then.getFullYear()+'/'+(then.getMonth()+1)+'/'+then.getDate()+
-				'</div>'
-			);
-		}
-		lastDate = then;
-	}
+    $('#url-input').val('');
 
 	function renderView(mediaLinkIndex, mediaLink, rendererLink) {
 		var title = util.escapeHTML(mediaLink.title || mediaLink.id || prettyHref(mediaLink.href));
 		var $slot =  $(
 			'<div id="slot-'+mediaLinkIndex+'" class="directory-item-slot">'+
-				'<a class="title" href="#feed/'+mediaLinkIndex+'" method="SELECT">'+title+'</a>'+
+				'<a class="title" method="VIEW" href="#gui?url='+mediaLink.href+'">'+title+'</a>'+
 				'<div id="view-'+mediaLinkIndex+'" class="view" data-view="'+rendererLink.href+'">Loading...</div>'+
 			'</div>'
 		);
@@ -174,74 +197,92 @@ function renderContentFeed() {
 		var mediaLink = _mediaLinks[mediaLinkIndex];
 		var rendererLink = feedcfg.findRenderer(mediaLink);
 
-		renderDateLine(rendererLink);
 		renderView(mediaLinkIndex, mediaLink, rendererLink);
 	}
 }
 
-function renderMetaFeed() {
-	var $list = $('.directory-links-list');
-	$list.empty(); // clear out
+function renderItemViews() {
+    var itemUri = _itemModeUrl; // the views need to read from the right uri, so capture it now to account for possible state-changes during the async
+	var $views = $('#item-views');
+	$views.html('<h3>Fetching...</h3>');
+    $('#url-input').val(itemUri);
+    _itemReq
+        .then(function(res) {
+            var mediaLink = res.links.first('self');
+            var linkIsAdded = false;
+            if (!mediaLink) {
+                mediaLink = {};
+                res.links.push(mediaLink);
+                linkIsAdded = true;
+            }
 
-	var lastDate = new Date(0);
-	function renderDateLine(mediaLink) {
-		var then = new Date(+mediaLink.created_at);
-		if (isNaN(then.valueOf())) then = lastDate;
+            // Defaults
+            if (!mediaLink.href) {
+                mediaLink.href = itemUri;
+            }
+            if (!mediaLink.rel) mediaLink.rel = '';
+            if (!local.queryLink(mediaLink, 'self')) {
+                mediaLink.rel = 'self ' + mediaLink.rel;
+            }
+            if (!local.queryLink(mediaLink, 'stdrel.com/media')) {
+                mediaLink.rel = 'stdrel.com/media ' + mediaLink.rel;
+            }
 
-		if (then.getDay() != lastDate.getDay() || (lastDate.getYear() == 69 && then.getYear() != 69)) {
-			// add date entry
-			$list.append(
-				'<div class="directory-time">'+
-					then.getFullYear()+'/'+(then.getMonth()+1)+'/'+then.getDate()+
-				'</div>'
-			);
-		}
-		lastDate = then;
-	}
+            // Try to establish the mimetype
+            if (!mediaLink.type) {
+                var mimeType = res.ContentType;
+                if (!mimeType) {
+                    mimeType = mimetypes.lookup(url) || 'application/octet-stream';
+                }
+                var semicolonIndex = mimeType.indexOf(';');
+                if (semicolonIndex !== -1) {
+                    mimeType = mimeType.slice(0, semicolonIndex); // strip the charset
+                }
+                mediaLink.type = mimeType;
+            }
 
-	function renderView(mediaLinkIndex, mediaLink, rendererLink) {
-		var title = util.escapeHTML(mediaLink.title || mediaLink.id || prettyHref(mediaLink.href));
-		$list.append('<div id="slot-'+mediaLinkIndex+'" class="directory-item-slot"><span class="title">'+title+'</span></div>');
-	}
+            // Now that link is settled, add to headers if needed
+            if (linkIsAdded) {
+                if (typeof res.Link == 'string') {
+                    res.Link = local.httpHeaders.serialize('link', [mediaLink]) + ((res.Link)?(','+res.Link):'');
+                } else {
+                    if (!res.Link)
+                        res.Link = [];
+                    res.Link.push(mediaLink);
+                }
+            }
+           
 
-	for (var i = 0; i < _mediaLinks.length; i++) {
-		var mediaLinkIndex = (_sortReversed) ? (_mediaLinks.length - i - 1) : i;
-		var mediaLink = _mediaLinks[mediaLinkIndex];
-		var rendererLink = feedcfg.findRenderer(mediaLink);
+	        // Gather views for the item
+	        _activeRendererLinks = {};
+	        var matches = feedcfg.findRenderers(mediaLink);
+	        for (var j=0; j < matches.length; j++) {
+		        _activeRendererLinks[matches[j].href] = matches[j];
+	        }
 
-		renderDateLine(rendererLink);
-		renderView(mediaLinkIndex, mediaLink, rendererLink);
-	}
-}
+	        // Create view spaces
+	        var i = 0;
+            $views.empty();
+	        for (var href in _activeRendererLinks) {
+		        var rendererLink = _activeRendererLinks[href];
 
-function renderSelectionViews() {
-	// Get selected item
-	var $sel = $('.directory-links-list .selected');
-	var mediaLinkIndex = $sel[0].id.slice(5);
-	var mediaLink = _mediaLinks[mediaLinkIndex];
-	if (!mediaLink) { console.error('Media link not found for selection'); return; }
+		        var $view = createViewEl(rendererLink);
+		        $views.append($view);
+		        $view.on('request', onViewRequest);
 
-	// Gather views for the selection
-	_activeRendererLinks = {};
-	var matches = feedcfg.findRenderers(mediaLink);
-	for (var j=0; j < matches.length; j++) {
-		_activeRendererLinks[matches[j].href] = matches[j];
-	}
-
-	// Create view spaces
-	var $views = $('#meta-views');
-	$views.empty();
-	var i = 0;
-	for (var href in _activeRendererLinks) {
-		var rendererLink = _activeRendererLinks[href];
-
-		var $view = createViewEl(rendererLink);
-		$views.append($view);
-		$view.on('request', onViewRequest);
-
-		var renderRequest = { method: 'GET', url: href, params: { target: '#feed/'+mediaLinkIndex } };
-		rendererDispatch(renderRequest, rendererLink, $view);
-	}
+                // :TODO: give plan token in a header to allow the fetch
+		        var renderRequest = { method: 'GET', url: href, params: { target: itemUri } };
+                // ^ we pass the original item uri as the target, and workers will automatically prepend a #-sign to send it to the vweb
+		        rendererDispatch(renderRequest, rendererLink, $view);
+	        }
+        })
+        .fail(function(res) {
+            if (res instanceof local.IncomingResponse) {
+                $views.html('<h4>Error: '+util.escapeHTML(res.status||0)+' '+util.escapeHTML(res.reason||'')+'</h4>');
+            } else {
+                $views.html('<h4>Error: '+res.toString()+'</h4>');
+            }
+        });
 }
 
 // create div for view
@@ -253,21 +294,6 @@ function onViewRequest(e) {
 	var $view = $(this);
 	var href = $view.data('view');
 	rendererDispatch(e.detail, _activeRendererLinks[href], $view);
-	return false;
-}
-
-function onClickMetaView(e) {
-	if (_layout != 'meta')
-		return; // only applies to meta view
-
-	// select slot if target is a slot
-	var slotEl = local.util.findParentNode.byClass(e.target, 'directory-item-slot');
-	if (slotEl) {
-		$('.directory-links-list .selected').removeClass('selected');
-		slotEl.classList.add('selected');
-
-		renderSelectionViews();
-	}
 	return false;
 }
 
@@ -322,7 +348,7 @@ function prettyHref(href) {
 	var hrefd = local.parseUri(href);
 	return hrefd.authority + hrefd.relative;
 }
-},{"../security":9,"../util":10,"./feedcfg":2}],4:[function(require,module,exports){
+},{"../security":11,"../util":12,"./cache":2,"./feedcfg":3}],5:[function(require,module,exports){
 var globals = require('../globals');
 var util = require('../util');
 var gui = require('./gui');
@@ -344,14 +370,12 @@ $(document).on('request', function(e) {
 	// dispatch and log
 	var req = new local.Request(e.originalEvent.detail);
 	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
-	req.bufferResponse();
-	req.end(e.originalEvent.detail.body).always(console.log.bind(console, req.headers));
-	return req;
+	req.end(e.originalEvent.detail.body);
+	return false;
 });
 
 // :TEMP:
 local.at('#todo', function(req, res) { alert('Todo'); res.s204().end(); });
-
 
 // server starting-point
 function auth(req, res, worker) {
@@ -381,6 +405,9 @@ local.at('#', function (req, res, worker) {
 	);
 	res.s204().end();
 });
+
+// public web servers
+require('./publicweb.js');
 
 // feed items
 local.at('#feed/?(.*)', function (req, res, worker) {
@@ -458,11 +485,6 @@ function serveItem(req, res, worker, link) {
 	// route method
 	if (req.HEAD) return res.s204().end();
 	if (req.GET) return GET(url, req.params).Accept(req.Accept).pipe(res);
-	if (req.SELECT) {
-		if (worker) return res.s403('forbidden').end();
-		gui.selectItem(req.pathd[1]);
-		return res.s204().end();
-	}
 	res.Allow('HEAD, GET');
 	res.s405('bad method').end();
 }
@@ -477,7 +499,26 @@ function extractActId(req) {
 
 	return +parts[1] || false;
 }
-},{"../auth":1,"../globals":6,"../http-headers":7,"../util":10,"./feedcfg":2,"./gui":3,"./renderers":5}],5:[function(require,module,exports){
+},{"../auth":1,"../globals":8,"../http-headers":9,"../util":12,"./feedcfg":3,"./gui":4,"./publicweb.js":6,"./renderers":7}],6:[function(require,module,exports){
+var cache = require('./cache');
+
+// proxy to http/s
+local.at('#(https?://.*)', function(req, res, worker) {
+    // :TODO: perms
+
+    // try the cache
+    if (req.HEAD || req.GET) {
+        if (cache.respond(req.pathd[1], res)) {
+            return;
+        }
+    }
+
+    // :TODO: targets-cache
+    var req2 = local.dispatch({ method: req.method, url: req.pathd[1] });
+    req.pipe(req2);
+    req2.pipe(res);
+});
+},{"./cache":2}],7:[function(require,module,exports){
 var util = require('../util');
 
 // Thing renderer
@@ -503,6 +544,7 @@ local.at('#thing-renderer', function(req, res) {
 // Default renderer
 local.at('#about-renderer', function(req, res) {
 	HEAD(req.params.target)
+        .forceLocal()
 		.always(function(res2) {
 			var selfLink = res2.links.first('self');
 			if (!selfLink) {
@@ -538,7 +580,7 @@ local.at('#about-renderer', function(req, res) {
 local.at('#test-renderer', function(req, res) {
 	res.s200().ContentType('html').end('<strong>This renderer does fucking nothing, totally useless.</strong>');
 });
-},{"../util":10}],6:[function(require,module,exports){
+},{"../util":12}],8:[function(require,module,exports){
 var hostClient = local.client(window.location.protocol + '//' + window.location.host);
 window.globals = module.exports = {
 	session: {
@@ -551,7 +593,7 @@ window.globals = module.exports = {
 	meClient:         hostClient.item('.me'),
 	fetchProxyClient: hostClient.service('.fetch'),
 };
-},{}],7:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 module.exports = { setup: setup };
 function setup() {
 	local.httpHeaders.register('pragma',
@@ -578,7 +620,7 @@ function setup() {
 		}
 	);
 }
-},{}],8:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 // Policies for HTML rendered from untrusted sources
 var policies = {
 
@@ -712,7 +754,7 @@ var policies = {
 	}
 };
 module.exports = policies;
-},{"./security":9}],9:[function(require,module,exports){
+},{"./security":11}],11:[function(require,module,exports){
 var policies = require('./security-policies');
 
 module.exports = {
@@ -1013,7 +1055,7 @@ function removeUnsafeRules(ast, propertyPolicy, valuePolicy) {
 		});
 	});
 }
-},{"./security-policies":8}],10:[function(require,module,exports){
+},{"./security-policies":10}],12:[function(require,module,exports){
 var globals = require('./globals');
 
 var lbracket_regex = /</g;
@@ -1186,4 +1228,5 @@ module.exports = {
 	fetch: fetch,
 	fetchMeta: function(url) { return fetch(url, true); }
 };
-},{"./globals":6}]},{},[4])
+},{"./globals":8}]},{},[5])
+;

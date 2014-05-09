@@ -67,8 +67,11 @@ var importScriptsPatch_src = [ // patches importScripts() to allow relative path
 ].join('\n');
 
 module.exports = {
+    logTraffic: true,
 	logAllExceptions: false,
     maxActiveWorkers: 10,
+    virtualOnly: (typeof self.window == 'undefined') ? true : false,
+    localOnly: (typeof self.window == 'undefined') ? true : false,
 	workerBootstrapScript: whitelistAPIs_src+importScriptsPatch_src
 };
 },{}],2:[function(require,module,exports){
@@ -86,6 +89,8 @@ var util = require('./util');
 module.exports = {
 	Request: require('./web/request.js'),
 	Response: require('./web/response.js'),
+	IncomingRequest: require('./web/incoming-request.js'),
+	IncomingResponse: require('./web/incoming-response.js'),
 	Bridge: require('./web/bridge.js'),
 	UriTemplate: require('./web/uri-template.js'),
 
@@ -150,7 +155,7 @@ if (global) {
 
 // Run worker setup (does nothing outside of a worker)
 require('./worker');
-},{"./config.js":1,"./constants.js":2,"./promises.js":4,"./request-event.js":5,"./util":8,"./web/bridge.js":9,"./web/client.js":10,"./web/content-types.js":11,"./web/helpers.js":12,"./web/http-headers.js":13,"./web/httpl.js":14,"./web/request.js":17,"./web/response.js":18,"./web/schemes.js":19,"./web/subscribe.js":20,"./web/uri-template.js":21,"./web/workers.js":22,"./worker":23}],4:[function(require,module,exports){
+},{"./config.js":1,"./constants.js":2,"./promises.js":4,"./request-event.js":5,"./util":8,"./web/bridge.js":9,"./web/client.js":10,"./web/content-types.js":11,"./web/helpers.js":12,"./web/http-headers.js":13,"./web/httpl.js":14,"./web/incoming-request.js":15,"./web/incoming-response.js":16,"./web/request.js":17,"./web/response.js":18,"./web/schemes.js":19,"./web/subscribe.js":20,"./web/uri-template.js":21,"./web/workers.js":22,"./worker":23}],4:[function(require,module,exports){
 var localConfig = require('./config.js');
 var util = require('./util');
 
@@ -1248,7 +1253,7 @@ Bridge.prototype.onMessage = function(msg) {
 		});
 
         // Fire handler
-        handler(ireq, ores);
+        handler(ireq, ores, this.channel);
 	}
 
 	// Pipe received data into stream
@@ -2940,6 +2945,7 @@ var promises = require('../promises.js');
 var helpers = require('./helpers.js');
 var schemes = require('./schemes.js');
 var contentTypes = require('./content-types.js');
+var Response = require('./response.js');
 var IncomingResponse = require('./incoming-response.js');
 
 // Request
@@ -2960,6 +2966,7 @@ function Request(headers, originChannel) {
 	this.originChannel = originChannel;
 	this.isBinary = false; // stream is binary?
 	this.isVirtual = undefined; // request going to virtual host?
+    this.isForcedLocal = local.localOnly; // forcing request to be local?
 	this.isBufferingResponse = false; // auto-buffering the response?
 
 	// Stream state
@@ -3049,6 +3056,17 @@ Request.prototype.setVirtual = function(v) {
 	return this;
 };
 
+// Forced local
+// instructs the request to prepend a '#' if needed
+Request.prototype.forceLocal = function(v) {
+	if (typeof v == 'boolean') {
+		this.isForcedLocal = v;
+	} else {
+		this.isForcedLocal = true;
+	}
+	return this;
+};
+
 // Response buffering
 // instructs the request to auto-buffer the response body and set it to `res.body`
 Request.prototype.bufferResponse = function(v) {
@@ -3093,6 +3111,15 @@ Request.prototype.start = function() {
 		// if not forced, decide on whether this is virtual based on the presence of a hash
 		this.isVirtual = (this.headers.url.indexOf('#') !== -1);
 	}
+    if (local.virtualOnly && !this.isVirtual) {
+        // if virtual only, force
+        this.isVirtual = true;
+    }
+    if (this.isForcedLocal && this.headers.url.charAt(0) !== '#') {
+        // if local only, force
+        this.headers.url = '#' + this.headers.url;
+        this.isVirtual = true;
+    }
 	this.urld = helpers.parseUri(this.headers.url);
 
 	// Setup response object
@@ -3170,14 +3197,19 @@ Request.prototype.close = function() {
 
 // helper
 // fulfills/reject a promise for a response with the given response
-function fulfillResponsePromise(p, response) {
+function fulfillResponsePromise(req, res) {
+    // log if logging
+    if (local.logTraffic) {
+        console.log(req.headers, res);
+    }
+    
 	// wasnt streaming, fulfill now that full response is collected
-	if (response.status >= 200 && response.status < 400)
-		p.fulfill(response);
-	else if (response.status >= 400 && response.status < 600 || response.status === 0)
-		p.reject(response);
+	if (res.status >= 200 && res.status < 400)
+		req.fulfill(res);
+	else if (res.status >= 400 && res.status < 600 || res.status === 0)
+		req.reject(res);
 	else
-		p.fulfill(response); // :TODO: 1xx protocol handling
+		req.fulfill(res); // :TODO: 1xx protocol handling
 }
 
 // helper - extracts scheme from the url
@@ -3185,7 +3217,7 @@ function parseScheme(url) {
 	var schemeMatch = /^([^.^:]*):/.exec(url);
 	return (schemeMatch) ? schemeMatch[1] : 'http';
 }
-},{"../promises.js":4,"../util":8,"./content-types.js":11,"./helpers.js":12,"./incoming-response.js":16,"./schemes.js":19}],18:[function(require,module,exports){
+},{"../promises.js":4,"../util":8,"./content-types.js":11,"./helpers.js":12,"./incoming-response.js":16,"./response.js":18,"./schemes.js":19}],18:[function(require,module,exports){
 var util = require('../util');
 var promise = require('../promises.js').promise;
 var helpers = require('./helpers.js');
@@ -4680,6 +4712,7 @@ module.exports = {
 };
 
 var _workers = {};
+var _bridges = {};
 // a map of known protocols for http/s domains
 // (reduces the frequency of failed HTTPS lookups when loading scripts without a scheme)
 var _domainSchemes = {};
@@ -4699,16 +4732,18 @@ function get(urld) {
 	}
 
 	// Lookup from existing children
-	var worker = _workers[urld.authority+urld.path];
-	if (worker) {
-		return worker.bridge.onRequest.bind(worker.bridge);
+    var id = urld.authority+urld.path;
+	var bridge = _bridges[id];
+	if (bridge) {
+		return bridge.onRequest.bind(bridge);
 	}
 
 	// Nothing exists yet - is it a .js?
 	if (urld.path.slice(-3) == '.js') {
 		// Try to autoload temp worker
-		worker = spawnTempWorker(urld);
-		return worker.bridge.onRequest.bind(worker.bridge);
+		spawnTempWorker(urld);
+        var bridge = _bridges[id];
+		return bridge.onRequest.bind(bridge);
 	}
 
 	// Send back a failure responder
@@ -4741,7 +4776,7 @@ function spawnWorker(urld) {
 	if (Object.keys(_workers).length >= local.maxActiveWorkers) {
         var eject = null;
 	    for (var d in _workers) {
-		    if ( _workers[d].isTemp && !_workers[d].bridge.isInTransaction()) {
+		    if ( _workers[d].isTemp && !_bridges[d].isInTransaction()) {
                 eject = d;
                 break;
             }
@@ -4749,20 +4784,23 @@ function spawnWorker(urld) {
 		console.log('Closing temporary worker', eject);
 		_workers[eject].terminate();
         delete _workers[eject];
+        delete _bridges[eject];
 	}
 
-	var worker = new WorkerWrapper();
-	_workers[urld.authority+urld.path] = worker;
+    var id = urld.authority+urld.path;
+	var worker = new WorkerWrapper(id);
+	_workers[id] = worker;
+    _bridges[id] = new Bridge(worker);
 	worker.load(urld);
 	return worker;
 }
 
-function WorkerWrapper() {
+function WorkerWrapper(id) {
 	this.isReady = false;
 	this.isTemp = false;
 
+    this.id = id;
 	this.worker = null;
-	this.bridge = new Bridge(this);
 
 	this.script_blob = null;
 	this.script_objurl = null;
@@ -4835,7 +4873,7 @@ WorkerWrapper.prototype.setup = function() {
 		switch (message.op) {
 			case 'ready':
 				this2.isReady = true;
-				this2.bridge.flushBufferedMessages();
+				_bridges[this2.id].flushBufferedMessages();
 				break;
 			case 'log':
 				this2.onWorkerLog(message.body);
@@ -4845,7 +4883,7 @@ WorkerWrapper.prototype.setup = function() {
 				break;
 			default:
 				// If no 'op' field is given, treat it as an HTTPL request and pass onto our bridge
-				this2.bridge.onMessage(message);
+				_bridges[this2.id].onMessage(message);
 				break;
 		}
 	});
@@ -4860,11 +4898,11 @@ WorkerWrapper.prototype.postMessage = function(msg) {
 
 // Cleanup
 WorkerWrapper.prototype.terminate = function(status, reason) {
-	if (this.bridge) this.bridge.terminate(status, reason);
+	if (_bridges[this.id]) _bridges[this.id].terminate(status, reason);
 	if (this.worker) this.worker.terminate();
 	if (this.script_objurl) window.URL.revokeObjectURL(this.script_objurl);
 
-	this.bridge = null;
+	delete _bridges[this.id];
 	this.worker = null;
 	this.script_blob = null;
 	this.script_objurl = null;

@@ -19,14 +19,12 @@ $(document).on('request', function(e) {
 	// dispatch and log
 	var req = new local.Request(e.originalEvent.detail);
 	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
-	req.bufferResponse();
-	req.end(e.originalEvent.detail.body).always(console.log.bind(console, req.headers));
-	return req;
+	req.end(e.originalEvent.detail.body);
+	return false;
 });
 
 // :TEMP:
 local.at('#todo', function(req, res) { alert('Todo'); res.s204().end(); });
-
 
 // server starting-point
 function auth(req, res, worker) {
@@ -56,6 +54,9 @@ local.at('#', function (req, res, worker) {
 	);
 	res.s204().end();
 });
+
+// public web servers
+require('./publicweb.js');
 
 // feed items
 local.at('#feed/?(.*)', function (req, res, worker) {
@@ -133,11 +134,6 @@ function serveItem(req, res, worker, link) {
 	// route method
 	if (req.HEAD) return res.s204().end();
 	if (req.GET) return GET(url, req.params).Accept(req.Accept).pipe(res);
-	if (req.SELECT) {
-		if (worker) return res.s403('forbidden').end();
-		gui.selectItem(req.pathd[1]);
-		return res.s204().end();
-	}
 	res.Allow('HEAD, GET');
 	res.s405('bad method').end();
 }
