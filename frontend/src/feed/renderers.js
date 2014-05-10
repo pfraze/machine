@@ -92,11 +92,36 @@ local.at('#hn-renderer', function(req, res) {
 			}
 			var $title = $html.find('.title a').eq(0);
 			var $comments = $html.find('table table table');
-			return res.s200()
-				.html('<p>')
+			var $commenters = $comments.find('a[href^=user]');
+			var $commentersGrouped = {};
+			$commenters.each(function(i, a) {
+				var $a = $(a);
+				if ($commentersGrouped[$a.attr('href')]) {
+					$commentersGrouped[$a.attr('href')].count++;
+				} else {
+					$commentersGrouped[$a.attr('href')] = $a;
+					$a.count = 1;
+				}
+			});
+
+			res.s200().html('');
+
+			res.write('<p>')
 				.write('<a target="_top" href="'+$title.attr('href')+'">'+$title.text()+'</a><br>')
 				.write('<small><a target="_top" href="'+selfLink.href+'">'+$comments.length+' comments</a></small>')
-				.write('</p>')
-			.end();
+				.write('</p>');
+
+			res.write('<ul>');
+			for (var url in $commentersGrouped) {
+				res.write('<li>');
+				res.write('<a target="_top" href="https://news.ycombinator.com/' + $commentersGrouped[url].attr('href') + '">');
+				res.write($commentersGrouped[url].text());
+				res.write('</a>');
+				res.write(' ('+$commentersGrouped[url].count+')');
+				res.write('</li>');
+			}
+			res.write('</ul>');
+
+			res.end();
 		});
 });

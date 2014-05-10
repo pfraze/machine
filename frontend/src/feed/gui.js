@@ -31,7 +31,7 @@ function setup(mediaLinks) {
 }
 
 // VWeb server.
-// 
+//
 local.at('#gui', function(req, res, worker) {
     if (worker) return res.s403('forbidden').end();
 
@@ -169,7 +169,7 @@ function renderItemViews() {
                     res.Link.push(mediaLink);
                 }
             }
-           
+
 
 	        // Gather views for the item
 	        _activeRendererLinks = {};
