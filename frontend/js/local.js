@@ -1814,6 +1814,7 @@ function contentTypes__mkTypesList(type) {
 // INTERNAL
 // finds the closest-matching type in the registry and gives the request function
 function contentTypes__find(type, fn) {
+	type = contentTypes__lookup(type); // in case we were given an alias
 	var types = contentTypes__mkTypesList(type);
 	for (var i=0; i < types.length; i++) {
 		if (types[i] in contentTypes__registry)
@@ -3004,6 +3005,19 @@ function formatHeaderKey(str) {
 	return str.replace(headerKeyRegex, function(_0,_1,_2) { return _2.toUpperCase(); });
 }
 
+// Content-type sugars
+[ 'json', 'text', 'html', 'csv' ].forEach(function(k) {
+    Request.prototype[k] = function (v) {
+        this.ContentType(k);
+        this.write(v);
+        return this;
+    };
+    Request.prototype['to'+k] = function (v) {
+        this.Accept(k);
+        return this;
+    };
+});
+
 // Param setter
 // - `k` may be an object of keys to add
 // - or `k` can be the keyname and `v` the value
@@ -3198,6 +3212,9 @@ Request.prototype.close = function() {
 // helper
 // fulfills/reject a promise for a response with the given response
 function fulfillResponsePromise(req, res) {
+    if (!req.isUnfulfilled())
+        return;
+
     // log if logging
     if (local.logTraffic) {
         console.log(req.headers, res);
@@ -3278,34 +3295,48 @@ Response.prototype.header = function(k, v) {
 	};
 });
 
+// Content-type sugars
+[ 'json', 'text', 'html', 'csv' ].forEach(function(k) {
+	Response.prototype[k] = function (v) {
+		this.ContentType(k);
+		this.write(v);
+		return this;
+	};
+});
+Response.prototype.event = function(event, data) {
+	this.ContentType('event-stream');
+	this.write({ event: event, data: data });
+	return this;
+};
+
 // Link-header construction helper
 Response.prototype.link = function(link) {
-    if (!this.headers.Link) { this.headers.Link = []; }
-    if (arguments.length > 1) {
-        if (Array.isArray(arguments[0])) {
-            // table form
-            this.link(util.table.apply(null, arguments));
-        } else {
-            // (href, rel, opts) form
-            var href = arguments[0];
-            var rel = arguments[1];
-            var opts = arguments[2];
-            if (rel && typeof rel == 'object') {
-                opts = rel;
-                rel = false;
-            }
-            if (!opts) opts = {};
-            opts.href = href;
-            if (rel) { opts.rel = (opts.rel) ? (opts.rel+' '+rel) : rel; }
-            this.link(opts);
-        }
-    } else if (Array.isArray(link)) {
-        // [{rel:,href:}...] form
-        this.headers.Link = this.headers.Link.concat(link);
-    } else {
-        // {rel:,href:} form
-        this.headers.Link.push(link);
-    }
+	if (!this.headers.Link) { this.headers.Link = []; }
+	if (arguments.length > 1) {
+		if (Array.isArray(arguments[0])) {
+			// table form
+			this.link(util.table.apply(null, arguments));
+		} else {
+			// (href, rel, opts) form
+			var href = arguments[0];
+			var rel = arguments[1];
+			var opts = arguments[2];
+			if (rel && typeof rel == 'object') {
+				opts = rel;
+				rel = false;
+			}
+			if (!opts) opts = {};
+			opts.href = href;
+			if (rel) { opts.rel = (opts.rel) ? (opts.rel+' '+rel) : rel; }
+			this.link(opts);
+		}
+	} else if (Array.isArray(link)) {
+		// [{rel:,href:}...] form
+		this.headers.Link = this.headers.Link.concat(link);
+	} else {
+		// {rel:,href:} form
+		this.headers.Link.push(link);
+	}
 };
 
 // helper to convert a given header value to our standard format - camel case, no dashes
@@ -3316,7 +3347,7 @@ function formatHeaderKey(str) {
 	return str.replace(headerKeyRegex, function(_0,_1,_2) { return _2.toUpperCase(); });
 }
 
-// 
+//
 
 // Event connection helper
 // connects events from this stream to the target (event proxying)
