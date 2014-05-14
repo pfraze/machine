@@ -112,10 +112,7 @@ util.mixin.call(module.exports, require('./web/client.js'));
 // Request sugars
 function dispatch(headers) {
 	var req = new module.exports.Request(headers);
-	req.bufferResponse(true);
-	util.nextTick(function() {
-		req.end(); // send next tick
-	});
+	req.autoEnd();
 	return req;
 }
 function makeRequestSugar(method) {
@@ -1993,6 +1990,10 @@ function queryLink(link, query) {
 			if (!query[attr].call(null, link[attr], attr)) {
 				return false;
 			}
+		} else if (query[attr] instanceof RegExp) {
+			if (!query[attr].test(link[attr])) {
+				return false;
+			}
 		} else if (attr == 'rel') {
 			var terms = query.rel.split(/\s+/);
 			for (var i=0; i < terms.length; i++) {
@@ -2024,6 +2025,43 @@ function queryLink(link, query) {
 				}
 			}
 		}
+	}
+	return true;
+}
+
+// EXPORTED
+// takes set of links and a search string, does a per-term filter
+// - `links`: [object]/object/Document, either the parsed array of links, the request/response object, or a Document
+// - `searchTerms`: [string]/string, an array or space-separated string of search terms
+function searchLinks(links, searchTerms) {
+	if (!links || !searchTerms) return [];
+	if (__docexists && links instanceof Document) links = extractDocumentLinks(links); // actually the document
+	if (links.parsedHeaders) links = links.parsedHeaders.link; // actually a request or response object
+	if (!Array.isArray(links)) return [];
+	if (!Array.isArray(searchTerms)) searchTerms = searchTerms.split(' ');
+	return links.filter(function(link) { return searchLink(link, searchTerms); });
+}
+
+// EXPORTED
+// takes parsed link and string of search terms, produces boolean `isMatch`
+function searchLink(link, searchTerms) {
+	// Combine link att values into a single string
+	var linkText = '';
+	if (typeof link == 'string') {
+		linkText = link;
+	} else {
+		for (var k in link) {
+			linkText += link[k] + ' ';
+		}
+	}
+
+	// Break the search into individual terms
+	if (!Array.isArray(searchTerms)) searchTerms = searchTerms.split(' ');
+
+	// Search for each term
+	for (var i=0; i < searchTerms.length; i++) {
+		if (linkText.indexOf(searchTerms[i]) === -1)
+			return false;
 	}
 	return true;
 }
@@ -2307,6 +2345,12 @@ function makeProxyUri(uri, templates) {
 }
 
 // EXPORTED
+// convenience wrapper around uri template
+function renderUri(tmpl, ctx) {
+	return UriTemplate.parse(tmpl).expand(ctx);
+}
+
+// EXPORTED
 // identifiers a string as a header key
 // - 'FooBar' -> true
 // - 'foo' -> false
@@ -2316,163 +2360,29 @@ function isHeaderKey(k) {
 	return ucRegEx.test(k);
 }
 
-// :TODO:
-// EXPORTED
-// modifies XMLHttpRequest to support HTTPL
-/*function patchXHR() {
-	// Store references to original methods
-	var orgXHR = XMLHttpRequest;
-	var orgPrototype = XMLHttpRequest.prototype;
-	function localXMLHttpRequest() {}
-	(window || self).XMLHttpRequest = localXMLHttpRequest;
-	localXMLHttpRequest.UNSENT = 0;
-	localXMLHttpRequest.OPENED = 1;
-	localXMLHttpRequest.HEADERS_RECEIVED = 2;
-	localXMLHttpRequest.LOADING = 4;
-	localXMLHttpRequest.DONE = 4;
-
-	localXMLHttpRequest.prototype.open = function(method, url, async, user, password) {
-		// Is HTTPL?
-		var urld = parseUri(url);
-		if (urld.protocol != 'httpl' && urld.protocol != 'local') {
-			Object.defineProperty(this, '__xhr_request', { value: new orgXHR() });
-			return this.__xhr_request.open(method, url, async, user, password);
-		}
-
-		// Construct request
-		var Request = require('./request.js');
-		Object.defineProperty(this, '__local_request', { value: new Request({ method: method, url: url, stream: true }) });
-		if (user) {
-			this.__local_request.setHeader('Authorization', 'Basic '+btoa(user+':'+password));
-		}
-
-		// Update state
-		this.readyState = 1;
-		if (this.onreadystatechange) {
-			this.onreadystatechange();
-		}
-	};
-
-	localXMLHttpRequest.prototype.send = function(data) {
-		var this2 = this;
-		if (this.__local_request) {
-			// Dispatch and send data
-			var res_ = require('./dispatch.js').dispatch(this.__local_request);
-			this.__local_request.end(data);
-
-			// Wire up events
-			res_.always(function(res) {
-				Object.defineProperty(this2, '__local_response', { value: res });
-				// Update state
-				this2.readyState = 2;
-				this2.status = res.status;
-				this2.statusText = res.status + ' ' + res.reason;
-				this2.responseText = null;
-				// Fire event
-				if (this2.onreadystatechange) {
-					this2.onreadystatechange();
-				}
-				res.on('data', function(chunk) {
-					this2.readyState = 3;
-					if (this2.responseText === null && typeof chunk == 'string') this2.responseText = '';
-					this2.responseText += chunk;
-					// Fire event
-					if (this2.onreadystatechange) {
-						this2.onreadystatechange();
-					}
-				});
-				res.on('end', function() {
-					this2.readyState = 4;
-					switch (this2.responseType) {
-						case 'json':
-							this2.response = res.body;
-							break;
-
-						case 'text':
-						default:
-							this2.response = this2.responseText;
-							break;
-					}
-					// Fire event
-					if (this2.onreadystatechange) {
-						this2.onreadystatechange();
-					}
-					if (this2.onload) {
-						this2.onload();
-					}
-				});
-			});
-		} else {
-			// Copy over any attributes we've been given
-			this.__xhr_request.onreadystatechange = function() {
-				for (var k in this) {
-					if (typeof this[k] == 'function') continue;
-					this2[k] = this[k];
-				}
-				if (this2.onreadystatechange) {
-					this2.onreadystatechange();
-				}
-			};
-			return this.__xhr_request.send(data);
-		}
-	};
-
-	localXMLHttpRequest.prototype.abort = function() {
-		if (this.__local_request) {
-			return this.__local_request.close();
-		} else {
-			return this.__xhr_request.abort();
-		}
-	};
-
-	localXMLHttpRequest.prototype.setRequestHeader = function(k, v) {
-		if (this.__local_request) {
-			return this.__local_request.setHeader(k.toLowerCase(), v);
-		} else {
-			return this.__xhr_request.setRequestHeader(k, v);
-		}
-	};
-
-	localXMLHttpRequest.prototype.getAllResponseHeaders = function(k) {
-		if (this.__local_request) {
-			return this.__local_response ? this.__local_response.headers : null;
-		} else {
-			return this.__xhr_request.getAllResponseHeaders(k);
-		}
-	};
-
-	localXMLHttpRequest.prototype.getResponseHeader = function(k) {
-		if (this.__local_request) {
-			return this.__local_response ? this.__local_response.getHeader(k) : null;
-		} else {
-			return this.__xhr_request.getResponseHeader(k);
-		}
-	};
-}*/
-
 module.exports = {
 	extractDocumentLinks: extractDocumentLinks,
 	queryLinks: queryLinks,
 	queryLink: queryLink,
+	searchLinks: searchLinks,
+	searchLink: searchLink,
 
 	preferredTypes: preferredTypes,
 	preferredType: preferredType,
 	parseMediaType: parseMediaType,
 	parseAcceptHeader: parseAcceptHeader,
 
-	joinUri: joinUri,
+	joinUri: joinUri, joinUrl: joinUri,
 	joinRelPath: joinRelPath,
 
-	isAbsUri: isAbsUri,
-	isNavSchemeUri: isNavSchemeUri,
-
-	parseUri: parseUri,
-	parseNavUri: parseNavUri,
-	makeProxyUri: makeProxyUri,
-
+	isAbsUri: isAbsUri, isAbsUrl: isAbsUri,
+	isNavSchemeUri: isNavSchemeUri, isNavSchemeUrl: isNavSchemeUri,
 	isHeaderKey: isHeaderKey,
 
-	// patchXHR: patchXHR :TODO:
+	parseUri: parseUri, parseUrl: parseUri,
+	parseNavUri: parseNavUri, parseNavUrl: parseNavUri,
+	makeProxyUri: makeProxyUri, makeProxyUrl: makeProxyUri,
+	renderUri: renderUri, renderUrl: renderUri,
 };
 },{"../promises.js":4,"./content-types.js":11,"./uri-template.js":21}],13:[function(require,module,exports){
 var helpers = require('./helpers.js');
@@ -2715,7 +2625,6 @@ function IncomingRequest(headers) {
 	this.path = headers.path || '#';
     this.pathd = headers.pathd || [this.path];
 	this.params = (headers.params) || {};
-	this.isBinary = false; // stream is binary? :TODO:
 	for (var k in headers) {
 		if (helpers.isHeaderKey(k)) { // starts uppercase?
 			// Is a header, save
@@ -2773,6 +2682,9 @@ IncomingRequest.prototype.buffer = function(cb) {
 IncomingRequest.prototype.pipe = function(target, headersCB, bodyCb) {
 	headersCB = headersCB || function(k, v) { return v; };
 	bodyCb = bodyCb || function(v) { return v; };
+	if (target.autoEnd) {
+		target.autoEnd(false); // disable auto-ending, we are now streaming
+	}
 	if (target instanceof require('./request')) {
 		if (!target.headers.method) {
 			target.headers.method = this.method;
@@ -2798,6 +2710,7 @@ IncomingRequest.prototype.pipe = function(target, headersCB, bodyCb) {
 		this.on('data', function(chunk) { target.write(bodyCb(chunk)); });
 		this.on('end', function() { target.end(); });
 	}
+	return target;
 };
 },{"../util":8,"./content-types.js":11,"./helpers.js":12,"./http-headers.js":13,"./request":17,"./response":18}],16:[function(require,module,exports){
 var util = require('../util');
@@ -2877,7 +2790,9 @@ IncomingResponse.prototype.processHeaders = function(baseUrl, headers) {
     noEnumDesc.value = helpers.queryLinks.bind(null, this.links);
     Object.defineProperty(this.links, 'query', noEnumDesc);
     noEnumDesc.value = function(query) { return this.query(query)[0]; };
-    Object.defineProperty(this.links, 'first', noEnumDesc);
+    Object.defineProperty(this.links, 'get', noEnumDesc);
+    noEnumDesc.value = helpers.searchLinks.bind(null, this.links);
+    Object.defineProperty(this.links, 'search', noEnumDesc);
 };
 var noEnumDesc = { value: null, enumerable: false, configurable: true, writable: true };
 
@@ -2917,6 +2832,9 @@ IncomingResponse.prototype.buffer = function(cb) {
 IncomingResponse.prototype.pipe = function(target, headersCB, bodyCb) {
 	headersCB = headersCB || function(k, v) { return v; };
 	bodyCb = bodyCb || function(v) { return v; };
+	if (target.autoEnd) {
+		target.autoEnd(false); // disable auto-ending, we are now streaming
+	}
 	if (target instanceof require('./response')) {
 		if (!target.headers.status) {
 			target.status(this.status, this.reason);
@@ -2927,6 +2845,11 @@ IncomingResponse.prototype.pipe = function(target, headersCB, bodyCb) {
 			}
 		}
 	} else if (target instanceof require('./request')) {
+		if (this.status < 200 || this.status >= 400) {
+			// We're a failed response, abort the request
+			target.close();
+			return target;
+		}
 		if (!target.headers.ContentType && this.ContentType) {
 			target.ContentType(this.ContentType);
 		}
@@ -2939,6 +2862,7 @@ IncomingResponse.prototype.pipe = function(target, headersCB, bodyCb) {
 		this.on('data', function(chunk) { target.write(bodyCb(chunk)); });
 		this.on('end', function() { target.end(); });
 	}
+	return target;
 };
 },{"../util":8,"./content-types.js":11,"./helpers.js":12,"./http-headers.js":13,"./request":17,"./response":18}],17:[function(require,module,exports){
 var util = require('../util');
@@ -2966,9 +2890,12 @@ function Request(headers, originChannel) {
 	this.headers.params = (this.headers.params) || {};
 	this.originChannel = originChannel;
 	this.isBinary = false; // stream is binary?
-	this.isVirtual = undefined; // request going to virtual host?
-    this.isForcedLocal = local.localOnly; // forcing request to be local?
-	this.isBufferingResponse = false; // auto-buffering the response?
+	this.isVirtual = local.virtualOnly || undefined; // request going to virtual host?
+
+	// Behavior flags
+    this.isForcedLocal = local.localOnly; // forcing request to be local
+	this.isBufferingResponse = true; // auto-buffering the response?
+	this.isAutoEnding = false; // auto-ending the request on next tick?
 
 	// Stream state
 	this.isConnOpen = true;
@@ -3058,20 +2985,19 @@ Request.prototype.setBinary = function(v) {
 	return this;
 };
 
+
 // Virtual mode
-// forces the request to go to a virtual host (or not)
-// - if no bool is given, sets virtual-mode to true
+// overrides the automatic decision as to whether to route to virtual or remote endpoints
+// - (true) -> will route to local or worker endpoints
+// - (false) -> will route to remote endpoints
+// - if no bool is given, sets to true
 Request.prototype.setVirtual = function(v) {
-	if (typeof v == 'boolean') {
-		this.isVirtual = v;
-	} else {
-		this.isVirtual = true;
-	}
+	this.isVirtual = (v !== void 0) ? v : true;
 	return this;
 };
 
 // Forced local
-// instructs the request to prepend a '#' if needed
+// instructs the request to only route to endpoints in the current page
 Request.prototype.forceLocal = function(v) {
 	if (typeof v == 'boolean') {
 		this.isForcedLocal = v;
@@ -3092,10 +3018,30 @@ Request.prototype.bufferResponse = function(v) {
 	return this;
 };
 
+// Auto-end
+// queues a callback next tick to end the stream, for non-streaming requests
+Request.prototype.autoEnd = function(v) {
+	v = (typeof v != 'undefined') ? v : true;
+	if (v && !this.isAutoEnding) {
+		// End next tick
+		var self = this;
+		util.nextTick(function() {
+			if (self.isAutoEnding) { // still planned?
+				self.end(); // send next tick
+			}
+		});
+	}
+	this.isAutoEnding = v;
+};
+
 // Pipe helper
 // passes through to its incoming response
 Request.prototype.pipe = function(target, headersCb, bodyCb) {
+	if (target.autoEnd) {
+		target.autoEnd(false); // disable auto-ending, we are now streaming
+	}
 	this.always(function(res) { res.pipe(target, headersCb, bodyCb); });
+	return target;
 };
 
 // Event connection helper
@@ -3122,13 +3068,9 @@ Request.prototype.start = function() {
 
 	// Prep request
 	if (typeof this.isVirtual == 'undefined') {
-		// if not forced, decide on whether this is virtual based on the presence of a hash
+		// decide on whether this is virtual based on the presence of a hash
 		this.isVirtual = (this.headers.url.indexOf('#') !== -1);
 	}
-    if (local.virtualOnly && !this.isVirtual) {
-        // if virtual only, force
-        this.isVirtual = true;
-    }
     if (this.isForcedLocal && this.headers.url.charAt(0) !== '#') {
         // if local only, force
         this.headers.url = '#' + this.headers.url;
@@ -3206,6 +3148,16 @@ Request.prototype.close = function() {
 	this.isConnOpen = false;
 	this.emit('close');
 	this.clearEvents();
+
+	if (!this.isStarted) {
+		// Fulfill with abort response
+		var ires = new IncomingResponse();
+		ires.on('headers', ires.processHeaders.bind(ires, (this.isVirtual && !this.urld.authority && !this.urld.path) ? false : this.urld));
+		var ores = new Response();
+		ores.wireUp(ires);
+		ores.status(0, 'aborted by client').end();
+		fulfillResponsePromise(this, ires);
+	}
 	return this;
 };
 
@@ -3219,7 +3171,7 @@ function fulfillResponsePromise(req, res) {
     if (local.logTraffic) {
         console.log(req.headers, res);
     }
-    
+
 	// wasnt streaming, fulfill now that full response is collected
 	if (res.status >= 200 && res.status < 400)
 		req.fulfill(res);
@@ -3250,7 +3202,6 @@ function Response() {
 	this.headers = {};
 	this.headers.status = 0;
 	this.headers.reason = '';
-	this.isBinary = false; // stream is binary? :TODO:
 
 	// Stream state
 	this.isConnOpen = true;
@@ -4739,7 +4690,8 @@ var Bridge = require('./bridge.js');
 module.exports = {
 	getWorker: get,
 	spawnWorker: spawnWorker,
-	spawnTempWorker: spawnTempWorker
+	spawnTempWorker: spawnTempWorker,
+	closeWorker: closeWorker
 };
 
 var _workers = {};
@@ -4824,6 +4776,28 @@ function spawnWorker(urld) {
     _bridges[id] = new Bridge(worker);
 	worker.load(urld);
 	return worker;
+}
+
+function closeWorker(url) {
+	var urld = local.parseUri(url);
+
+	// Relative to current host? Construct full URL
+	if (!urld.authority || urld.authority == '.' || urld.authority.indexOf('.') === -1) {
+		var dir = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+		var dirurl = window.location.protocol + '//' + window.location.hostname + dir;
+		var url = helpers.joinRelPath(dirurl, urld.source);
+		urld = local.parseUri(url);
+	}
+
+	// Find and terminate
+	var id = urld.authority + urld.path;
+	if (id in _workers) {
+		_workers[id].terminate();
+        delete _workers[id];
+        delete _bridges[id];
+        return true;
+	}
+	return false;
 }
 
 function WorkerWrapper(id) {

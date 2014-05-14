@@ -159,6 +159,7 @@ module.exports = {
 	makeSafe: escapeHTML,
 	escapeQuotes: escapeQuotes,
 	stripScripts: stripScripts,
+
 	decorateReltype: decorateReltype,
 	// renderResponse: renderResponse,
 

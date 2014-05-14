@@ -122,11 +122,13 @@ function renderListViews() {
 function renderItemViews() {
     var itemUri = _itemModeUrl; // the views need to read from the right uri, so capture it now to account for possible state-changes during the async
 	var $views = $('#item-views');
-	$views.html('<h3>Fetching...</h3>');
+	var repaintTimeoutId = setTimeout($views.html.bind($views, '<h3>Fetching...</h3>'), 1500);
     $('#url-input').val(itemUri);
     _itemReq
         .then(function(res) {
-            var mediaLink = res.links.first('self');
+        	clearTimeout(repaintTimeoutId);
+
+            var mediaLink = res.links.get('self');
             var linkIsAdded = false;
             if (!mediaLink) {
                 mediaLink = {};
@@ -205,7 +207,7 @@ function renderItemViews() {
 
 // create div for view
 function createViewEl(rendererLink) {
-	return $('<div class="view" data-view="'+rendererLink.href+'">Loading...</div>');
+	return $('<div class="view" data-view="'+rendererLink.href+'"></div>');
 }
 
 function onViewRequest(e) {

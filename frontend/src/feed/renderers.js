@@ -24,36 +24,30 @@ local.at('#thing-renderer', function(req, res) {
 local.at('#about-renderer', function(req, res) {
 	HEAD(req.params.target)
 		.forceLocal() // force local so that, if the scheme is public (http/s), we'll go through the virtual proxy at #http or #https
-					  // ...happens automatically in workers
 		.always(function(targetRes) {
-			var selfLink = targetRes.links.first('self');
+			var selfLink = targetRes.links.get('self');
 			if (!selfLink) {
 				return res.s502().ContentType('html').end('Bad target');
 			}
+			var isLocalhosted = (selfLink.href.indexOf(window.location.origin) === 0 || selfLink.href.indexOf('#/') === 0);
 
 			res.s200().ContentType('html');
 			var html = '';
 
-			if (selfLink.rel == 'self stdrel.com/media') {
-				// Raw media file, tell the shorthand type (.json, .html, .xml, etc)
-				var mime = selfLink.type || 'text/plain';
-				if (mime == 'text/plain') mime = 'plain-text';
-				else mime = mime.split('/')[1];
-				html += '<p>Raw media (.'+mime+') - nothing else is known about this file.</p>';
-			} else if (selfLink.is('stdrel.com/rel')) {
-				// Summarize reltypes
-				html += '<p>This is a "relation type." It explains how a location on the Web behaves, and is the basis of Layer1\'s structure.</p>';
+			html += '<div class="btn-group">';
+			if (!isLocalhosted) {
+				html += '<a href="#" class="btn btn-xs btn-default">Save</a> ';
 			}
+			html += '<a href="#" class="btn btn-xs btn-default">Create Link</a> ';
+			if (isLocalhosted) {
+				html += '<a href="#" class="btn btn-xs btn-danger">Delete</a> ';
+			}
+			html += '</div>';
 
-			// Render a small table of common attributes
-			if (selfLink.id) { html += '<small class="text-muted">ID</small> '+util.escapeHTML(selfLink.id)+'<br>'; }
-			if (selfLink.rel) {
-				html += '<small class="text-muted">TYPE</small> '+util.decorateReltype(selfLink.rel);
-				if (selfLink.type) { html += ' '+util.escapeHTML(selfLink.type); }
-				html += '<br>';
-			}
-			if (selfLink.href) { html += '<small class="text-muted">HREF</small> <a href="'+util.escapeHTML(selfLink.href)+'" target=_blank>'+util.escapeHTML(selfLink.href)+'</a><br>'; }
-			if (selfLink.created_at) { html += '<small class="text-muted">ADDED</small> '+((new Date(+selfLink.created_at)).toLocaleTimeString())+'<br>'; }
+			var desc = [];
+			if (selfLink.type) { desc.push(util.escapeHTML(selfLink.type)); }
+			if (selfLink.created_at) { desc.push('created '+((new Date(+selfLink.created_at)).toLocaleString())); }
+			html += '<p>' + desc.join(', ') + '</p>';
 
 			res.end(html);
 		});
@@ -70,7 +64,7 @@ local.at('#hn-renderer', function(req, res) {
 		.forceLocal() // force local so that, if the scheme is public (http/s), we'll go through the virtual proxy at #http or #https
 		              // ...happens automatically in workers
 		.always(function (targetRes) {
-			var selfLink = targetRes.links.first('self');
+			var selfLink = targetRes.links.get('self');
 			if (!selfLink) return res.s502('could not load target').end();
 			if (selfLink.href.indexOf('https://news.ycombinator.com') !== 0) {
 				return res.s418('I only understand URLs from https://news.ycombinator.com').end();
