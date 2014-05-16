@@ -1,11 +1,26 @@
 ;(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 // Worker API whitelisting code
 // ============================
+var localjsUrl = '';
+if (typeof self.document !== 'undefined') { // in the page
+    try { localjsUrl = document.querySelector('script[src$="local.js"]').src; }
+    catch (e) {
+        try { localjsUrl = document.querySelector('script[src$="local.min.js"]').src; }
+        catch (e) {
+            console.error('Unable to find local.js or local.min.js script tags; unable to setup worker scripts');
+        }
+    }
+}
+var localjsImport_src = 'importScripts("'+localjsUrl+'");\n';
 var whitelist = [ // a list of global objects which are allowed in the worker
+    // defined by local.js
+    'local', 'pageBridge',
+    'HEAD', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'SUBSCRIBE', 'NOTIFY', 'from',
+
 	'null', 'self', 'console', 'atob', 'btoa',
 	'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
 	'Proxy',
-	'importScripts', 'navigator',
+	'navigator',
 	'postMessage', 'addEventListener', 'removeEventListener',
 	'onmessage', 'onerror', 'onclose',
 	'dispatchEvent'
@@ -13,7 +28,7 @@ var whitelist = [ // a list of global objects which are allowed in the worker
 var blacklist = [ // a list of global objects which are not allowed in the worker, and which dont enumerate on `self` for some reason
 	'XMLHttpRequest', 'WebSocket', 'EventSource',
     'FileReaderSync',
-	'Worker'
+	'Worker', 'importScripts'
 ];
 var whitelistAPIs_src = [ // nullifies all toplevel variables except those listed above in `whitelist`
 	'(function() {',
@@ -32,47 +47,14 @@ var whitelistAPIs_src = [ // nullifies all toplevel variables except those liste
 		'});',
 		'if (typeof console != "undefined") { console.log("Nullified: "+nulleds.join(", ")); }',
 	'})();\n'
-].join('');
-var importScriptsPatch_src = [ // patches importScripts() to allow relative paths despite the use of blob uris
-	'(function() {',
-		'var orgImportScripts = importScripts;',
-		'function joinRelPath(base, relpath) {',
-			'if (relpath.charAt(0) == \'/\') {',
-				'return "<HOST>" + relpath;',
-			'}',
-			'// totally relative, oh god',
-			'// (thanks to geoff parker for this)',
-			'var hostpath = "<HOST_DIR_PATH>";',
-			'var hostpathParts = hostpath.split(\'/\');',
-			'var relpathParts = relpath.split(\'/\');',
-			'for (var i=0, ii=relpathParts.length; i < ii; i++) {',
-				'if (relpathParts[i] == \'.\')',
-					'continue; // noop',
-				'if (relpathParts[i] == \'..\')',
-					'hostpathParts.pop();',
-				'else',
-					'hostpathParts.push(relpathParts[i]);',
-			'}',
-			'return "<HOST>/" + hostpathParts.join(\'/\');',
-		'}',
-		'var isImportingAllowed = true;',
-		'setTimeout(function() { isImportingAllowed = false; },0);', // disable after initial run
-		'importScripts = function() {',
-			'if (!isImportingAllowed) { throw "Local.js - Imports disabled after initial load to prevent data-leaking"; }',
-			'return orgImportScripts.apply(null, Array.prototype.map.call(arguments, function(v, i) {',
-				'return (v.indexOf(\'/\') < v.indexOf(/[.:]/) || v.charAt(0) == \'/\' || v.charAt(0) == \'.\') ? joinRelPath(\'<HOST_DIR_URL>\',v) : v;',
-			'}));',
-		'};',
-	'})();\n'
 ].join('\n');
-
 module.exports = {
     logTraffic: true,
 	logAllExceptions: false,
     maxActiveWorkers: 10,
-    virtualOnly: (typeof self.window == 'undefined') ? true : false,
-    localOnly: (typeof self.window == 'undefined') ? true : false,
-	workerBootstrapScript: whitelistAPIs_src+importScriptsPatch_src
+    virtualOnly: false,
+    localOnly: false,
+	workerBootstrapScript: localjsImport_src+whitelistAPIs_src
 };
 },{}],2:[function(require,module,exports){
 module.exports = {
@@ -1329,14 +1311,14 @@ var subscribe = require('./subscribe.js').subscribe;
 // information about the resource that a agent targets
 //  - exists in an "unresolved" state until the URI is confirmed by a response from the server
 //  - enters a "bad" state if an attempt to resolve the link failed
-//  - may be "relative" if described by a relation from another context (eg a query or a relative URI)
+//  - may be "relative" if described by a relation from another context (eg a query)
 //  - may be "absolute" if described by an absolute URI
 // :NOTE: absolute contexts may have a URI without being resolved, so don't take the presence of a URI as a sign that the resource exists
 function Context(query) {
 	this.query = query;
 	this.resolveState = Context.UNRESOLVED;
 	this.error = null;
-	this.queryIsAbsolute = (typeof query == 'string' && helpers.isAbsUri(query));
+	this.queryIsAbsolute = (typeof query == 'string');
 	if (this.queryIsAbsolute) {
 		this.url  = query;
 		this.urld = helpers.parseUri(this.url);
@@ -1579,14 +1561,7 @@ Client.prototype.resolve = function(options) {
 	} else if (this.context.isBad() === false || (this.context.isBad() && !options.noretry)) {
 		// We don't have links, and we haven't previously failed (or we want to try again)
 		this.context.resetResolvedState();
-		if (this.context.isRelative()) {
-			if (!this.parentClient) {
-				// Parent failed, we failed
-				self.context.setFailed({ status: 404, reason: 'not found' });
-				resolvePromise.reject(this.context.getError());
-				return resolvePromise;
-			}
-
+		if (this.context.isRelative() && this.parentClient) {
 			// Up the chain we go
 			resolvePromise = this.parentClient.resolve(options)
 				.succeed(function() {
@@ -2190,10 +2165,10 @@ function joinUri() {
 // tests to see if a URL is absolute
 // - "absolute" means that the URL can reach something without additional context
 // - eg http://foo.com, //foo.com, #bar.app, foo.com/test.js#bar
-var hasSchemeRegex = /^(#)|((http(s|l)?:)?\/\/)|((nav:)?\|\|)|(data:)/;
+var hasSchemeRegex = /^((http(s|l)?:)?\/\/)|((nav:)?\|\|)|(data:)/;
 function isAbsUri(url) {
 	// Has a scheme?
-	return hasSchemeRegex.test(url) || url.indexOf('#') !== -1;
+	return hasSchemeRegex.test(url);
 }
 
 // EXPORTED
@@ -2217,16 +2192,19 @@ function joinRelPath(urld, relpath) {
 			protocol = '//';
 		} else if (urld.source.indexOf('||') === 0) {
 			protocol = '||';
-		} else if (urld.authority && urld.authority.indexOf('.') !== -1) {
+		} else if (urld.authority) {
             protocol = 'http://';
         }
 	}
 	if (relpath.charAt(0) == '/') {
-		// "absolute" relative, easy stuff
+		// absolute path
 		return protocol + urld.authority + relpath;
 	}
-	// totally relative, oh god
-	// (thanks to geoff parker for this)
+    if (relpath.charAt(0) == '#') {
+        // absolute hash-path
+		return protocol + urld.authority + urld.path + relpath;
+    }
+	// relative path, run as a set of instruction
 	var hostpath = urld.path;
 	var hostpathParts = hostpath.split('/');
 	var relpathParts = relpath.split('/');
@@ -2239,7 +2217,6 @@ function joinRelPath(urld, relpath) {
 			hostpathParts.push(relpathParts[i]);
 	}
     var path = hostpathParts.join('/');
-    if (relpath.charAt(0) == '#') path = '#' + path.slice(1);
 	return joinUri(protocol + urld.authority, path);
 }
 
@@ -2555,26 +2532,38 @@ schemes.register('#', function (oreq, ires) {
 	}
 	oreq.headers.path = '#' + urld2.path.slice(1);
 
-	// Get the handler
-	var handler;
-    // Are we in a worker?
-    if (typeof self.document == 'undefined' && self.pageBridge) {
-        handler = self.pageBridge.onRequest.bind(self.pageBridge);
-	// Is a host URL given?
-	} else if (oreq.urld.path) {
-		// Try to get/load the VM
-		handler = workers.getWorker(oreq.urld);
-    } else {
-		// Match the route in the current page
-		var pathd;
+    // Helper to lookup the handler from the current env's routes
+    var lookupRoute = function() {
+        var pathd;
 		for (var i=0; i < _routes.length; i++) {
 			pathd = _routes[i].path.exec(oreq.headers.path);
 			if (pathd) {
-				handler = _routes[i].handler;
-				break;
+                oreq.headers.pathd = pathd; // update request headers to include the path match
+				return _routes[i].handler;
 			}
 		}
-		oreq.headers.pathd = pathd;
+    };
+
+	// Get the handler
+	var handler;
+    var isInWorker = (typeof self.document == 'undefined');
+	// Is a host URL given?
+	if (oreq.urld.authority || oreq.urld.path) {
+        if (oreq.urld.authority == 'page') {
+            if (isInWorker) {
+                // Use the page
+                handler = self.pageBridge.onRequest.bind(self.pageBridge); 
+            } else {
+		        // Match the route in the current page
+                handler = lookupRoute();
+            }
+        } else {
+		    // Try to get/load the VM
+		    handler = workers.getWorker(oreq.urld);
+        }
+    } else {
+		// Match the route in the current page
+        handler = lookupRoute();		
 	}
 
 	// Create incoming request / outgoing response
@@ -2766,18 +2755,17 @@ IncomingResponse.prototype.processHeaders = function(baseUrl, headers) {
 		delete this.link;
 		this.links.forEach(function(link) {
 			// Convert relative paths to absolute uris
-			if (!helpers.isAbsUri(link.href)) {
-				if (baseUrl) {
+			if (!helpers.isAbsUri(link.href) && baseUrl) {
+                if (link.href.charAt(0) == '#') {
+                    if (baseUrl.source) {
+                        // strip any hash or query param
+                        baseUrl = ((baseUrl.protocol) ? baseUrl.protocol + '://' : '') + baseUrl.authority + baseUrl.path;
+                    }
+                    link.href = helpers.joinUri(baseUrl, link.href);
+                } else {
                     link.href = helpers.joinRelPath(baseUrl, link.href);
-				} else {
-					link.href = '#'+link.href;
 				}
-			} else if (baseUrl && link.href.charAt(0) == '#') {
-                if (baseUrl.source) {
-                    baseUrl = ((baseUrl.protocol) ? baseUrl.protocol + '://' : '') + baseUrl.authority + baseUrl.path;
-                }
-                link.href = helpers.joinUri(baseUrl, link.href);
-            }
+			}
 
             // Add `is` helper
             if (link.is && typeof link.is != 'function') link._is = link.is;
@@ -4707,7 +4695,7 @@ function get(urld) {
 	}
 
 	// Relative to current host? Construct full URL
-	if (!urld.authority || urld.authority == '.' || urld.authority.indexOf('.') === -1) {
+	if (!urld.authority || urld.authority == '.') {
 		var dir = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
 		var dirurl = window.location.origin + dir;
 		var url = helpers.joinRelPath(dirurl, urld.source);
@@ -4731,7 +4719,7 @@ function get(urld) {
 
 	// Send back a failure responder
 	return function(req, res) {
-		res.status(0, 'request to '+url.source+' expects '+urld.path+' to be a .js file');
+		res.status(0, 'request to '+urld.source+' expects '+urld.path+' to be a .js file');
 		res.end();
 	};
 }
@@ -4748,7 +4736,7 @@ function spawnWorker(urld) {
 	}
 
 	// Relative to current host? Construct full URL
-	if (!urld.authority || urld.authority == '.' || urld.authority.indexOf('.') === -1) {
+	if (!urld.authority || urld.authority == '.') {
 		var dir = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
 		var dirurl = window.location.protocol + '//' + window.location.hostname + dir;
 		var url = helpers.joinRelPath(dirurl, urld.source);

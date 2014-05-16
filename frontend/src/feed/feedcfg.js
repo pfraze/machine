@@ -13,6 +13,8 @@ var _cfg = {
 		['href',           'rel',                'title',       'for'],
 		'#thing-renderer', 'layer1.io/renderer', 'Thing',       'schema.org/Thing',
 		'#about-renderer', 'layer1.io/renderer', 'About',       'stdrel.com/media',
+		'/user/test.js#',  'layer1.io/renderer', 'Test',        'stdrel.com/media',
+		'#test-render',  'layer1.io/renderer', 'Test',        'stdrel.com/media',
 		'#hn-renderer',    'layer1.io/renderer', 'HN Renderer', 'stdrel.com/media text/html news.ycombinator.com'
 		// rel(contains)stdrel.com/media,type(starts)text(or)application
 		// href(protocol_is)https,href(domain_is)

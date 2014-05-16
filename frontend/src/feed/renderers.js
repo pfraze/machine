@@ -20,6 +20,15 @@ local.at('#thing-renderer', function(req, res) {
 	});
 });
 
+local.at('#test-render', function(req, res) {
+	res.s200().ContentType('html');
+	if (req.params.other) {
+		res.end('<a href="#test-render">first</a>');
+	} else {
+		res.end('<a href="#test-render?other=1">second</a>');
+	}
+});
+
 // Default renderer
 local.at('#about-renderer', function(req, res) {
 	HEAD(req.params.target)

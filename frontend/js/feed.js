@@ -55,6 +55,8 @@ var _cfg = {
 		['href',           'rel',                'title',       'for'],
 		'#thing-renderer', 'layer1.io/renderer', 'Thing',       'schema.org/Thing',
 		'#about-renderer', 'layer1.io/renderer', 'About',       'stdrel.com/media',
+		'/user/test.js#',  'layer1.io/renderer', 'Test',        'stdrel.com/media',
+		'#test-render',  'layer1.io/renderer', 'Test',        'stdrel.com/media',
 		'#hn-renderer',    'layer1.io/renderer', 'HN Renderer', 'stdrel.com/media text/html news.ycombinator.com'
 		// rel(contains)stdrel.com/media,type(starts)text(or)application
 		// href(protocol_is)https,href(domain_is)
@@ -114,33 +116,33 @@ function setup(mediaLinks) {
 // VWeb server.
 //
 local.at('#gui', function(req, res, worker) {
-    if (worker) return res.s403('forbidden').end();
+	if (worker) return res.s403('forbidden').end();
 
-    if (req.VIEW) {
-        return req.buffer(function() {
-            // Check we got a URL
-            var url = req.params.url || req.body.url;
-            if (!url) {
-                return res.s400('`url` required in params or json').end();
-            }
+	if (req.VIEW) {
+		return req.buffer(function() {
+			// Check we got a URL
+			var url = req.params.url || req.body.url;
+			if (!url) {
+				return res.s400('`url` required in params or json').end();
+			}
 
-            // Switch into item mode
-            render('item', { url: url });
-            return res.s204().end();
-        });
-    }
-    res.Allow('VIEW');
-    res.s405('bad method').end();
+			// Switch into item mode
+			render('item', { url: url });
+			return res.s204().end();
+		});
+	}
+	res.Allow('VIEW');
+	res.s405('bad method').end();
 });
 
 function render(mode, opts) {
-    opts = opts || {};
+	opts = opts || {};
 	_mode = mode;
 	switch (_mode) {
 	case 'list':
 		// tear down item mode
 		$('#item-views').hide();
-        $('.reset-layout').hide();
+		$('.reset-layout').hide();
 
 		// setup list mode
 		$('#list-views').show();
@@ -153,17 +155,17 @@ function render(mode, opts) {
 
 		// setup item mode
 		$('#item-views').show();
-        $('.reset-layout').show();
-        _itemModeUrl = opts.url;
-        if (_itemModeUrl.indexOf(window.location.origin) === 0) {
-            // current host, fetch directly
-            _itemReq = GET(_itemModeUrl);
-        } else {
-            // public web, use fetch proxy
-            _itemReq = GET(window.location.host + '/.fetch', { url: _itemModeUrl });
-        }
-        _itemReq.Accept('application/json, text/html, */*');
-        cache.add(opts.url, _itemReq);
+		$('.reset-layout').show();
+		_itemModeUrl = opts.url;
+		if (_itemModeUrl.indexOf(window.location.origin) === 0) {
+			// current host, fetch directly
+			_itemReq = GET(_itemModeUrl);
+		} else {
+			// public web, use fetch proxy
+			_itemReq = GET(window.location.host + '/.fetch', { url: _itemModeUrl });
+		}
+		_itemReq.Accept('application/json, text/html, */*');
+		cache.add(opts.url, _itemReq);
 		renderItemViews();
 		break;
 	}
@@ -172,7 +174,7 @@ function render(mode, opts) {
 function renderListViews() {
 	var $list = $('#list-views');
 	$list.empty(); // clear out
-    $('#url-input').val('');
+	$('#url-input').val('');
 
 	function renderView(mediaLinkIndex, mediaLink, rendererLink) {
 		var title = util.escapeHTML(mediaLink.title || mediaLink.id || prettyHref(mediaLink.href));
@@ -201,89 +203,88 @@ function renderListViews() {
 }
 
 function renderItemViews() {
-    var itemUri = _itemModeUrl; // the views need to read from the right uri, so capture it now to account for possible state-changes during the async
+	var itemUri = _itemModeUrl; // the views need to read from the right uri, so capture it now to account for possible state-changes during the async
 	var $views = $('#item-views');
 	var repaintTimeoutId = setTimeout($views.html.bind($views, '<h3>Fetching...</h3>'), 1500);
-    $('#url-input').val(itemUri);
-    _itemReq
-        .then(function(res) {
-        	clearTimeout(repaintTimeoutId);
+	$('#url-input').val(itemUri);
+	_itemReq
+		.then(function(res) {
+			clearTimeout(repaintTimeoutId);
 
-            var mediaLink = res.links.get('self');
-            var linkIsAdded = false;
-            if (!mediaLink) {
-                mediaLink = {};
-                res.links.push(mediaLink);
-                linkIsAdded = true;
-            }
+			var mediaLink = res.links.get('self');
+			var linkIsAdded = false;
+			if (!mediaLink) {
+				mediaLink = {};
+				res.links.push(mediaLink);
+				linkIsAdded = true;
+			}
 
-            // Defaults
-            if (!mediaLink.href) {
-                mediaLink.href = itemUri;
-            }
-            if (!mediaLink.rel) mediaLink.rel = '';
-            if (!local.queryLink(mediaLink, 'self')) {
-                mediaLink.rel = 'self ' + mediaLink.rel;
-            }
-            if (!local.queryLink(mediaLink, 'stdrel.com/media')) {
-                mediaLink.rel = 'stdrel.com/media ' + mediaLink.rel;
-            }
+			// Defaults
+			if (!mediaLink.href) {
+				mediaLink.href = itemUri;
+			}
+			if (!mediaLink.rel) mediaLink.rel = '';
+			if (!local.queryLink(mediaLink, 'self')) {
+				mediaLink.rel = 'self ' + mediaLink.rel;
+			}
+			if (!local.queryLink(mediaLink, 'stdrel.com/media')) {
+				mediaLink.rel = 'stdrel.com/media ' + mediaLink.rel;
+			}
 
-            // Try to establish the mimetype
-            if (!mediaLink.type) {
-                var mimeType = res.ContentType;
-                if (!mimeType) {
-                    mimeType = mimetypes.lookup(url) || 'application/octet-stream';
-                }
-                var semicolonIndex = mimeType.indexOf(';');
-                if (semicolonIndex !== -1) {
-                    mimeType = mimeType.slice(0, semicolonIndex); // strip the charset
-                }
-                mediaLink.type = mimeType;
-            }
+			// Try to establish the mimetype
+			if (!mediaLink.type) {
+				var mimeType = res.ContentType;
+				if (!mimeType) {
+					mimeType = mimetypes.lookup(url) || 'application/octet-stream';
+				}
+				var semicolonIndex = mimeType.indexOf(';');
+				if (semicolonIndex !== -1) {
+					mimeType = mimeType.slice(0, semicolonIndex); // strip the charset
+				}
+				mediaLink.type = mimeType;
+			}
 
-            // Now that link is settled, add to headers if needed
-            if (linkIsAdded) {
-                if (typeof res.Link == 'string') {
-                    res.Link = local.httpHeaders.serialize('link', [mediaLink]) + ((res.Link)?(','+res.Link):'');
-                } else {
-                    if (!res.Link)
-                        res.Link = [];
-                    res.Link.push(mediaLink);
-                }
-            }
+			// Now that link is settled, add to headers if needed
+			if (linkIsAdded) {
+				if (typeof res.Link == 'string') {
+					res.Link = local.httpHeaders.serialize('link', [mediaLink]) + ((res.Link)?(','+res.Link):'');
+				} else {
+					if (!res.Link)
+						res.Link = [];
+					res.Link.push(mediaLink);
+				}
+			}
 
+			// Gather views for the item
+			_activeRendererLinks = {};
+			var matches = feedcfg.findRenderers(mediaLink);
+			for (var j=0; j < matches.length; j++) {
+				_activeRendererLinks[matches[j].href] = matches[j];
+			}
 
-	        // Gather views for the item
-	        _activeRendererLinks = {};
-	        var matches = feedcfg.findRenderers(mediaLink);
-	        for (var j=0; j < matches.length; j++) {
-		        _activeRendererLinks[matches[j].href] = matches[j];
-	        }
+			// Create view spaces
+			var i = 0;
+			$views.empty();
+			for (var href in _activeRendererLinks) {
+				var rendererLink = _activeRendererLinks[href];
 
-	        // Create view spaces
-	        var i = 0;
-            $views.empty();
-	        for (var href in _activeRendererLinks) {
-		        var rendererLink = _activeRendererLinks[href];
+				var $view = createViewEl(rendererLink);
+				$views.append($view);
+				$view.on('request', onViewRequest);
 
-		        var $view = createViewEl(rendererLink);
-		        $views.append($view);
-		        $view.on('request', onViewRequest);
-
-                // :TODO: give plan token in a header to allow the fetch
-		        var renderRequest = { method: 'GET', url: href, params: { target: itemUri } };
-                // ^ we pass the original item uri as the target, and workers will automatically prepend a #-sign to send it to the vweb
-		        rendererDispatch(renderRequest, rendererLink, $view);
-	        }
-        })
-        .fail(function(res) {
-            if (res instanceof local.IncomingResponse) {
-                $views.html('<h4>Error: '+util.escapeHTML(res.status||0)+' '+util.escapeHTML(res.reason||'')+'</h4>');
-            } else {
-                $views.html('<h4>Error: '+res.toString()+'</h4>');
-            }
-        });
+				// :TODO: give plan token in a header to allow the fetch
+				var renderRequest = { method: 'GET', url: href, params: { target: itemUri } };
+				// ^ we pass the original item uri as the target, and workers will automatically prepend a #-sign to send it to the vweb
+				rendererDispatch(renderRequest, rendererLink, $view);
+			}
+		})
+		.fail(function(res) {
+			if (res instanceof local.IncomingResponse) {
+				$views.html('<h4>Error: '+util.escapeHTML(res.status||0)+' '+util.escapeHTML(res.reason||'')+'</h4>');
+			} else {
+				$views.html('<h4>Error: '+res.toString()+'</h4>');
+			}
+		});
 }
 
 // create div for view
@@ -294,7 +295,7 @@ function createViewEl(rendererLink) {
 function onViewRequest(e) {
 	var $view = $(this);
 	var href = $view.data('view');
-	rendererDispatch(e.detail, _activeRendererLinks[href], $view);
+	rendererDispatch(e.originalEvent.detail, _activeRendererLinks[href], $view);
 	return false;
 }
 
@@ -306,7 +307,7 @@ function rendererDispatch(req, rendererLink, $view) {
 	var reqUrld      = local.parseUri(req.url);
 	var reqDomain    = reqUrld.protocol + '://' + reqUrld.authority;
 	var rendererUrld   = local.parseUri(rendererLink.href);
-	var rendererDomain = rendererUrld.protocol + '://' + rendererUrld.authority;
+	var rendererDomain = (rendererUrld.authority) ? (rendererUrld.protocol + '://' + rendererUrld.authority) : '';
 
 	// audit request
 	// :TODO: must be to renderer
@@ -319,7 +320,7 @@ function rendererDispatch(req, rendererLink, $view) {
 	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
 
 	if (!local.isAbsUri(req.headers.url)) {
-		req.headers.url = local.joinUri(rendererDomain, req.headers.url);
+		req.headers.url = local.joinRelPath(rendererUrld, req.headers.url);
 	}
 
 	// dispatch
@@ -338,7 +339,7 @@ function rendererDispatch(req, rendererLink, $view) {
 			view = reason + ' <small>'+res.status+'</small>';
 		}
 
-        // sanitize
+		// sanitize
 		$view.html(sec.sanitizeHtml(view, '#'+$view.attr('id')));
 	});
 	return req;
@@ -545,6 +546,15 @@ local.at('#thing-renderer', function(req, res) {
 		].join('');
 		res.end(html);
 	});
+});
+
+local.at('#test-render', function(req, res) {
+	res.s200().ContentType('html');
+	if (req.params.other) {
+		res.end('<a href="#test-render">first</a>');
+	} else {
+		res.end('<a href="#test-render?other=1">second</a>');
+	}
 });
 
 // Default renderer
