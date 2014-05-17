@@ -332,6 +332,11 @@ function respond(url, res, isHEAD) {
 local.at('#cache/(.*)', function(req, res, worker) {
 	// :TODO: perms
 
+    // add query params back onto url if parsed out
+    if (Object.keys(req.params).length) {
+        req.pathd[1] += '?'+local.contentTypes.serialize('form', req.params);
+    }
+
 	if (req.HEAD || req.GET) {
 		if (respond(req.pathd[1], res, req.HEAD)) {
 			return;
@@ -345,30 +350,51 @@ local.at('#cache/(.*)', function(req, res, worker) {
 var util = require('../util');
 
 module.exports = {
-	setup: function() {},
+	setup: function(indexLinks) {
+		indexLinks.forEach(addIndex);
+	},
 	get: function() { return _cfg; },
+	addIndex: addIndex,
+	setIndex: setIndex,
 	findRenderers: findRenderers,
 	findRenderer: findRenderer
 };
 
 // The active feed config
 var _cfg = {
-	renderers: local.util.table(
-		['href',           'rel',                'title',       'for'],
-		'#thing-renderer', 'layer1.io/renderer', 'Thing',       'schema.org/Thing',
-		'#about-renderer', 'layer1.io/renderer', 'About',       'stdrel.com/media',
-		'/user/test.js#',  'layer1.io/renderer', 'Test',        'stdrel.com/media',
-		'#test-render',  'layer1.io/renderer', 'Test',        'stdrel.com/media',
-		'#hn-renderer',    'layer1.io/renderer', 'HN Renderer', 'stdrel.com/media text/html news.ycombinator.com'
-		// rel(contains)stdrel.com/media,type(starts)text(or)application
-		// href(protocol_is)https,href(domain_is)
-	)
+	curIndex: null,
+	indexLinks: [],
+	indexes: {}, // indexHref -> [link]
+	renderers: {}  // indexHref -> [link]
 };
+
+function addIndex(indexLink) {
+	_cfg.indexLinks.push(indexLink);
+	_cfg.indexes[indexLink.href] = [];
+	_cfg.renderers[indexLink.href] = [];
+	if (!_cfg.curIndex) {
+		_cfg.curIndex = indexLink.href;
+	}
+	return HEAD(indexLink.href).then(function(res) {
+		_cfg.indexes[indexLink.href] = res.links;
+		_cfg.renderers[indexLink.href] = res.links.query('layer1.io/renderer');
+		return res;
+	});
+}
+
+function setIndex(indexLink) {
+	if (!(indexLink.href in _cfg.indexes)) {
+		addIndex(indexLink);
+	}
+	_cfg.curIndex = indexLink.href;
+}
 
 function findRenderers(targetLink, maxMatches) {
 	var matches = [];
-	for (var i=0; i < _cfg.renderers.length; i++) {
-		var g = _cfg.renderers[i];
+	var renderers = _cfg.renderers[_cfg.curIndex];
+
+	for (var i=0; i < renderers.length; i++) {
+		var g = renderers[i];
 		if (!g.for) continue;
 		if (local.searchLink(targetLink, g.for)) {
 			matches.push(g);
@@ -416,12 +442,11 @@ function setup(mediaLinks) {
 	});
 }
 
-// VWeb server.
-//
-local.at('#gui', function(req, res, worker) {
+// Services
+local.at('#gui/context', function(req, res, worker) {
 	if (worker) return res.s403('forbidden').end();
 
-	if (req.VIEW) {
+	if (req.PUT) {
 		return req.buffer(function() {
 			// Check we got a URL
 			var url = req.params.url || req.body.url;
@@ -434,13 +459,34 @@ local.at('#gui', function(req, res, worker) {
 			return res.s204().end();
 		});
 	}
-	res.Allow('VIEW');
+	res.Allow('PUT');
+	res.s405('bad method').end();
+});
+local.at('#gui/index', function(req, res, worker) {
+	if (worker) return res.s403('forbidden').end();
+
+	if (req.PUT) {
+		return req.buffer(function() {
+			// Check we got a URL
+			var url = req.params.url || req.body.url;
+			if (!url) {
+				return res.s400('`url` required in params or json').end();
+			}
+
+			// Set index and re-render
+			feedcfg.setIndex({ href: url });
+			render();
+			res.s204().end();
+		});
+	}
+	res.Allow('PUT');
 	res.s405('bad method').end();
 });
 
+
 function render(mode, opts) {
 	opts = opts || {};
-	_mode = mode;
+	_mode = mode || _mode;
 	switch (_mode) {
 	case 'list':
 		// tear down item mode
@@ -459,7 +505,7 @@ function render(mode, opts) {
 		// setup item mode
 		$('#item-views').show();
 		$('.reset-layout').show();
-		_itemModeUrl = opts.url;
+		_itemModeUrl = opts.url || _itemModeUrl;
 		if (_itemModeUrl.indexOf(window.location.origin) === 0 || _itemModeUrl.indexOf('#') !== -1) {
 			// current host or virtual, fetch directly
 			_itemReq = GET(_itemModeUrl);
@@ -472,6 +518,9 @@ function render(mode, opts) {
 		renderItemViews();
 		break;
 	}
+
+	// show index nav
+	renderIndexSidenav();
 }
 
 function renderListViews() {
@@ -483,7 +532,7 @@ function renderListViews() {
 		var title = util.escapeHTML(mediaLink.title || mediaLink.id || prettyHref(mediaLink.href));
 		var $slot =  $(
 			'<div id="slot-'+mediaLinkIndex+'" class="directory-item-slot">'+
-				'<a class="title" method="VIEW" href="#gui?url='+mediaLink.href+'"><b class="glyphicon glyphicon-file"></b>'+title+'</a>'+
+				'<a class="title" method="PUT" href="#gui/context?url='+mediaLink.href+'"><b class="glyphicon glyphicon-file"></b>'+title+'</a>'+
 				'<div id="view-'+mediaLinkIndex+'" class="view" data-view="'+rendererLink.href+'">Loading...</div>'+
 			'</div>'
 		);
@@ -588,6 +637,21 @@ function renderItemViews() {
 		});
 }
 
+function renderIndexSidenav() {
+	var $nav = $('#index-sidenav');
+	$nav.empty();
+	feedcfg.get().indexLinks.forEach(function(indexLink) {
+		var isActive = (indexLink.href == feedcfg.get().curIndex);
+		$nav.append(
+			'<li ' + (isActive?'class="active"':'') + '>' +
+				'<a method=PUT href="#gui/index?url=' + encodeURIComponent(util.escapeHTML(indexLink.href)) + '">' +
+					util.escapeHTML(indexLink.title || indexLink.id || indexLink.href) +
+				'</a>' +
+			'</li>'
+		);
+	});
+}
+
 // create div for view
 function createViewEl(rendererLink) {
 	return $('<div class="view" data-view="'+rendererLink.href+'"></div>');
@@ -656,17 +720,25 @@ var globals = require('../globals');
 var util = require('../util');
 var gui = require('./gui');
 var mediaLinks = local.queryLinks(document, 'stdrel.com/media');
+var indexLinks = local.queryLinks(document, 'layer1.io/index');
 
 // Environment Setup
 // =================
 local.logAllExceptions = true;
 require('../auth').setup();
 require('../http-headers').setup();
-require('./feedcfg').setup();
-require('./renderers'); // :DEBUG:
+require('./feedcfg').setup(indexLinks);
 
-// ui
-gui.setup(mediaLinks);
+require('./renderers'); // :DEBUG:
+require('./feedcfg').addIndex({ href: '#', rel: 'layer1.io/index', title: 'Builtins' }).then(function() {
+	gui.setup(mediaLinks);
+
+	require('./feedcfg').addIndex({ href: '#test-index', rel: 'layer1.io/index', title: 'Test' })
+		.then(gui.render.bind(gui, null, null));
+}).fail(function() {
+	console.error('Failed to setup builtins index');
+});
+
 
 local.bindRequestEvents(document);
 $(document).on('request', function(e) {
@@ -700,11 +772,26 @@ function auth(req, res, worker) {
 // toplevel
 local.at('#', function (req, res, worker) {
 	res.link(
-		['href',    'id',      'rel',                       'title'],
-		'#',        undefined, 'self service via',          'Host Page',
-		'#target',  'target',  'service layer1.io/target',  'Target for Rendering',
-		'#feed',    'feed',    'service layer1.io/feed',    'Current Feed',
-		'#service', 'service', 'service layer1.io/service', 'Layer1 Toplevel Service'
+		['href',    'id',      'rel',                          'title'],
+		'#',        undefined, 'self service layer1.io/index', 'Host Page',
+		'#target',  'target',  'service layer1.io/target',     'Target for Rendering',
+		'#feed',    'feed',    'service layer1.io/feed',       'Current Feed',
+		'#service', 'service', 'service layer1.io/service',    'Layer1 Toplevel Service'
+	);
+	res.link(
+		['href',           'rel',                'title',       'for'],
+		'#thing-renderer', 'layer1.io/renderer', 'Thing',       'schema.org/Thing',
+		'#about-renderer', 'layer1.io/renderer', 'About',       'stdrel.com/media',
+		'#test-render',    'layer1.io/renderer', 'Test2',       'stdrel.com/media',
+		'#hn-renderer',    'layer1.io/renderer', 'HN Renderer', 'stdrel.com/media text/html news.ycombinator.com'
+	);
+	res.s204().end();
+});
+// :DEBUG
+local.at('#test-index', function (req, res, worker) {
+	res.link(
+		['href',           'rel',                'title',       'for'],
+		'/user/test.js#',  'layer1.io/renderer', 'Test1',       'stdrel.com/media'
 	);
 	res.s204().end();
 });

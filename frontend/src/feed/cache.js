@@ -19,6 +19,11 @@ function respond(url, res, isHEAD) {
 local.at('#cache/(.*)', function(req, res, worker) {
 	// :TODO: perms
 
+    // add query params back onto url if parsed out
+    if (Object.keys(req.params).length) {
+        req.pathd[1] += '?'+local.contentTypes.serialize('form', req.params);
+    }
+
 	if (req.HEAD || req.GET) {
 		if (respond(req.pathd[1], res, req.HEAD)) {
 			return;

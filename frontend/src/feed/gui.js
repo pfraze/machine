@@ -31,12 +31,11 @@ function setup(mediaLinks) {
 	});
 }
 
-// VWeb server.
-//
-local.at('#gui', function(req, res, worker) {
+// Services
+local.at('#gui/context', function(req, res, worker) {
 	if (worker) return res.s403('forbidden').end();
 
-	if (req.VIEW) {
+	if (req.PUT) {
 		return req.buffer(function() {
 			// Check we got a URL
 			var url = req.params.url || req.body.url;
@@ -49,13 +48,34 @@ local.at('#gui', function(req, res, worker) {
 			return res.s204().end();
 		});
 	}
-	res.Allow('VIEW');
+	res.Allow('PUT');
+	res.s405('bad method').end();
+});
+local.at('#gui/index', function(req, res, worker) {
+	if (worker) return res.s403('forbidden').end();
+
+	if (req.PUT) {
+		return req.buffer(function() {
+			// Check we got a URL
+			var url = req.params.url || req.body.url;
+			if (!url) {
+				return res.s400('`url` required in params or json').end();
+			}
+
+			// Set index and re-render
+			feedcfg.setIndex({ href: url });
+			render();
+			res.s204().end();
+		});
+	}
+	res.Allow('PUT');
 	res.s405('bad method').end();
 });
 
+
 function render(mode, opts) {
 	opts = opts || {};
-	_mode = mode;
+	_mode = mode || _mode;
 	switch (_mode) {
 	case 'list':
 		// tear down item mode
@@ -74,7 +94,7 @@ function render(mode, opts) {
 		// setup item mode
 		$('#item-views').show();
 		$('.reset-layout').show();
-		_itemModeUrl = opts.url;
+		_itemModeUrl = opts.url || _itemModeUrl;
 		if (_itemModeUrl.indexOf(window.location.origin) === 0 || _itemModeUrl.indexOf('#') !== -1) {
 			// current host or virtual, fetch directly
 			_itemReq = GET(_itemModeUrl);
@@ -87,6 +107,9 @@ function render(mode, opts) {
 		renderItemViews();
 		break;
 	}
+
+	// show index nav
+	renderIndexSidenav();
 }
 
 function renderListViews() {
@@ -98,7 +121,7 @@ function renderListViews() {
 		var title = util.escapeHTML(mediaLink.title || mediaLink.id || prettyHref(mediaLink.href));
 		var $slot =  $(
 			'<div id="slot-'+mediaLinkIndex+'" class="directory-item-slot">'+
-				'<a class="title" method="VIEW" href="#gui?url='+mediaLink.href+'"><b class="glyphicon glyphicon-file"></b>'+title+'</a>'+
+				'<a class="title" method="PUT" href="#gui/context?url='+mediaLink.href+'"><b class="glyphicon glyphicon-file"></b>'+title+'</a>'+
 				'<div id="view-'+mediaLinkIndex+'" class="view" data-view="'+rendererLink.href+'">Loading...</div>'+
 			'</div>'
 		);
@@ -201,6 +224,21 @@ function renderItemViews() {
 				$views.html('<h4>Error: '+res.toString()+'</h4>');
 			}
 		});
+}
+
+function renderIndexSidenav() {
+	var $nav = $('#index-sidenav');
+	$nav.empty();
+	feedcfg.get().indexLinks.forEach(function(indexLink) {
+		var isActive = (indexLink.href == feedcfg.get().curIndex);
+		$nav.append(
+			'<li ' + (isActive?'class="active"':'') + '>' +
+				'<a method=PUT href="#gui/index?url=' + encodeURIComponent(util.escapeHTML(indexLink.href)) + '">' +
+					util.escapeHTML(indexLink.title || indexLink.id || indexLink.href) +
+				'</a>' +
+			'</li>'
+		);
+	});
 }
 
 // create div for view

@@ -1,30 +1,51 @@
 var util = require('../util');
 
 module.exports = {
-	setup: function() {},
+	setup: function(indexLinks) {
+		indexLinks.forEach(addIndex);
+	},
 	get: function() { return _cfg; },
+	addIndex: addIndex,
+	setIndex: setIndex,
 	findRenderers: findRenderers,
 	findRenderer: findRenderer
 };
 
 // The active feed config
 var _cfg = {
-	renderers: local.util.table(
-		['href',           'rel',                'title',       'for'],
-		'#thing-renderer', 'layer1.io/renderer', 'Thing',       'schema.org/Thing',
-		'#about-renderer', 'layer1.io/renderer', 'About',       'stdrel.com/media',
-		'/user/test.js#',  'layer1.io/renderer', 'Test',        'stdrel.com/media',
-		'#test-render',  'layer1.io/renderer', 'Test',        'stdrel.com/media',
-		'#hn-renderer',    'layer1.io/renderer', 'HN Renderer', 'stdrel.com/media text/html news.ycombinator.com'
-		// rel(contains)stdrel.com/media,type(starts)text(or)application
-		// href(protocol_is)https,href(domain_is)
-	)
+	curIndex: null,
+	indexLinks: [],
+	indexes: {}, // indexHref -> [link]
+	renderers: {}  // indexHref -> [link]
 };
+
+function addIndex(indexLink) {
+	_cfg.indexLinks.push(indexLink);
+	_cfg.indexes[indexLink.href] = [];
+	_cfg.renderers[indexLink.href] = [];
+	if (!_cfg.curIndex) {
+		_cfg.curIndex = indexLink.href;
+	}
+	return HEAD(indexLink.href).then(function(res) {
+		_cfg.indexes[indexLink.href] = res.links;
+		_cfg.renderers[indexLink.href] = res.links.query('layer1.io/renderer');
+		return res;
+	});
+}
+
+function setIndex(indexLink) {
+	if (!(indexLink.href in _cfg.indexes)) {
+		addIndex(indexLink);
+	}
+	_cfg.curIndex = indexLink.href;
+}
 
 function findRenderers(targetLink, maxMatches) {
 	var matches = [];
-	for (var i=0; i < _cfg.renderers.length; i++) {
-		var g = _cfg.renderers[i];
+	var renderers = _cfg.renderers[_cfg.curIndex];
+
+	for (var i=0; i < renderers.length; i++) {
+		var g = renderers[i];
 		if (!g.for) continue;
 		if (local.searchLink(targetLink, g.for)) {
 			matches.push(g);

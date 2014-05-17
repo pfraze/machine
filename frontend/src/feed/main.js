@@ -2,17 +2,25 @@ var globals = require('../globals');
 var util = require('../util');
 var gui = require('./gui');
 var mediaLinks = local.queryLinks(document, 'stdrel.com/media');
+var indexLinks = local.queryLinks(document, 'layer1.io/index');
 
 // Environment Setup
 // =================
 local.logAllExceptions = true;
 require('../auth').setup();
 require('../http-headers').setup();
-require('./feedcfg').setup();
-require('./renderers'); // :DEBUG:
+require('./feedcfg').setup(indexLinks);
 
-// ui
-gui.setup(mediaLinks);
+require('./renderers'); // :DEBUG:
+require('./feedcfg').addIndex({ href: '#', rel: 'layer1.io/index', title: 'Builtins' }).then(function() {
+	gui.setup(mediaLinks);
+
+	require('./feedcfg').addIndex({ href: '#test-index', rel: 'layer1.io/index', title: 'Test' })
+		.then(gui.render.bind(gui, null, null));
+}).fail(function() {
+	console.error('Failed to setup builtins index');
+});
+
 
 local.bindRequestEvents(document);
 $(document).on('request', function(e) {
@@ -46,11 +54,26 @@ function auth(req, res, worker) {
 // toplevel
 local.at('#', function (req, res, worker) {
 	res.link(
-		['href',    'id',      'rel',                       'title'],
-		'#',        undefined, 'self service via',          'Host Page',
-		'#target',  'target',  'service layer1.io/target',  'Target for Rendering',
-		'#feed',    'feed',    'service layer1.io/feed',    'Current Feed',
-		'#service', 'service', 'service layer1.io/service', 'Layer1 Toplevel Service'
+		['href',    'id',      'rel',                          'title'],
+		'#',        undefined, 'self service layer1.io/index', 'Host Page',
+		'#target',  'target',  'service layer1.io/target',     'Target for Rendering',
+		'#feed',    'feed',    'service layer1.io/feed',       'Current Feed',
+		'#service', 'service', 'service layer1.io/service',    'Layer1 Toplevel Service'
+	);
+	res.link(
+		['href',           'rel',                'title',       'for'],
+		'#thing-renderer', 'layer1.io/renderer', 'Thing',       'schema.org/Thing',
+		'#about-renderer', 'layer1.io/renderer', 'About',       'stdrel.com/media',
+		'#test-render',    'layer1.io/renderer', 'Test2',       'stdrel.com/media',
+		'#hn-renderer',    'layer1.io/renderer', 'HN Renderer', 'stdrel.com/media text/html news.ycombinator.com'
+	);
+	res.s204().end();
+});
+// :DEBUG
+local.at('#test-index', function (req, res, worker) {
+	res.link(
+		['href',           'rel',                'title',       'for'],
+		'/user/test.js#',  'layer1.io/renderer', 'Test1',       'stdrel.com/media'
 	);
 	res.s204().end();
 });
