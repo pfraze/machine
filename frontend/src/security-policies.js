@@ -41,7 +41,10 @@ var policies = {
 		'label', 'input', 'button', 'select',
 		'datalist', 'optgroup', 'option',
 		'textarea', 'keygen', 'output',
-		'progress', 'meter'
+		'progress', 'meter',
+
+		// crummy old tags that really shouldnt be used anymore
+		'center'
 	],
 	disallowedClasses: [
 		// Boostrap

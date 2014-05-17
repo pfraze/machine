@@ -32,7 +32,6 @@ local.at('#test-render', function(req, res) {
 // Default renderer
 local.at('#about-renderer', function(req, res) {
 	HEAD(req.params.target)
-		.forceLocal() // force local so that, if the scheme is public (http/s), we'll go through the virtual proxy at #http or #https
 		.always(function(targetRes) {
 			var selfLink = targetRes.links.get('self');
 			if (!selfLink) {
@@ -70,8 +69,6 @@ local.at('#test-renderer', function(req, res) {
 // Hacker news renderer
 local.at('#hn-renderer', function(req, res) {
 	GET(req.params.target)
-		.forceLocal() // force local so that, if the scheme is public (http/s), we'll go through the virtual proxy at #http or #https
-		              // ...happens automatically in workers
 		.always(function (targetRes) {
 			var selfLink = targetRes.links.get('self');
 			if (!selfLink) return res.s502('could not load target').end();

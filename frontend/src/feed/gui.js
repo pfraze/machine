@@ -1,4 +1,5 @@
 var sec = require('../security');
+var mimetypes = require('../mimetypes');
 var util = require('../util');
 var feedcfg = require('./feedcfg');
 var cache = require('./cache');
@@ -74,8 +75,8 @@ function render(mode, opts) {
 		$('#item-views').show();
 		$('.reset-layout').show();
 		_itemModeUrl = opts.url;
-		if (_itemModeUrl.indexOf(window.location.origin) === 0) {
-			// current host, fetch directly
+		if (_itemModeUrl.indexOf(window.location.origin) === 0 || _itemModeUrl.indexOf('#') !== -1) {
+			// current host or virtual, fetch directly
 			_itemReq = GET(_itemModeUrl);
 		} else {
 			// public web, use fetch proxy
@@ -152,7 +153,7 @@ function renderItemViews() {
 			if (!mediaLink.type) {
 				var mimeType = res.ContentType;
 				if (!mimeType) {
-					mimeType = mimetypes.lookup(url) || 'application/octet-stream';
+					mimeType = mimetypes.lookup(itemUri) || 'application/octet-stream';
 				}
 				var semicolonIndex = mimeType.indexOf(';');
 				if (semicolonIndex !== -1) {
@@ -189,9 +190,7 @@ function renderItemViews() {
 				$views.append($view);
 				$view.on('request', onViewRequest);
 
-				// :TODO: give plan token in a header to allow the fetch
-				var renderRequest = { method: 'GET', url: href, params: { target: itemUri } };
-				// ^ we pass the original item uri as the target, and workers will automatically prepend a #-sign to send it to the vweb
+				var renderRequest = { method: 'GET', url: href, params: { target: 'http://page#cache/'+itemUri } };
 				rendererDispatch(renderRequest, rendererLink, $view);
 			}
 		})
