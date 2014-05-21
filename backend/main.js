@@ -9,6 +9,7 @@ var fs      = require('fs');
 var db         = require('./lib/db');
 var middleware = require('./lib/middleware.js');
 var html       = require('./lib/html.js');
+var frontendjs = require('./lib/frontendjs.js');
 
 // Config
 // ======
@@ -59,8 +60,9 @@ if (!config.ssl && urlPort == '80') urlPort = false;
 config.authority = config.hostname + (urlPort ? (':' + urlPort) : '');
 config.url = ((config.ssl) ? 'https://' : 'http://') + config.authority;
 
-// Read HTML with config mixed in
+// Read assets with config mixed in
 html.load(config);
+frontendjs.load(config);
 
 // Server Creation
 // ===============

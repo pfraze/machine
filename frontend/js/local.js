@@ -86,6 +86,7 @@ util.mixin.call(module.exports, require('./config.js'));
 util.mixin.call(module.exports, require('./promises.js'));
 util.mixin.call(module.exports, require('./request-event.js'));
 util.mixin.call(module.exports, require('./web/helpers.js'));
+util.mixin.call(module.exports, require('./web/links.js'));
 util.mixin.call(module.exports, require('./web/httpl.js'));
 util.mixin.call(module.exports, require('./web/workers.js'));
 util.mixin.call(module.exports, require('./web/subscribe.js'));
@@ -134,7 +135,7 @@ if (global) {
 
 // Run worker setup (does nothing outside of a worker)
 require('./worker');
-},{"./config.js":1,"./constants.js":2,"./promises.js":4,"./request-event.js":5,"./util":8,"./web/bridge.js":9,"./web/client.js":10,"./web/content-types.js":11,"./web/helpers.js":12,"./web/http-headers.js":13,"./web/httpl.js":14,"./web/incoming-request.js":15,"./web/incoming-response.js":16,"./web/request.js":17,"./web/response.js":18,"./web/schemes.js":19,"./web/subscribe.js":20,"./web/uri-template.js":21,"./web/workers.js":22,"./worker":23}],4:[function(require,module,exports){
+},{"./config.js":1,"./constants.js":2,"./promises.js":4,"./request-event.js":5,"./util":8,"./web/bridge.js":9,"./web/client.js":10,"./web/content-types.js":11,"./web/helpers.js":12,"./web/http-headers.js":13,"./web/httpl.js":14,"./web/incoming-request.js":15,"./web/incoming-response.js":16,"./web/links.js":17,"./web/request.js":18,"./web/response.js":19,"./web/schemes.js":20,"./web/subscribe.js":21,"./web/uri-template.js":22,"./web/workers.js":23,"./worker":24}],4:[function(require,module,exports){
 var localConfig = require('./config.js');
 var util = require('./util');
 
@@ -1294,7 +1295,7 @@ function validateHttplMessage(parsedmsg) {
 		return false;
 	return true;
 }
-},{"./helpers.js":12,"./httpl.js":14,"./incoming-request.js":15,"./incoming-response.js":16,"./request.js":17,"./response.js":18}],10:[function(require,module,exports){
+},{"./helpers.js":12,"./httpl.js":14,"./incoming-request.js":15,"./incoming-response.js":16,"./request.js":18,"./response.js":19}],10:[function(require,module,exports){
 var constants = require('../constants.js');
 var util = require('../util');
 var promise = require('../promises.js').promise;
@@ -1439,26 +1440,28 @@ Client.prototype.dispatch = function(req) {
 	if (!req) req = {};
 	var self = this;
 
-	// If given a request, streaming may occur. Suspend events on the request until resolved, as the dispatcher wont wire up until after resolution.
-	//if (req instanceof Request) {
-	//req.suspendEvents();
-	//}:TODO: ?
+	var isAutoEnding = (req.isAutoEnding !== void 0) ? req.isAutoEnding : true;
+	if (!(req instanceof Request)) {
+		req = new Request(req);
+	}
+	req.autoEnd(false); // suspend for a moment
 
 	// Resolve our target URL
-	return ((req.url) ? promise(req.url) : this.resolve({ noretry: req.noretry, nohead: true }))
+	((req.url) ? promise(req.url) : this.resolve({ noretry: req.noretry, nohead: true }))
 		.succeed(function(url) {
-			req.url = url;
-			req = local.dispatch(req);
+			req.headers.url = url;
+			if (isAutoEnding) req.autoEnd(); // resume autoend
+			req.start();
 
+			// After every successful request, update our links and mark our context as good (in case it had been bad)
 			req.succeed(function(res) {
-				// After every successful request, update our links and mark our context as good (in case it had been bad)
 				self.context.setResolved();
 				if (res.links) self.links = res.links;
 				else self.links = self.links || []; // cache an empty link list so we dont keep trying during resolution
 				return res;
-			})
-			.fail(function(res) {
-				console.debug('fail',req.url,res.status);
+			});
+			// On fail, mark context bad
+			req.fail(function(res) {
 				// Let a 1 or 404 indicate a bad context (as opposed to some non-navigational error like a bad request body)
 				if (res.status === constants.LINK_NOT_FOUND || res.status === 404)
 					self.context.setFailed(res);
@@ -1466,7 +1469,12 @@ Client.prototype.dispatch = function(req) {
 			});
 
 			return req;
+		})
+		.fail(function(res) {
+			req.reject(res);
 		});
+
+	return req;
 };
 
 // Executes a GET text/event-stream request to our context
@@ -1684,7 +1692,7 @@ module.exports = {
 	Client: Client,
 	client: client
 };
-},{"../constants.js":2,"../promises.js":4,"../util":8,"./helpers.js":12,"./httpl.js":14,"./request.js":17,"./response.js":18,"./subscribe.js":20,"./uri-template.js":21}],11:[function(require,module,exports){
+},{"../constants.js":2,"../promises.js":4,"../util":8,"./helpers.js":12,"./httpl.js":14,"./request.js":18,"./response.js":19,"./subscribe.js":21,"./uri-template.js":22}],11:[function(require,module,exports){
 // contentTypes
 // ============
 // EXPORTED
@@ -2361,7 +2369,7 @@ module.exports = {
 	makeProxyUri: makeProxyUri, makeProxyUrl: makeProxyUri,
 	renderUri: renderUri, renderUrl: renderUri,
 };
-},{"../promises.js":4,"./content-types.js":11,"./uri-template.js":21}],13:[function(require,module,exports){
+},{"../promises.js":4,"./content-types.js":11,"./uri-template.js":22}],13:[function(require,module,exports){
 var helpers = require('./helpers.js');
 
 // headers
@@ -2593,7 +2601,7 @@ module.exports = {
 	at: at,
 	getRoutes: getRoutes
 };
-},{"./content-types.js":11,"./helpers.js":12,"./incoming-request.js":15,"./response.js":18,"./schemes.js":19,"./workers.js":22}],15:[function(require,module,exports){
+},{"./content-types.js":11,"./helpers.js":12,"./incoming-request.js":15,"./response.js":19,"./schemes.js":20,"./workers.js":23}],15:[function(require,module,exports){
 var util = require('../util');
 var helpers = require('./helpers.js');
 var httpHeaders = require('./http-headers.js');
@@ -2701,7 +2709,7 @@ IncomingRequest.prototype.pipe = function(target, headersCB, bodyCb) {
 	}
 	return target;
 };
-},{"../util":8,"./content-types.js":11,"./helpers.js":12,"./http-headers.js":13,"./request":17,"./response":18}],16:[function(require,module,exports){
+},{"../util":8,"./content-types.js":11,"./helpers.js":12,"./http-headers.js":13,"./request":18,"./response":19}],16:[function(require,module,exports){
 var util = require('../util');
 var helpers = require('./helpers.js');
 var httpHeaders = require('./http-headers.js');
@@ -2749,40 +2757,10 @@ IncomingResponse.prototype.processHeaders = function(baseUrl, headers) {
 		}
 	}
 
-	// Update the link headers
-	if (this.link) {
-		this.links = Array.isArray(this.link) ? this.link : [this.link];
-		delete this.link;
-		this.links.forEach(function(link) {
-			// Convert relative paths to absolute uris
-			if (!helpers.isAbsUri(link.href) && baseUrl) {
-                if (link.href.charAt(0) == '#') {
-                    if (baseUrl.source) {
-                        // strip any hash or query param
-                        baseUrl = ((baseUrl.protocol) ? baseUrl.protocol + '://' : '') + baseUrl.authority + baseUrl.path;
-                    }
-                    link.href = helpers.joinUri(baseUrl, link.href);
-                } else {
-                    link.href = helpers.joinRelPath(baseUrl, link.href);
-				}
-			}
-
-            // Add `is` helper
-            if (link.is && typeof link.is != 'function') link._is = link.is;
-            noEnumDesc.value = helpers.queryLink.bind(null, link);
-            Object.defineProperty(link, 'is', noEnumDesc);
-		});
-	} else {
-		this.links = [];
-	}
-    noEnumDesc.value = helpers.queryLinks.bind(null, this.links);
-    Object.defineProperty(this.links, 'query', noEnumDesc);
-    noEnumDesc.value = function(query) { return this.query(query)[0]; };
-    Object.defineProperty(this.links, 'get', noEnumDesc);
-    noEnumDesc.value = helpers.searchLinks.bind(null, this.links);
-    Object.defineProperty(this.links, 'search', noEnumDesc);
+	// Process links
+	this.links = require('./links').processLinks(this.link || [], baseUrl);
+	delete this.link;
 };
-var noEnumDesc = { value: null, enumerable: false, configurable: true, writable: true };
 
 
 // Stream buffering
@@ -2852,7 +2830,43 @@ IncomingResponse.prototype.pipe = function(target, headersCB, bodyCb) {
 	}
 	return target;
 };
-},{"../util":8,"./content-types.js":11,"./helpers.js":12,"./http-headers.js":13,"./request":17,"./response":18}],17:[function(require,module,exports){
+},{"../util":8,"./content-types.js":11,"./helpers.js":12,"./http-headers.js":13,"./links":17,"./request":18,"./response":19}],17:[function(require,module,exports){
+var helpers = require('./helpers');
+module.exports.processLinks = function(links, baseUrl) {
+    if (!links) links = [];
+    links = Array.isArray(links) ? links : [links];
+	links.forEach(function(link) {
+		// Convert relative paths to absolute uris
+		if (link.href && !helpers.isAbsUri(link.href) && baseUrl) {
+            if (link.href.charAt(0) == '#') {
+                if (baseUrl.source) {
+                    // strip any hash or query param
+                    baseUrl = ((baseUrl.protocol) ? baseUrl.protocol + '://' : '') + baseUrl.authority + baseUrl.path;
+                }
+                link.href = helpers.joinUri(baseUrl, link.href);
+            } else {
+                link.href = helpers.joinRelPath(baseUrl, link.href);
+			}
+		}
+
+        // Add `is` helper
+        if (link.is && typeof link.is != 'function') link._is = link.is;
+        noEnumDesc.value = helpers.queryLink.bind(null, link);
+        Object.defineProperty(link, 'is', noEnumDesc);
+	});
+
+    // Add helpers
+    noEnumDesc.value = helpers.queryLinks.bind(null, links);
+    Object.defineProperty(links, 'query', noEnumDesc);
+    noEnumDesc.value = function(query) { return this.query(query)[0]; };
+    Object.defineProperty(links, 'get', noEnumDesc);
+    noEnumDesc.value = helpers.searchLinks.bind(null, links);
+    Object.defineProperty(links, 'search', noEnumDesc);
+
+    return links;
+};
+var noEnumDesc = { value: null, enumerable: false, configurable: true, writable: true };
+},{"./helpers":12}],18:[function(require,module,exports){
 var util = require('../util');
 var promises = require('../promises.js');
 var helpers = require('./helpers.js');
@@ -2892,6 +2906,7 @@ function Request(headers, originChannel) {
 }
 Request.prototype = Object.create(util.EventEmitter.prototype);
 util.mixin.call(Request.prototype, promises.Promise.prototype);
+Request.fulfillResponsePromise = fulfillResponsePromise;
 module.exports = Request;
 
 // Header setter
@@ -3064,6 +3079,10 @@ Request.prototype.start = function() {
         this.headers.url = '#' + this.headers.url;
         this.isVirtual = true;
     }
+    if (this.headers.url.charAt(0) == '/' && typeof window.location != 'undefined') {
+		var origin = window.location.protocol + '//' + window.location.hostname + ((window.location.port) ? (':' + window.location.port) : '');
+		this.headers.url = helpers.joinUri(origin, this.headers.url);
+    }
 	this.urld = helpers.parseUri(this.headers.url);
 
 	// Setup response object
@@ -3174,7 +3193,7 @@ function parseScheme(url) {
 	var schemeMatch = /^([^.^:]*):/.exec(url);
 	return (schemeMatch) ? schemeMatch[1] : 'http';
 }
-},{"../promises.js":4,"../util":8,"./content-types.js":11,"./helpers.js":12,"./incoming-response.js":16,"./response.js":18,"./schemes.js":19}],18:[function(require,module,exports){
+},{"../promises.js":4,"../util":8,"./content-types.js":11,"./helpers.js":12,"./incoming-response.js":16,"./response.js":19,"./schemes.js":20}],19:[function(require,module,exports){
 var util = require('../util');
 var promise = require('../promises.js').promise;
 var helpers = require('./helpers.js');
@@ -3351,7 +3370,7 @@ Response.prototype.close = function() {
 	this.clearEvents();
 	return this;
 };
-},{"../promises.js":4,"../util":8,"./content-types.js":11,"./helpers.js":12}],19:[function(require,module,exports){
+},{"../promises.js":4,"../util":8,"./content-types.js":11,"./helpers.js":12}],20:[function(require,module,exports){
 var util = require('../util');
 var helpers = require('./helpers.js');
 var contentTypes = require('./content-types.js');
@@ -3593,7 +3612,7 @@ schemes.register('data', function(oreq, ires) {
 	ores.s200().ContentType(contentType);
 	ores.end(data);
 });
-},{"../util":8,"./content-types.js":11,"./helpers.js":12,"./http-headers.js":13,"./response.js":18}],20:[function(require,module,exports){
+},{"../util":8,"./content-types.js":11,"./helpers.js":12,"./http-headers.js":13,"./response.js":19}],21:[function(require,module,exports){
 // Events
 // ======
 var util = require('../util');
@@ -3797,7 +3816,7 @@ module.exports = {
 	EventStream: EventStream,
 	EventHost: EventHost
 };
-},{"../util":8,"./content-types.js":11,"./request.js":17,"./response.js":18}],21:[function(require,module,exports){
+},{"../util":8,"./content-types.js":11,"./request.js":18,"./response.js":19}],22:[function(require,module,exports){
 /*
  UriTemplate Copyright (c) 2012-2013 Franz Antesberger. All Rights Reserved.
  Available via the MIT license.
@@ -4670,7 +4689,7 @@ var UriTemplate = (function () {
 }(function (UriTemplate) {
     module.exports = UriTemplate;
 }));
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 var helpers = require('./helpers.js');
 var promise = require('../promises.js').promise;
 var Bridge = require('./bridge.js');
@@ -4923,7 +4942,7 @@ WorkerWrapper.prototype.onWorkerLog = function(message) {
 			break;
 	}
 };
-},{"../config.js":1,"../promises.js":4,"./bridge.js":9,"./helpers.js":12}],23:[function(require,module,exports){
+},{"../config.js":1,"../promises.js":4,"./bridge.js":9,"./helpers.js":12}],24:[function(require,module,exports){
 if (typeof self != 'undefined' && typeof self.window == 'undefined') { (function() {
 	// GLOBAL
 	// custom console.*

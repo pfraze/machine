@@ -1,7 +1,7 @@
 h1 { color: #808080; }
 
 .nav { margin: 10px 0; }
-.layer1-startbar { margin: 10px 0; }
+#program-editor { margin: 10px 0; }
 
 /*.directory-links-list { border-bottom: 1px solid #ccc; }*/
 .directory-time { margin-top: 18px; font-size: 11px; color: #aaa; }

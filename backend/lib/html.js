@@ -1,7 +1,9 @@
-var _feedWatching, _feedLoading;
-var _secTestWatching, _secTestLoading;
+var _feed_watching     = false, _feed_loading     = false;
+var _sec_test_watching = false, _sec_test_loading = false;
+
 var fs = require('fs');
 var path = require('path');
+
 module.exports = {
 	feed: '',
 	secTest: '',
@@ -9,10 +11,10 @@ module.exports = {
 		var port = config.downstream_port || config.port;
 
 		var loadFeed = (function() {
-			if (_feedLoading) return;
-			_feedLoading = true;
+			if (_feed_loading) return;
+			_feed_loading = true;
 			fs.readFile('./frontend/feed.html', { encoding: 'utf8' }, (function(err, feed) {
-				_feedLoading = false;
+				_feed_loading = false;
 				if (err)
 					return console.log((new Date()).toLocaleTimeString() + ' - feed.html failed to load', err);
 				this.feed = feed
@@ -24,10 +26,10 @@ module.exports = {
 		loadFeed();
 
 		var loadSecTest = (function() {
-			if (_secTestLoading) return;
-			_secTestLoading = true;
+			if (_sec_test_loading) return;
+			_sec_test_loading = true;
 			fs.readFile('./frontend/sec-test.html', { encoding: 'utf8' }, (function(err, secTest) {
-				_secTestLoading = false;
+				_sec_test_loading = false;
 				if (err)
 					return console.log((new Date()).toLocaleTimeString() + ' - sec-test.html failed to load', err);
 				this.secTest = secTest
@@ -38,10 +40,10 @@ module.exports = {
 		}).bind(this);
 		loadSecTest();
 
-		if (!_feedWatching)
-			_feedWatching = fs.watch(path.normalize('./frontend/feed.html'), { persistent: false }, loadFeed), true;
-		if (!_secTestWatching)
-			_secTestWatching = fs.watch(path.normalize('./frontend/sec-test.html'), { persistent: false }, loadSecTest), true;
+		if (!_feed_watching)
+			_feed_watching = fs.watch(path.normalize('./frontend/feed.html'), { persistent: false }, loadFeed), true;
+		if (!_sec_test_watching)
+			_sec_test_watching = fs.watch(path.normalize('./frontend/sec-test.html'), { persistent: false }, loadSecTest), true;
 	},
 	render: function(tmplName, ctx) {
 		var html = module.exports[tmplName];

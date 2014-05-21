@@ -36,7 +36,7 @@ module.exports = function(server) {
 			'</{id}>; rel="item"; _internal=1', // used to manage the links internally (:TODO: use a reltype instead of _internal)
 			'</.auth>; rel="service"; id="auth"; title="Authentication Service"',
 			'</.me>; rel="item"; id=".me"; title="Your Profile"',
-			'</.fetch>; rel="service"; id=".fetch"; title="Resource-Fetching Proxy"',
+			'</.fetch>; rel="service layer1.io/proxy"; id=".fetch"; title="Resource-Fetching Proxy"',
 			'</.status>; rel="service"; id="status"; title="Network Host Stats"',
 		];
 		// :TODO: put behind a flag

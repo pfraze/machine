@@ -27,12 +27,12 @@
           <ul id="index-sidenav" class="nav nav-pills nav-stacked"></ul>
         </div>
         <div id="content-views" class="col-xs-10">
-          <form class="form layer1-startbar" role="form" action="#gui/context" method="PUT">
-            <input type="text" class="form-control" id="url-input" placeholder="Enter URL" name="url">
-            <p><a href="#" class="reset-layout">clear</a></p>
+          <form id="program-editor" class="form" role="form">
+            <textarea id="program-input" class="form-control" placeholder="Enter your program"></textarea>
+            <a id="run-program-btn" class="btn btn-default btn-xs" href="#">Run</a>
           </form>
           <div id="list-views" class="directory-links-list"></div>
-          <div id="item-views" class="directory-links-list"></div>
+          <div id="agent-view" class="view"></div>
         </div>
       </div>
     </div>

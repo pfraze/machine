@@ -20,7 +20,7 @@ module.exports = function(server) {
 		if (!req.query.url) {
 			res.setHeader('Link', [
 				'</>; rel="up via service"; title="'+config.hostname+'"',
-				'</.fetch>; rel="self service"; id=".fetch"; title="Resource-Fetching Proxy"',
+				'</.fetch>; rel="self service layer1.io/proxy"; id=".fetch"; title="Resource-Fetching Proxy"',
 			].join(', '));
 			return res.send(204);
 		}
