@@ -304,16 +304,9 @@ function renderProgramLoadErrors(ress) {
 function extractProgramUrls() {
 	var $input = $('#program-input');
 	var program = $input.val();
-	var urls = [];
-
-	//               edge     scheme        domain    rest   hashurl     scheme-only url  edge
-	//               ----   -----------   ----------- --     -------    ----------------- ----
-	var urlRegex = /(^|\b)(([A-z]+:\/\/)?[A-z0-9-]+\.[\S]+)|(\#[\S]+)|(([A-z]+:\/\/)[\S]+)(\b|$)/g;
-	var match;
-	while ((match = urlRegex.exec(program))) {
-		urls.push(match[0]);
-	}
-	return urls;
+	return program.split('\n') // expect each line to be a url
+		.map(function(str) { return str.trim(); })
+		.filter(function(str) { return !!str; });
 }
 
 function autoSizeProgramInput() {
@@ -327,10 +320,6 @@ function onProgramInputFocus(e) {
 }
 
 function onProgramInputBlur(e) {
-	var $input = $('#program-input');
-
-	// Reset size
-	$input.prop('rows', 2);
 }
 
 function onProgramInputKeyup(e) {

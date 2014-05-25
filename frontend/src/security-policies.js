@@ -29,7 +29,7 @@ var policies = {
 		'ins', 'del',
 
 		// embedded content
-		'img', 'video', 'audio', 'source', 'track',
+		'img', 'object', 'video', 'audio', 'source', 'track',
 
 		// tabular data
 		'table', 'caption', 'colgroup', 'col',
@@ -47,7 +47,7 @@ var policies = {
 		'center'
 	],
 	disallowedClasses: [
-		// Boostrap
+		// Bootstrap
 		// because of position: fixed or position: absolute
 		'affix', 'dropdown-backdrop', 'navbar-fixed-top', 'navbar-fixed-bottom',
 		'modal', 'modal-backdrop',
@@ -57,7 +57,7 @@ var policies = {
 		// Custom
 		'addlink-panel', 'config-panel'
 	],
-	urlsPolicy: function(url) { return url; }, // allow all
+	urlsPolicy: function(url) { return url; }, // allow all (for now)
 	tokensPolicy: function(token) {
 		if (policies.disallowedClasses.indexOf(token) == -1) {
 			return token;

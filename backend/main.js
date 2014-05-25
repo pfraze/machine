@@ -142,7 +142,7 @@ server.use('/js', express.static(__dirname + '/../frontend/js', { maxAge: 1000*6
 server.use('/css', express.static(__dirname + '/../frontend/css', { maxAge: 1000*60*60*24 }));
 server.use('/img', express.static(__dirname + '/../frontend/img', { maxAge: 1000*60*60*24 }));
 server.use('/fonts', express.static(__dirname + '/../frontend/fonts', { maxAge: 1000*60*60*24 }));
-server.use('/user', express.static(__dirname + '/../user'));
+server.use('/files', express.static(__dirname + '/../files'));
 // Program routes
 require('./routes/auth')(server);
 require('./routes/me')(server);
