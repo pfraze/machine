@@ -129,7 +129,7 @@ function render(mode, opts) {
 
 		// setup list mode
 		$('#list-views').show();
-		renderListViews();
+		// renderListViews();
 		break;
 
 	case 'program':
@@ -139,19 +139,19 @@ function render(mode, opts) {
 		// setup program mode
 		$('#program-view').show();
 
-		// extract URLs
-		var urls = extractProgramUrls($('#program-input').val());
-		console.debug('Extracted the following URLs from your posted program:', urls);
+		// extract queries
+		var queries = extractProgramQueries($('#program-input').val());
+		console.debug('Extracted the following queries from your posted program:', queries);
 
-		// resolve all components
-		resolveProgramUrls(urls)
-			.fail(renderProgramLoadErrors)
-			.then(function(links) {
-				console.debug('URLs resolved to:', links);
-				// Run new program
-				setActiveProgramLinks(links);
-				runAgent(links.get('layer1.io/agent') || _default_agent_link);
-			});
+		// resolve all queries
+		var links = resolveProgramQueries(queries)
+		console.debug('Queries resolved to:', links);
+		links = local.processLinks(links);
+
+		// Run new program
+		setActiveProgramLinks(links);
+		runAgent(links.get('layer1.io/agent') || _default_agent_link);
+
 		break;
 	}
 
@@ -159,52 +159,15 @@ function render(mode, opts) {
 	renderIndexSidenav();
 }
 
-function resolveProgramUrls(urls) {
-	return local.promise.all(urls.map(function(url) {
-		// GET
-		var isClientside = (url.indexOf(window.location.origin) === 0 || url.indexOf('#') !== -1);
-		var req = (isClientside) ? GET(url) : _fetchproxy.GET({ url: url }); // use localhost proxy to avoid CORS
-		req.Accept('application/json, text/html, */*');
-
-		// Add response to cache
-		cache.add(url, req);
-
-		return req;
-	})).then(function(ress) {
-		// All succeeded, build list of the self links
-		var links = ress.map(function(res, i) {
-			var selfLink = res.links.get('self') || {};
-
-			// Defaults
-			if (!selfLink.href) { selfLink.href = urls[i]; }
-			if (!selfLink.rel)  { selfLink.rel = ''; }
-
-			// Update positional reltypes
-			selfLink.rel = selfLink.rel.replace(/((self|up|item)\s?)/g, '');
-			selfLink.rel = 'item ' + selfLink.rel;
-
-			// Try to establish the mimetype
-			if (!selfLink.type) {
-				var mimeType = res.ContentType;
-				if (!mimeType) {
-					mimeType = mimetypes.lookup(urls[i]);
-				}
-				if (mimeType) {
-					var semicolonIndex = mimeType.indexOf(';');
-					if (semicolonIndex !== -1) {
-						mimeType = mimeType.slice(0, semicolonIndex); // strip the charset
-					}
-					selfLink.type = mimeType;
-				}
-			}
-
-			return selfLink;
-		});
-
-		// Add helpers
-		links = local.processLinks(links);
-
-		return links;
+function resolveProgramQueries(queries) {
+	return queries.map(function(query) {
+		var link = feedcfg.findLink(query);
+		if (!link) {
+			// :TODO: how is this handled?
+			console.error('Query failed:', query);
+			return null;
+		}
+		return link;
 	});
 }
 
@@ -301,7 +264,7 @@ function renderProgramLoadErrors(ress) {
 	throw ress;
 }
 
-function extractProgramUrls() {
+function extractProgramQueries() {
 	var $input = $('#program-input');
 	var program = $input.val();
 	return program.split('\n') // expect each line to be a url

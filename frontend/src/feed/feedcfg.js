@@ -7,6 +7,7 @@ module.exports = {
 	get: function() { return _cfg; },
 	addIndex: addIndex,
 	setIndex: setIndex,
+	findLink: findLink,
 	findRenderers: findRenderers,
 	findRenderer: findRenderer
 };
@@ -40,6 +41,32 @@ function setIndex(indexLink) {
 	_cfg.curIndex = indexLink.href;
 }
 
+function findLink(query) {
+	var links = _cfg.indexes[_cfg.curIndex];
+	var terms = query.split(' ').map(function(term) { return new RegExp(term, 'i'); });
+
+	for (var i=0; i < links.length; i++) {
+		var link = links[i];
+		var linkText =
+			(link.href||'')  + ' ' +
+			(link.rel||'')   + ' ' +
+			(link.title||'') + ' ' +
+			(link.keywords||'')
+		;
+		var match = true;
+		for (var j = 0; j < terms.length; j++) {
+			if (!terms[j].test(linkText)) {
+				match = false;
+				break;
+			}
+		}
+		if (match) {
+			return link;
+		}
+	}
+	return null;
+}
+
 function findRenderers(targetLink, maxMatches) {
 	var matches = [];
 	var renderers = _cfg.renderers[_cfg.curIndex];
@@ -47,7 +74,7 @@ function findRenderers(targetLink, maxMatches) {
 	for (var i=0; i < renderers.length; i++) {
 		var g = renderers[i];
 		if (!g.for) continue;
-		if (local.searchLink(targetLink, g.for)) {
+		if (local.queryLink(targetLink, g.for)) {
 			matches.push(g);
 			if (matches.length >= maxMatches)
 				return matches;

@@ -14,9 +14,6 @@ require('./feedcfg').setup(indexLinks);
 require('./renderers'); // :DEBUG:
 require('./feedcfg').addIndex({ href: '#', rel: 'layer1.io/index', title: 'Builtins' }).then(function() {
 	gui.setup(mediaLinks);
-
-	require('./feedcfg').addIndex({ href: '#test-index', rel: 'layer1.io/index', title: 'Test' })
-		.then(gui.render.bind(gui, null, null));
 }).fail(function() {
 	console.error('Failed to setup builtins index');
 });
@@ -52,8 +49,17 @@ function auth(req, res, worker) {
 }
 
 // toplevel
+function getSelf(res) { return res.links.get('self'); }
+var indexLinks = [
+	HEAD('/files/column-layouts.js#3col').always(getSelf),
+	HEAD('/files/column-layouts.js#2col').always(getSelf),
+	HEAD('/files/image-viewer.js#').always(getSelf),
+	HEAD('/files/list-view.js#').always(getSelf),
+	HEAD('/files/media-summaries.js#').always(getSelf),
+	HEAD('/files/thumbnail-view.js#').always(getSelf)
+];
 local.at('#', function (req, res, worker) {
-	res.link(
+	/*res.link(
 		['href',    'id',      'rel',                          'title'],
 		'#',        undefined, 'self service layer1.io/index', 'Host Page',
 		'#target',  'target',  'service layer1.io/target',     'Target for Rendering',
@@ -66,16 +72,12 @@ local.at('#', function (req, res, worker) {
 		'#about-renderer', 'layer1.io/renderer', 'About',       'stdrel.com/media',
 		'#test-render',    'layer1.io/renderer', 'Test2',       'stdrel.com/media',
 		'#hn-renderer',    'layer1.io/renderer', 'HN Renderer', 'stdrel.com/media text/html news.ycombinator.com'
-	);
-	res.s204().end();
-});
-// :DEBUG
-local.at('#test-index', function (req, res, worker) {
-	res.link(
-		['href',           'rel',                'title',       'for'],
-		'/user/test.js#',  'layer1.io/renderer', 'Test1',       'stdrel.com/media'
-	);
-	res.s204().end();
+	);*/
+	indexLinks.always(function(links) {
+		links = links.filter(function(link) { return !!link; });
+		res.link(links);
+		res.s204().end();
+	});
 });
 
 // public web servers

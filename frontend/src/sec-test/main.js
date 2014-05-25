@@ -10,3 +10,8 @@ var testStyles = document.getElementById('test-styles').innerHTML;
 testStyles = sec.sanitizeStyles('#sandbox', secPol.cssPropertyPolicy, secPol.cssValuePolicy, testStyles);
 document.getElementById('sanitized-styles').innerHTML = testStyles;
 $(document.body).append('<style>'+testStyles+'</style>');
+
+// Load and sanitize test HTML
+var testHTML = document.getElementById('test-html').innerHTML;
+testHTML = sec.sanitizeHtml(testHTML, 'prefix');
+document.getElementById('sanitized-html').innerHTML = testHTML;

@@ -29,7 +29,7 @@ var policies = {
 		'ins', 'del',
 
 		// embedded content
-		'img', 'object', 'video', 'audio', 'source', 'track',
+		'img', 'video', 'audio', 'source', 'track',
 
 		// tabular data
 		'table', 'caption', 'colgroup', 'col',

@@ -39,13 +39,22 @@ em { display: block; margin-top: -50px; padding-bottom: 50px; color: red }
     </pre>
 
     <p><strong>After sanitization:</strong></p>
-    <pre id="sanitized-styles">
-.other { color: red }
-body { background: red }
-document { background: red }
-    </pre>
+    <pre id="sanitized-styles"></pre>
+
+    <script type="text/html" id="test-html">
+<strong style="color: red; position: absolute; top: 0">sup</strong>
+<object data="move.swf" type="application/x-shockwave-flash">
+  <param name="foo" value="bar">
+</object>
+<div class="view" data-src="move.swf"></div>
+    </script>
+
+    <p><strong>Test HTML, after sanitization:</strong></p>
+    <div id="sanitized-html"></div>
+
 
     <script src="/js/jquery-2.0.3.min.js"></script>
+    <script src="/js/caja/html-sanitizer-minified.js"></script>
     <script src="/js/rework-css-1.6.1.js"></script>
     <script src="/js/sec-test.js"></script>
   </body>

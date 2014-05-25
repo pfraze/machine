@@ -11,6 +11,11 @@ var testStyles = document.getElementById('test-styles').innerHTML;
 testStyles = sec.sanitizeStyles('#sandbox', secPol.cssPropertyPolicy, secPol.cssValuePolicy, testStyles);
 document.getElementById('sanitized-styles').innerHTML = testStyles;
 $(document.body).append('<style>'+testStyles+'</style>');
+
+// Load and sanitize test HTML
+var testHTML = document.getElementById('test-html').innerHTML;
+testHTML = sec.sanitizeHtml(testHTML, 'prefix');
+document.getElementById('sanitized-html').innerHTML = testHTML;
 },{"../security":3,"../security-policies":2}],2:[function(require,module,exports){
 // Policies for HTML rendered from untrusted sources
 var policies = {
@@ -61,7 +66,7 @@ var policies = {
 		'center'
 	],
 	disallowedClasses: [
-		// Boostrap
+		// Bootstrap
 		// because of position: fixed or position: absolute
 		'affix', 'dropdown-backdrop', 'navbar-fixed-top', 'navbar-fixed-bottom',
 		'modal', 'modal-backdrop',
@@ -71,7 +76,7 @@ var policies = {
 		// Custom
 		'addlink-panel', 'config-panel'
 	],
-	urlsPolicy: function(url) { return url; }, // allow all
+	urlsPolicy: function(url) { return url; }, // allow all (for now)
 	tokensPolicy: function(token) {
 		if (policies.disallowedClasses.indexOf(token) == -1) {
 			return token;
@@ -175,7 +180,7 @@ module.exports = {
 // ===============
 var ampRe = /&/g;
 var looseAmpRe = /&([^a-z#]|#(?:[^0-9x]|x(?:[^0-9a-f]|$)|$)|$)/gi;
-var ltRe = /[<]/g;
+var ltRe = /</g;
 var gtRe = />/g;
 var quotRe = /\"/g;
 function escapeAttrib(s) {
@@ -357,10 +362,17 @@ function sanitizeHtmlAttribs(tagName, attribs, uriPolicy, tokenPolicy, cssProper
 		if (attribKey) {
 			atype = html4.ATTRIBS[attribKey];
 		} else {
-			// Type not known, scrub
-			attribs[i + 1] = null;
-			console.warn('Removed disallowed attribute', attribName);
-			continue;
+			// Is the attr data-* ?
+			if (attribName.indexOf('data-') === 0) {
+				// Allow
+				attribs[i + 1] = value;
+				continue;
+			} else {
+				// Type not known, scrub
+				attribs[i + 1] = null;
+				console.warn('Removed disallowed attribute', attribName);
+				continue;
+			}
 		}
 
 		// Sanitize by type

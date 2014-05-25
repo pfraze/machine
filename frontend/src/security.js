@@ -24,7 +24,7 @@ module.exports = {
 // ===============
 var ampRe = /&/g;
 var looseAmpRe = /&([^a-z#]|#(?:[^0-9x]|x(?:[^0-9a-f]|$)|$)|$)/gi;
-var ltRe = /[<]/g;
+var ltRe = /</g;
 var gtRe = />/g;
 var quotRe = /\"/g;
 function escapeAttrib(s) {
@@ -206,10 +206,17 @@ function sanitizeHtmlAttribs(tagName, attribs, uriPolicy, tokenPolicy, cssProper
 		if (attribKey) {
 			atype = html4.ATTRIBS[attribKey];
 		} else {
-			// Type not known, scrub
-			attribs[i + 1] = null;
-			console.warn('Removed disallowed attribute', attribName);
-			continue;
+			// Is the attr data-* ?
+			if (attribName.indexOf('data-') === 0) {
+				// Allow
+				attribs[i + 1] = value;
+				continue;
+			} else {
+				// Type not known, scrub
+				attribs[i + 1] = null;
+				console.warn('Removed disallowed attribute', attribName);
+				continue;
+			}
 		}
 
 		// Sanitize by type

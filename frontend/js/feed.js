@@ -356,6 +356,7 @@ module.exports = {
 	get: function() { return _cfg; },
 	addIndex: addIndex,
 	setIndex: setIndex,
+	findLink: findLink,
 	findRenderers: findRenderers,
 	findRenderer: findRenderer
 };
@@ -389,6 +390,32 @@ function setIndex(indexLink) {
 	_cfg.curIndex = indexLink.href;
 }
 
+function findLink(query) {
+	var links = _cfg.indexes[_cfg.curIndex];
+	var terms = query.split(' ').map(function(term) { return new RegExp(term, 'i'); });
+
+	for (var i=0; i < links.length; i++) {
+		var link = links[i];
+		var linkText =
+			(link.href||'')  + ' ' +
+			(link.rel||'')   + ' ' +
+			(link.title||'') + ' ' +
+			(link.keywords||'')
+		;
+		var match = true;
+		for (var j = 0; j < terms.length; j++) {
+			if (!terms[j].test(linkText)) {
+				match = false;
+				break;
+			}
+		}
+		if (match) {
+			return link;
+		}
+	}
+	return null;
+}
+
 function findRenderers(targetLink, maxMatches) {
 	var matches = [];
 	var renderers = _cfg.renderers[_cfg.curIndex];
@@ -396,7 +423,7 @@ function findRenderers(targetLink, maxMatches) {
 	for (var i=0; i < renderers.length; i++) {
 		var g = renderers[i];
 		if (!g.for) continue;
-		if (local.searchLink(targetLink, g.for)) {
+		if (local.queryLink(targetLink, g.for)) {
 			matches.push(g);
 			if (matches.length >= maxMatches)
 				return matches;
@@ -540,7 +567,7 @@ function render(mode, opts) {
 
 		// setup list mode
 		$('#list-views').show();
-		renderListViews();
+		// renderListViews();
 		break;
 
 	case 'program':
@@ -550,19 +577,19 @@ function render(mode, opts) {
 		// setup program mode
 		$('#program-view').show();
 
-		// extract URLs
-		var urls = extractProgramUrls($('#program-input').val());
-		console.debug('Extracted the following URLs from your posted program:', urls);
+		// extract queries
+		var queries = extractProgramQueries($('#program-input').val());
+		console.debug('Extracted the following queries from your posted program:', queries);
 
-		// resolve all components
-		resolveProgramUrls(urls)
-			.fail(renderProgramLoadErrors)
-			.then(function(links) {
-				console.debug('URLs resolved to:', links);
-				// Run new program
-				setActiveProgramLinks(links);
-				runAgent(links.get('layer1.io/agent') || _default_agent_link);
-			});
+		// resolve all queries
+		var links = resolveProgramQueries(queries)
+		console.debug('Queries resolved to:', links);
+		links = local.processLinks(links);
+
+		// Run new program
+		setActiveProgramLinks(links);
+		runAgent(links.get('layer1.io/agent') || _default_agent_link);
+
 		break;
 	}
 
@@ -570,52 +597,15 @@ function render(mode, opts) {
 	renderIndexSidenav();
 }
 
-function resolveProgramUrls(urls) {
-	return local.promise.all(urls.map(function(url) {
-		// GET
-		var isClientside = (url.indexOf(window.location.origin) === 0 || url.indexOf('#') !== -1);
-		var req = (isClientside) ? GET(url) : _fetchproxy.GET({ url: url }); // use localhost proxy to avoid CORS
-		req.Accept('application/json, text/html, */*');
-
-		// Add response to cache
-		cache.add(url, req);
-
-		return req;
-	})).then(function(ress) {
-		// All succeeded, build list of the self links
-		var links = ress.map(function(res, i) {
-			var selfLink = res.links.get('self') || {};
-
-			// Defaults
-			if (!selfLink.href) { selfLink.href = urls[i]; }
-			if (!selfLink.rel)  { selfLink.rel = ''; }
-
-			// Update positional reltypes
-			selfLink.rel = selfLink.rel.replace(/((self|up|item)\s?)/g, '');
-			selfLink.rel = 'item ' + selfLink.rel;
-
-			// Try to establish the mimetype
-			if (!selfLink.type) {
-				var mimeType = res.ContentType;
-				if (!mimeType) {
-					mimeType = mimetypes.lookup(urls[i]);
-				}
-				if (mimeType) {
-					var semicolonIndex = mimeType.indexOf(';');
-					if (semicolonIndex !== -1) {
-						mimeType = mimeType.slice(0, semicolonIndex); // strip the charset
-					}
-					selfLink.type = mimeType;
-				}
-			}
-
-			return selfLink;
-		});
-
-		// Add helpers
-		links = local.processLinks(links);
-
-		return links;
+function resolveProgramQueries(queries) {
+	return queries.map(function(query) {
+		var link = feedcfg.findLink(query);
+		if (!link) {
+			// :TODO: how is this handled?
+			console.error('Query failed:', query);
+			return null;
+		}
+		return link;
 	});
 }
 
@@ -712,7 +702,7 @@ function renderProgramLoadErrors(ress) {
 	throw ress;
 }
 
-function extractProgramUrls() {
+function extractProgramQueries() {
 	var $input = $('#program-input');
 	var program = $input.val();
 	return program.split('\n') // expect each line to be a url
@@ -806,9 +796,6 @@ require('./feedcfg').setup(indexLinks);
 require('./renderers'); // :DEBUG:
 require('./feedcfg').addIndex({ href: '#', rel: 'layer1.io/index', title: 'Builtins' }).then(function() {
 	gui.setup(mediaLinks);
-
-	require('./feedcfg').addIndex({ href: '#test-index', rel: 'layer1.io/index', title: 'Test' })
-		.then(gui.render.bind(gui, null, null));
 }).fail(function() {
 	console.error('Failed to setup builtins index');
 });
@@ -844,8 +831,17 @@ function auth(req, res, worker) {
 }
 
 // toplevel
+function getSelf(res) { return res.links.get('self'); }
+var indexLinks = [
+	HEAD('/files/column-layouts.js#3col').always(getSelf),
+	HEAD('/files/column-layouts.js#2col').always(getSelf),
+	HEAD('/files/image-viewer.js#').always(getSelf),
+	HEAD('/files/list-view.js#').always(getSelf),
+	HEAD('/files/media-summaries.js#').always(getSelf),
+	HEAD('/files/thumbnail-view.js#').always(getSelf)
+];
 local.at('#', function (req, res, worker) {
-	res.link(
+	/*res.link(
 		['href',    'id',      'rel',                          'title'],
 		'#',        undefined, 'self service layer1.io/index', 'Host Page',
 		'#target',  'target',  'service layer1.io/target',     'Target for Rendering',
@@ -858,16 +854,12 @@ local.at('#', function (req, res, worker) {
 		'#about-renderer', 'layer1.io/renderer', 'About',       'stdrel.com/media',
 		'#test-render',    'layer1.io/renderer', 'Test2',       'stdrel.com/media',
 		'#hn-renderer',    'layer1.io/renderer', 'HN Renderer', 'stdrel.com/media text/html news.ycombinator.com'
-	);
-	res.s204().end();
-});
-// :DEBUG
-local.at('#test-index', function (req, res, worker) {
-	res.link(
-		['href',           'rel',                'title',       'for'],
-		'/user/test.js#',  'layer1.io/renderer', 'Test1',       'stdrel.com/media'
-	);
-	res.s204().end();
+	);*/
+	indexLinks.always(function(links) {
+		links = links.filter(function(link) { return !!link; });
+		res.link(links);
+		res.s204().end();
+	});
 });
 
 // public web servers
@@ -1960,7 +1952,7 @@ var policies = {
 		'center'
 	],
 	disallowedClasses: [
-		// Boostrap
+		// Bootstrap
 		// because of position: fixed or position: absolute
 		'affix', 'dropdown-backdrop', 'navbar-fixed-top', 'navbar-fixed-bottom',
 		'modal', 'modal-backdrop',
@@ -1970,7 +1962,7 @@ var policies = {
 		// Custom
 		'addlink-panel', 'config-panel'
 	],
-	urlsPolicy: function(url) { return url; }, // allow all
+	urlsPolicy: function(url) { return url; }, // allow all (for now)
 	tokensPolicy: function(token) {
 		if (policies.disallowedClasses.indexOf(token) == -1) {
 			return token;
@@ -2074,7 +2066,7 @@ module.exports = {
 // ===============
 var ampRe = /&/g;
 var looseAmpRe = /&([^a-z#]|#(?:[^0-9x]|x(?:[^0-9a-f]|$)|$)|$)/gi;
-var ltRe = /[<]/g;
+var ltRe = /</g;
 var gtRe = />/g;
 var quotRe = /\"/g;
 function escapeAttrib(s) {
@@ -2256,10 +2248,17 @@ function sanitizeHtmlAttribs(tagName, attribs, uriPolicy, tokenPolicy, cssProper
 		if (attribKey) {
 			atype = html4.ATTRIBS[attribKey];
 		} else {
-			// Type not known, scrub
-			attribs[i + 1] = null;
-			console.warn('Removed disallowed attribute', attribName);
-			continue;
+			// Is the attr data-* ?
+			if (attribName.indexOf('data-') === 0) {
+				// Allow
+				attribs[i + 1] = value;
+				continue;
+			} else {
+				// Type not known, scrub
+				attribs[i + 1] = null;
+				console.warn('Removed disallowed attribute', attribName);
+				continue;
+			}
 		}
 
 		// Sanitize by type
