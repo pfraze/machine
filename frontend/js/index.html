@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+	<head>
+		<title>Local.js 0.7 - An Ajax library that combines XHR and postMessage.</title>
+
+		<!-- styling -->
+		<style>
+			#hero {
+				width: 100%;
+				height: 450px;
+				background: url(/assets/hero-bg.jpg) left -640px no-repeat;
+			}
+			@media (min-width: 1500px) {
+				/* hero background is now too small, so lets autosize it to cover */
+				#hero { background-position: top left; background-size: cover; }
+			}
+			#hero h1 { text-align: center; color: white; font-size: 54px; padding-top: 155px; margin-top: 0; }
+			#hero h1 span { color: #2D9AE4; }
+			#hero h4 { font-weight: normal; text-align: center; color: white; padding: 75px 10px 0; }
+			@media (min-width: 800px) {
+				#hero h1 { font-size: 70px; }
+				#hero h1, #hero h4 { margin-right: 50px; }
+			}
+
+			.button {
+				background: #ddd;
+				border-radius: 8px;
+				padding: 15px;
+				margin: 0 15px;
+				color: #333;
+				font-size: 18px;
+			}
+			.button:hover {
+				text-decoration: none;
+				background: #ccc;
+				color: #333;
+			}
+			.button.primary {
+				background: #1F6CB1;
+				color: #fff;
+			}
+			.button.primary:hover {
+				background: #0F5CA1;
+			}
+
+			pre[class*="language-"] { background: #fff; border: 0; }
+			code[class*="language-"] { color: rgb(60, 64, 68); font-size: 14px }
+			.token.comment, .token.prolog, .token.doctype, .token.cdata { color: #71787C; }
+			.token.selector, .token.attr-name, .token.string, .token.builtin { color: #0DA500; }
+			.token.property, .token.tag, .token.boolean, .token.number, .token.constant, .token.symbol { color: #48B63F; }
+		</style>
+		<link rel="stylesheet" href="assets/bootstrap/css/bootstrap.css" />
+		<link rel="stylesheet" href="assets/css/sitewide.css" />
+		<link rel="stylesheet" href="assets/prism/prism.css" />
+		<link rel="icon" type="image/png" href="/assets/favicon.png" />
+		<link href='http://fonts.googleapis.com/css?family=Roboto:300,400,700' rel='stylesheet' type='text/css'>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+	</head>
+
+	<body>
+		<div id="footer-wrapper-helper">
+			<div id="hero">
+				<h1>Local.js</h1>
+				<h4>An Ajax library that combines XHR and postMessage.</h4>
+			</div>
+			<div id="nav">
+				<div id="logo">Local.js</div>
+				<ul class="inline"><li class="active"><a target="_top" href="/">Home</a></li><li><a target="_top" href="/docs.html">Documentation</a></li><li><a target="_top" href="https://github.com/pfraze/local">Repo</a></li></ul>
+			</div>
+
+			<div class="container">
+				<div class="intro">
+					<img src="assets/icon-network.png">
+					<p><strong>Simple Ajax</strong><br><small>Promises-based, with streaming, piping, and automatic body-parsing.</small></p>
+					<pre><code class="language-javascript">GET('https://myhost.com', { query: 'params' })
+  .Accept('json')
+  .then(function(res) {
+  	res.status; // => 200
+  	res.reason; // => 'OK'
+    res.ContentType; // => 'application/json'
+    res.body; // => { hello: 'world' }
+  });</code></pre>
+				</div>
+				<div class="intro">
+					<img src="assets/icon-link.png">
+					<p><strong>Virtual servers on the page</strong><br><small>An emulation of HTTP lets you answer requests from client-side javascript.</small></p>
+					<pre><code class="language-javascript">local.at('#hi', function(req, res) {
+  res.status(200, 'OK');
+  res.ContentType('html');
+  res.Link({ href: '#hi', rel: 'self service', title: 'Hello Service' });
+  res.end('&lt;h1&gt;Hello, '+req.params.who+'&lt;/h1&gt;');
+});
+GET('#hi', { who: 'World' }).then(...);</code></pre>
+					<ul>
+						<li>The hash-path <code>#hi</code> is like a traditional single-page-app URL, but it handles Ajax requests instead of just page-navigations.</li>
+					</ul>
+				</div>
+				<div class="intro">
+					<img src="assets/icon-download.png">
+					<p><strong>Virtual servers in Web workers</strong><br><small>Workers run in parallel threads with sandboxed VMs, allowing you to load programs from other domains.</small></p>
+					<pre><code class="language-javascript">local.spawnWorker('/my-worker.js');
+GET('/my-worker.js', { who: 'Worker' }).then(function(res) {
+  	res.status; // => 200
+  	res.reason; // => 'OK'
+    res.ContentType; // => 'text/html'
+    res.body; // => &lt;h1&gt;Hello, Worker&lt;/ht&gt;
+});</code></pre>
+				</div>
+			</div>
+			<br><br>
+
+			<div class="container">
+
+				<div class="row">
+					<div class="span12" style="text-align: center">
+						<a class="button primary" href="/docs.html">Read More</a>
+						<a class="button" href="https://github.com/pfraze/local">Get Started</a>
+						<!-- <a target="_top" class="button" href="/docs.html">Documentation</a> -->
+						<!-- <a target="_top" class="button" href="http://httplocal.com/todosoa">TodoSOA</a> -->
+					</div>
+				</div>
+			</div>
+			<div id="footer-wrapper-push"></div>
+		</div>
+		<div id="footer">
+			<hr>
+			<ul class="inline">
+				<li>Maintained by <a href="https://twitter.com/pfrazee">@pfrazee</a></li>
+				<li>&middot;</li>
+				<li>Submit pull requests at <a href="https://github.com/pfraze/local">GitHub</a></li>
+			</ul>
+		</div>
+
+		<!-- third-party -->
+		<script src="assets/prism/prism.js"></script>
+
+		<!-- environment -->
+		<script src="assets/jquery-2.1.0.min.js"></script>
+		<script src="assets/jquery.sticky.js"></script>
+		<script>
+			$(document).ready(function(){
+				if ($(window).width() > 640) {
+					$("#nav").sticky({topSpacing:0});
+				}
+			});
+		</script>
+	</body>
+</html>
+

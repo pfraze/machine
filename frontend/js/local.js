@@ -14,9 +14,9 @@ if (typeof self.document !== 'undefined') { // in the page
 var localjsImport_src = 'importScripts("'+localjsUrl+'");\n';
 var whitelist = [ // a list of global objects which are allowed in the worker
     // defined by local.js
-    'local', 'pageBridge',
-    'HEAD', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'SUBSCRIBE', 'NOTIFY', 'from',
+    'web', 'pageBridge',
 
+    // defaults
 	'null', 'self', 'console', 'atob', 'btoa',
 	'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
 	'Proxy',
@@ -32,27 +32,28 @@ var blacklist = [ // a list of global objects which are not allowed in the worke
 ];
 var whitelistAPIs_src = [ // nullifies all toplevel variables except those listed above in `whitelist`
 	'(function() {',
-		'var nulleds=[];',
-		'var whitelist = ["'+whitelist.join('", "')+'"];',
-		'for (var k in self) {',
-			'if (whitelist.indexOf(k) === -1) {',
-				'Object.defineProperty(self, k, { value: null, configurable: false, writable: false });',
-				'nulleds.push(k);',
-			'}',
-		'}',
-		'var blacklist = ["'+blacklist.join('", "')+'"];',
-		'blacklist.forEach(function(k) {',
-			'Object.defineProperty(self, k, { value: null, configurable: false, writable: false });',
-			'nulleds.push(k);',
-		'});',
-		'if (typeof console != "undefined") { console.log("Nullified: "+nulleds.join(", ")); }',
+	'   var nulleds=[];',
+	'	var whitelist = ["'+whitelist.join('", "')+'"];',
+	'	for (var k in self) {',
+	'		if (whitelist.indexOf(k) === -1) {',
+	'			Object.defineProperty(self, k, { value: null, configurable: false, writable: false });',
+	'			nulleds.push(k);',
+	'		}',
+	'	}',
+	'	var blacklist = ["'+blacklist.join('", "')+'"];',
+	'	blacklist.forEach(function(k) {',
+	'		Object.defineProperty(self, k, { value: null, configurable: false, writable: false });',
+	'		nulleds.push(k);',
+	'	});',
+	'	if (typeof console != "undefined") { console.log("Nullified: "+nulleds.join(", ")); }',
 	'})();\n'
 ].join('\n');
+var isInWorker = (typeof self.document == 'undefined');
 module.exports = {
     logTraffic: true,
 	logAllExceptions: false,
     maxActiveWorkers: 10,
-    virtualOnly: false,
+    virtualOnly: isInWorker ? true : false,
     localOnly: false,
 	workerBootstrapScript: localjsImport_src+whitelistAPIs_src
 };
@@ -69,6 +70,8 @@ module.exports = {
 var util = require('./util');
 
 module.exports = {
+	cfg: require('./config.js'),
+
 	Request: require('./web/request.js'),
 	Response: require('./web/response.js'),
 	IncomingRequest: require('./web/incoming-request.js'),
@@ -82,12 +85,13 @@ module.exports = {
 	contentTypes: require('./web/content-types.js')
 };
 util.mixin.call(module.exports, require('./constants.js'));
-util.mixin.call(module.exports, require('./config.js'));
 util.mixin.call(module.exports, require('./promises.js'));
 util.mixin.call(module.exports, require('./request-event.js'));
 util.mixin.call(module.exports, require('./web/helpers.js'));
 util.mixin.call(module.exports, require('./web/links.js'));
 util.mixin.call(module.exports, require('./web/httpl.js'));
+util.mixin.call(module.exports, require('./web/response-templates.js'));
+util.mixin.call(module.exports, require('./web/handler-function.js'));
 util.mixin.call(module.exports, require('./web/workers.js'));
 util.mixin.call(module.exports, require('./web/subscribe.js'));
 util.mixin.call(module.exports, require('./web/client.js'));
@@ -117,40 +121,37 @@ module.exports.SUBSCRIBE = makeRequestSugar('SUBSCRIBE');
 module.exports.NOTIFY =    makeRequestSugar('NOTIFY');
 
 // Create globals
-var global, local = module.exports;
+var global, web = module.exports;
 if (typeof window != 'undefined') global = window;
 else if (typeof self != 'undefined') global = self;
 if (global) {
-	global.local     = local;
-	global.HEAD      = local.HEAD;
-	global.GET       = local.GET;
-	global.POST      = local.POST;
-	global.PUT       = local.PUT;
-	global.PATCH     = local.PATCH;
-	global.DELETE    = local.DELETE;
-	global.SUBSCRIBE = local.SUBSCRIBE;
-	global.NOTIFY    = local.NOTIFY;
-    global.from      = local.client;
+	global.web = web;
 }
 
 // Patch arrays to handle promises
-Array.prototype.thenEach = function(a, b) {
-	var callA = function(i, v) { return a(v, i); };
-	var callB = function(i, v) { return b(v, i); };
-	return this.map(function(v, i) {
-		return local.promise(v).then(callA.bind(null, i), callB.bind(null, i));
-	});
-};
-Array.prototype.always = function(a) {
-	return local.promise.bundle(this).always(a);
-};
-Array.prototype.then = function(a, b) {
-	return local.promise.all(this).then(a, b);
-};
+Object.defineProperty(Array.prototype, 'thenEach', {
+	value: function(a, b) {
+		var callA = function(i, v) { return a(v, i); };
+		var callB = function(i, v) { return b(v, i); };
+		return this.map(function(v, i) {
+			return web.promise(v).then(callA.bind(null, i), callB.bind(null, i));
+		});
+	}
+});
+Object.defineProperty(Array.prototype, 'always', {
+	value: function(a) {
+		return web.promise.bundle(this).always(a);
+	}
+});
+Object.defineProperty(Array.prototype, 'then', {
+	value: function(a, b) {
+		return web.promise.all(this).then(a, b);
+	}
+});
 
 // Run worker setup (does nothing outside of a worker)
 require('./worker');
-},{"./config.js":1,"./constants.js":2,"./promises.js":4,"./request-event.js":5,"./util":8,"./web/bridge.js":9,"./web/client.js":10,"./web/content-types.js":11,"./web/helpers.js":12,"./web/http-headers.js":13,"./web/httpl.js":14,"./web/incoming-request.js":15,"./web/incoming-response.js":16,"./web/links.js":17,"./web/request.js":18,"./web/response.js":19,"./web/schemes.js":20,"./web/subscribe.js":21,"./web/uri-template.js":22,"./web/workers.js":23,"./worker":24}],4:[function(require,module,exports){
+},{"./config.js":1,"./constants.js":2,"./promises.js":4,"./request-event.js":5,"./util":8,"./web/bridge.js":9,"./web/client.js":10,"./web/content-types.js":11,"./web/handler-function.js":12,"./web/helpers.js":13,"./web/http-headers.js":14,"./web/httpl.js":15,"./web/incoming-request.js":16,"./web/incoming-response.js":17,"./web/links.js":18,"./web/request.js":19,"./web/response-templates.js":20,"./web/response.js":21,"./web/schemes.js":22,"./web/subscribe.js":23,"./web/uri-template.js":24,"./web/workers.js":25,"./worker":26}],4:[function(require,module,exports){
 var localConfig = require('./config.js');
 var util = require('./util');
 
@@ -1012,6 +1013,13 @@ function deepClone(obj) {
 	return JSON.parse(JSON.stringify(obj));
 }
 
+function getFnName(fn) {
+  if (typeof fn !== 'function') return '';
+  if (fn.name) return fn.name;
+  var match = fn.toString().match(/function ([^\(]+)/);
+  return (match) ? match[1] : '';
+}
+
 // helper to make an array of objects
 // - takes an array of keys (the table "header")
 // - consumes the remaining arguments as table values
@@ -1057,6 +1065,7 @@ module.exports = {
 	mixin: mixin,
 	mixinEventEmitter: mixinEventEmitter,
 	deepClone: deepClone,
+	getFnName: getFnName,
     table: table,
 	nextTick: nextTick
 };
@@ -1107,9 +1116,7 @@ Bridge.prototype.send = function(msg) {
 		this.msgBuffer.push(msg);
 	} else {
 		if (debugLog) { this.log('debug', 'SEND', msg); }
-		if (true || !!self.window) {
-			this.channel.postMessage(msg);
-		}
+		this.channel.postMessage(msg);
 	}
 };
 
@@ -1213,7 +1220,7 @@ Bridge.prototype.onMessage = function(msg) {
 			}
 		}
 		msg.pathd = pathd;
-		if (!handler) { handler = function(req, res) { res.s404('not found').end(); }; };
+		if (!handler) { handler = function(req, res) { res.status(404, 'Not Found').end(); }; }
 
 		// Create incoming request, incoming response and outgoing response
 		var ireq = new IncomingRequest(msg);
@@ -1310,7 +1317,7 @@ function validateHttplMessage(parsedmsg) {
 		return false;
 	return true;
 }
-},{"./helpers.js":12,"./httpl.js":14,"./incoming-request.js":15,"./incoming-response.js":16,"./request.js":18,"./response.js":19}],10:[function(require,module,exports){
+},{"./helpers.js":13,"./httpl.js":15,"./incoming-request.js":16,"./incoming-response.js":17,"./request.js":19,"./response.js":21}],10:[function(require,module,exports){
 var constants = require('../constants.js');
 var util = require('../util');
 var promise = require('../promises.js').promise;
@@ -1381,9 +1388,9 @@ Context.prototype.setFailed = function(error) {
 // EXAMPLE 1. Get Bob from Foobar.com
 // - basic navigation
 // - requests
-var foobarService = local.client('https://foobar.com');
+var foobarService = web.client('https://foobar.com');
 var bob = foobarService.follow('|collection=users|item=bob');
-// ^ or local.client('nav:||https://foobar.com|collection=users|item=bob')
+// ^ or web.client('nav:||https://foobar.com|collection=users|item=bob')
 // ^ or foobarService.follow([{ rel: 'collection', id: 'users' }, { rel: 'item', id:'bob' }]);
 // ^ or foobarService.follow({ rel: 'collection', id: 'users' }).follow({ rel: 'item', id:'bob' });
 // ^ or foobarService.collection('users').item('bob')
@@ -1417,7 +1424,7 @@ pageCursor.get()
 	})
 	.fail(function(response, request) {
 		// Not finding a 'rel=next' link means the server didn't give us one.
-		if (response.status == local.LINK_NOT_FOUND) { // 001 Local: Link not found - termination condition
+		if (response.status == web.LINK_NOT_FOUND) { // 001 Local: Link not found - termination condition
 			// Tell Bob his greeting was sent
 			bob.service({ rel: 'foo.com/rel/inbox' }).POST({
 				title: '2013 Welcome Emails Sent',
@@ -1508,7 +1515,7 @@ Client.prototype.subscribe = function(req) {
 
 // Follows a link relation from our context, generating a new agent
 // - `query` may be:
-//   - an object in the same form of a `local.queryLink()` parameter
+//   - an object in the same form of a `web.queryLink()` parameter
 //   - an array of link query objects (to be followed sequentially)
 //   - a URI string
 //     - if using the 'nav:' scheme, will convert the URI into a link query object
@@ -1707,7 +1714,7 @@ module.exports = {
 	Client: Client,
 	client: client
 };
-},{"../constants.js":2,"../promises.js":4,"../util":8,"./helpers.js":12,"./httpl.js":14,"./request.js":18,"./response.js":19,"./subscribe.js":21,"./uri-template.js":22}],11:[function(require,module,exports){
+},{"../constants.js":2,"../promises.js":4,"../util":8,"./helpers.js":13,"./httpl.js":15,"./request.js":19,"./response.js":21,"./subscribe.js":23,"./uri-template.js":24}],11:[function(require,module,exports){
 // contentTypes
 // ============
 // EXPORTED
@@ -1923,6 +1930,258 @@ function splitEventstreamKV(kv) {
 	return [kv.slice(0, i).trim(), kv.slice(i+1).trim()];
 }
 },{}],12:[function(require,module,exports){
+var util = require('../util');
+var promises = require('../promises');
+var helpers = require('./helpers');
+var contentTypes = require('./content-types');
+var restmpls = require('./response-templates');
+var httpl = require('./httpl');
+
+// Handler fn mixin
+var handlerDef = {
+	__is_handler__: true, // is handler flag
+	__is_dynamic__: null, // handler function has a '$' token, indicating a subpath which is an {id}
+	__parent_handler__: null, // for link construction
+	__self_link__: null, // for link construction
+
+	// standard functions:
+	opts: handler_opts,
+	link: handler_link,
+	method: handler_method,
+	header: handler_header
+};
+
+// Header sugars
+[ 'Accept', 'Allow', 'ContentType', 'Location', 'Pragma' ].forEach(function(k) {
+	handlerDef[k] = function(v) {
+		return this.header(k, v);
+	};
+});
+
+// EXPORTED
+// decorates a given function to behave as a request-handler
+// - `fn`: function(req, res, worker), handler function
+// - `path`: optional string, the handler's path (defaults to using the fn's name)
+function handler_export(fn, path) {
+	// Generate path
+	var isDynamic = false;
+	if (!path) {
+		// Pull function name
+		path = util.getFnName(fn).trim();
+		if (!path) throw "Could not extract a name from given export: is it a named function?";
+		isDynamic = path.indexOf('$') != -1;
+	}
+	if (path == 'main') {
+		path = '#';
+	}
+	if (path.charAt(0) != '#') {
+		path = '#' + path;
+	}
+
+	// Decorate
+	decorateHandler(fn);
+	// handler attributes:
+	fn.path = path.replace(/\$/g, '/{id}');
+	fn.__methods__ = [];
+	fn.__links__ = [];
+	fn.__is_dynamic__ = isDynamic;
+	if (isDynamic) {
+		// atId() gives the solid path at the given id (replacing {id})
+		fn.atId = handler_atId;
+	}
+
+	// Add function
+	httpl.at(path.replace(/\$/g, '/(.*)'), runHandler(fn));
+}
+
+// INTERNAL
+// sets up a handler function, used in .export() and .method()
+function decorateHandler(fn) {
+	util.mixin.call(fn, handlerDef);
+	fn.__opts__ = {};
+	fn.__headers__ = {};
+}
+
+// sets handler options
+// - `opts.stream`: bool, if true will not buffer the request body and will ignore the function response
+function handler_opts(opts) {
+	for (var k in opts) {
+		this.__opts__[k] = opts[k];
+	}
+}
+
+// adds a link to the response
+// - params are same as req/res.link()
+function handler_link(href, attrs) {
+	this.__links__.push([href, attrs]);
+
+	// establish relationships for auto-creation of related links
+	if (typeof href == 'function') {
+		if (href == this) {
+			this.__self_link__ = attrs;
+			if (this.__is_dynamic__) {
+				this.__self_link__.templated = true;
+			}
+		} else if (href != this.__parent_handler__) {
+			href.__parent_handler__ = this;
+			href.link(href, attrs); // link to itself
+			href.link(this, this.__self_link__); // link up to this
+		}
+	}
+}
+
+// adds a handler for the given method
+// - `fn`: function(req, res, worker), handler function
+// - `verb`: optional string, the method-name of the handler (defaults to using the initial uppercase letters from the handler's name)
+function handler_method(fn, verb) {
+	if (!verb) {
+		// Pull function name
+		verb = util.getFnName(fn).trim();
+		if (!verb) throw "Could not extract a name from given handler: is it a named function?";
+
+		// Use only uppercase letters at the beginning
+		verb = verb.match(/^([A-Z])+/);
+		if (!verb) throw "Could not extract a method from given handler: does it start with the verb in all caps? eg POST or POST_foo";
+		verb = verb[0];
+	}
+
+	decorateHandler(fn);
+	this.__methods__[verb.toUpperCase()] = fn;
+}
+
+// sets a persistent header
+function handler_header(k, v) {
+	k = helpers.formatHeaderKey(k);
+	// Convert mime if needed
+	if (k == 'Accept' || k == 'ContentType') {
+		v = contentTypes.lookup(v);
+	}
+	this.__headers__[k] = v;
+}
+
+// generates a full path for a dynamic handler
+// - `id`: string, the id to use
+function handler_atId(id) {
+	return this.path.replace('{id}', id);
+}
+
+// INTERNAL
+// wraps the handler function with special logic, as is needed
+function runHandler(handler) {
+	return function(req, res, worker) {
+		// Find handler by method
+		var fn;
+		if (handler.__opts__.allmethods || req.method == 'HEAD' || req.method == 'GET')
+			fn = handler;
+		else {
+			fn = handler.__methods__[req.method];
+			if (!fn) {
+				res.status(405, 'Method Not Allowed')
+					.Allow(['HEAD', 'GET'].concat(Object.keys(handler.__methods__)).join(', '))
+					.end();
+				return;
+			}
+		}
+
+		// Populate response headers
+		for (var k in fn.__headers__) {
+			res.header(k, fn.__headers__[k]);
+		}
+
+		// Links
+		for (var i=0; i < handler.__links__.length; i++) {
+			var link = handler.__links__[i];
+			var href = link[0];
+			var attrs = link[1];
+
+			// Auto-relations
+			if (href == handler) {
+				// Self link
+				attrs = (attrs) ? util.deepClone(attrs) : {};
+				attrs.rel = 'self ' + (attrs.rel||'');
+				if (handler.__is_dynamic__) {
+					href = req.path;
+					delete attrs.templated;
+				}
+			} else if (href == handler.__parent_handler__) {
+				// Up link
+				attrs = (attrs) ? util.deepClone(attrs) : {};
+				attrs.rel = 'up ' + (attrs.rel||'');
+			}
+			res.link(href, attrs);
+		}
+
+		// Type negotation
+		if (fn.__headers__.Accept) {
+			if (req.ContentType != fn.__headers__.Accept) {
+				res.status(415, 'Unsupported Media Type').end();
+				return;
+			}
+		}
+		if (fn.__headers__.ContentType && req.Accept) {
+			if (!helpers.preferredType(req.Accept, fn.__headers__.ContentType)) {
+				res.status(406, 'Not Acceptable').end();
+				return;
+			}
+		}
+
+		// Run by options
+		if (fn.__opts__.stream) {
+			// No special handling
+			if (handler.__is_dynamic__) fn(req.pathd[1], req, res, worker);
+			else                        fn(req, res, worker);
+		} else {
+			// Wait for body
+			req.buffer(function() {
+				// Act on return type
+				try {
+					var ret;
+					if (handler.__is_dynamic__) ret = fn(req.pathd[1], req, res, worker);
+					else                        ret = fn(req, res, worker);
+					if (promises.isPromiselike(ret)) {
+						ret.then(buildRes.bind(null, req, res), buildFailRes.bind(null, req, res));
+					} else {
+						buildRes(req, res, ret);
+					}
+				}
+				catch (e) { buildFailRes(req, res, e); }
+			});
+		}
+	};
+}
+function buildRes(req, res, ret) {
+	if (ret === void 0) {
+		ret = restmpls.NoContent();
+	} else if (ret.pipe) {
+		return ret.pipe(res);
+	} else if (!(ret instanceof restmpls.ResponseTemplate)) {
+		if (req.method == 'HEAD') {
+			ret = restmpls.NoContent();
+		} else {
+			ret = restmpls.Ok({ body: ret });
+		}
+	}
+	ret.writeout(req, res);
+}
+function buildFailRes(req, res, err) {
+	if (!err) err = '';
+	if (err.pipe) {
+		return err.pipe(res);
+	} else if (!(err instanceof restmpls.ResponseTemplate)) {
+		var errString = err.message || err.toString();
+		if (errString == '[object Object]') {
+			try { errString = JSON.stringify(err); }
+			catch (e) { errString = ''; }
+		}
+		err = restmpls.InternalServerError({ reason: errString });
+	}
+	buildRes(req, res, err);
+}
+
+module.exports = {
+	'export': handler_export
+};
+},{"../promises":4,"../util":8,"./content-types":11,"./helpers":13,"./httpl":15,"./response-templates":20}],13:[function(require,module,exports){
 // Helpers
 // =======
 
@@ -2296,8 +2555,8 @@ function parseNavUri(str) {
 
 // EXPORTED
 // builds a proxy URI out of an array of templates
-// eg ('local://my_worker.js/', ['local://0.env/{uri}', 'local://foo/{?uri}'])
-// -> "local://0.env/local%3A%2F%2Ffoo%2F%3Furi%3Dhttpl%253A%252F%252Fmy_worker.js%252F"
+// eg ('http://my_worker.js/', ['http://0.env/{uri}', 'http://foo/{?uri}'])
+// -> "http://0.env/http%3A%2F%2Ffoo%2F%3Furi%3Dhttp%253A%252F%252Fmy_worker.js%252F"
 function makeProxyUri(uri, templates) {
 	if (!Array.isArray(templates)) templates = [templates];
 	for (var i=templates.length-1; i >= 0; i--) {
@@ -2324,6 +2583,15 @@ function isHeaderKey(k) {
 }
 
 // EXPORTED
+// converts a given header value to our standard format - camel case, no dashes
+var headerKeyRegex = /(^|-)(.)/g;
+function formatHeaderKey(str) {
+	// strip any dashes, convert to camelcase
+	// eg 'foo-bar' -> 'FooBar'
+	return str.replace(headerKeyRegex, function(_0,_1,_2) { return _2.toUpperCase(); });
+}
+
+// EXPORTED
 // escapes HTML tokens
 function escape(str) {
 	return (''+str).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -2344,7 +2612,9 @@ module.exports = {
 
 	isAbsUri: isAbsUri, isAbsUrl: isAbsUri,
 	isNavSchemeUri: isNavSchemeUri, isNavSchemeUrl: isNavSchemeUri,
+
 	isHeaderKey: isHeaderKey,
+	formatHeaderKey: formatHeaderKey,
 
 	parseUri: parseUri, parseUrl: parseUri,
 	parseNavUri: parseNavUri, parseNavUrl: parseNavUri,
@@ -2353,7 +2623,7 @@ module.exports = {
 
 	escape: escape
 };
-},{"../promises.js":4,"./content-types.js":11,"./uri-template.js":22}],13:[function(require,module,exports){
+},{"../promises.js":4,"./content-types.js":11,"./uri-template.js":24}],14:[function(require,module,exports){
 var helpers = require('./helpers.js');
 
 // headers
@@ -2487,7 +2757,7 @@ httpHeaders.register('accept',
 	},
 	helpers.parseAcceptHeader
 );
-},{"./helpers.js":12}],14:[function(require,module,exports){
+},{"./helpers.js":13}],15:[function(require,module,exports){
 var helpers = require('./helpers.js');
 var schemes = require('./schemes.js');
 var contentTypes = require('./content-types.js');
@@ -2516,10 +2786,10 @@ function getRoutes() {
 // Virtual request handler
 schemes.register('#', function (oreq, ires) {
 	// Parse the virtual path
-	var urld2 = local.parseUri('/' + (oreq.urld.anchor || ''));
+	var urld2 = helpers.parseUri('/' + (oreq.urld.anchor || ''));
 	if (urld2.query) {
 		// mix query params into request
-		var queryParams = local.contentTypes.deserialize('application/x-www-form-urlencoded', urld2.query);
+		var queryParams = contentTypes.deserialize('application/x-www-form-urlencoded', urld2.query);
 		oreq.param(queryParams);
 	}
 	oreq.headers.path = '#' + urld2.path.slice(1);
@@ -2539,17 +2809,42 @@ schemes.register('#', function (oreq, ires) {
 	// Get the handler
 	var handler;
 	var isInWorker = (typeof self.document == 'undefined');
+	var isNonLocal = (oreq.urld.authority || oreq.urld.path);
 	// Is a host URL given?
-	if (oreq.urld.authority || oreq.urld.path) {
-		if (oreq.urld.authority == 'page') {
-			if (isInWorker) {
-				// Use the page
-				handler = self.pageBridge.onRequest.bind(self.pageBridge);
-			} else {
-				// Match the route in the current page
-				handler = lookupRoute();
-			}
+	if (isInWorker) {
+		if (oreq.urld.authority == 'self') {
+			// http://self#foo
+			// Match the route in the current worker
+			handler = lookupRoute();
 		} else {
+			// Use the page
+			handler = self.pageBridge.onRequest.bind(self.pageBridge);
+
+			// Use the special #pubweb_proxy handler for non-local requests
+			if (isNonLocal) {
+				// build new combined query params
+				var queryParams = contentTypes.serialize('application/x-www-form-urlencoded', oreq.headers.params);
+				if (queryParams && oreq.urld.query) { queryParams += '&'; }
+				queryParams += oreq.urld.query;
+
+				// prep new request
+				oreq.headers.path = '#pubweb_proxy';
+				oreq.headers.params = {
+					url: ((oreq.urld.protocol) ? oreq.urld.protocol + '://' : '') +
+						(oreq.urld.authority||'') +
+						oreq.urld.path +
+						((queryParams) ? '?' + queryParams : '') +
+						((oreq.headers.url.indexOf('#') !== -1) ? '#' + oreq.urld.anchor : '')
+				};
+			}
+		}
+	} else if (isNonLocal) {
+		if (oreq.urld.authority == 'page') {
+			// http://page#foo
+			// Match the route in the current page
+			handler = lookupRoute();
+		} else {
+			// http://bar.com/foo.js#
 			// Try to get/load the VM
 			handler = workers.getWorker(oreq.urld);
 		}
@@ -2577,7 +2872,7 @@ schemes.register('#', function (oreq, ires) {
 	if (handler) {
 		handler(ireq, ores, oreq.originChannel);
 	} else {
-		ores.s404().end();
+		ores.status(404, 'Not Found').end();
 	}
 });
 
@@ -2585,7 +2880,7 @@ module.exports = {
 	at: at,
 	getRoutes: getRoutes
 };
-},{"./content-types.js":11,"./helpers.js":12,"./incoming-request.js":15,"./response.js":19,"./schemes.js":20,"./workers.js":23}],15:[function(require,module,exports){
+},{"./content-types.js":11,"./helpers.js":13,"./incoming-request.js":16,"./response.js":21,"./schemes.js":22,"./workers.js":25}],16:[function(require,module,exports){
 var util = require('../util');
 var helpers = require('./helpers.js');
 var httpHeaders = require('./http-headers.js');
@@ -2602,7 +2897,6 @@ function IncomingRequest(headers) {
 
 	// Set attributes
 	this.method = (headers.method) ? headers.method.toUpperCase() : 'GET';
-	this[this.method] = true;
 	this.path = headers.path || '#';
     this.pathd = headers.pathd || [this.path];
 	this.params = (headers.params) || {};
@@ -2697,7 +2991,7 @@ IncomingRequest.prototype.pipe = function(target, headersCB, bodyCb) {
 	}
 	return target;
 };
-},{"../util":8,"./content-types.js":11,"./helpers.js":12,"./http-headers.js":13,"./links":17,"./request":18,"./response":19}],16:[function(require,module,exports){
+},{"../util":8,"./content-types.js":11,"./helpers.js":13,"./http-headers.js":14,"./links":18,"./request":19,"./response":21}],17:[function(require,module,exports){
 var util = require('../util');
 var helpers = require('./helpers.js');
 var httpHeaders = require('./http-headers.js');
@@ -2823,41 +3117,44 @@ IncomingResponse.prototype.pipe = function(target, headersCB, bodyCb) {
 	}
 	return target;
 };
-},{"../util":8,"./content-types.js":11,"./helpers.js":12,"./http-headers.js":13,"./links":17,"./request":18,"./response":19}],17:[function(require,module,exports){
+},{"../util":8,"./content-types.js":11,"./helpers.js":13,"./http-headers.js":14,"./links":18,"./request":19,"./response":21}],18:[function(require,module,exports){
 var helpers = require('./helpers');
 module.exports.processLinks = function(links, baseUrl) {
-    if (!links) links = [];
-    links = Array.isArray(links) ? links : [links];
-	links.forEach(function(link) {
-		// Convert relative paths to absolute uris
-		if (link.href && !helpers.isAbsUri(link.href) && baseUrl) {
-            if (link.href.charAt(0) == '#') {
-                if (baseUrl.source) {
-                    // strip any hash or query param
-                    baseUrl = ((baseUrl.protocol) ? baseUrl.protocol + '://' : '') + baseUrl.authority + baseUrl.path;
-                }
-                link.href = helpers.joinUri(baseUrl, link.href);
-            } else {
-                link.href = helpers.joinRelPath(baseUrl, link.href);
+	if (!links) links = [];
+	links = Array.isArray(links) ? links : [links];
+	links
+		.filter(function(link) { return !!link; })
+		.forEach(function(link) {
+			// Convert relative paths to absolute uris
+			if (link.href && !helpers.isAbsUri(link.href) && baseUrl) {
+				if (link.href.charAt(0) == '#') {
+					if (baseUrl.source) {
+						// strip any hash or query param
+						baseUrl = ((baseUrl.protocol) ? baseUrl.protocol + '://' : '') + baseUrl.authority + baseUrl.path;
+					}
+					link.href = helpers.joinUri(baseUrl, link.href);
+				} else {
+					link.href = helpers.joinRelPath(baseUrl, link.href);
+				}
 			}
-		}
 
-        // Add `is` helper
-        if (link.is && typeof link.is != 'function') link._is = link.is;
-        noEnumDesc.value = helpers.queryLink.bind(null, link);
-        Object.defineProperty(link, 'is', noEnumDesc);
-	});
+			// Add `is` helper
+			if (link.is && typeof link.is != 'function') link._is = link.is;
+			noEnumDesc.value = helpers.queryLink.bind(null, link);
+			Object.defineProperty(link, 'is', noEnumDesc);
+		});
 
-    // Add helpers
-    noEnumDesc.value = helpers.queryLinks.bind(null, links);
-    Object.defineProperty(links, 'query', noEnumDesc);
-    noEnumDesc.value = function(query) { return this.query(query)[0]; };
-    Object.defineProperty(links, 'get', noEnumDesc);
+	// Add helpers
+	noEnumDesc.value = helpers.queryLinks.bind(null, links);
+	Object.defineProperty(links, 'query', noEnumDesc);
+	noEnumDesc.value = function(query) { return this.query(query)[0]; };
+	Object.defineProperty(links, 'get', noEnumDesc);
 
-    return links;
+	return links;
 };
 var noEnumDesc = { value: null, enumerable: false, configurable: true, writable: true };
-},{"./helpers":12}],18:[function(require,module,exports){
+},{"./helpers":13}],19:[function(require,module,exports){
+var localConfig = require('../config.js');
 var util = require('../util');
 var promises = require('../promises.js');
 var helpers = require('./helpers.js');
@@ -2883,10 +3180,10 @@ function Request(headers, originChannel) {
 	this.headers.params = (this.headers.params) || {};
 	this.originChannel = originChannel;
 	this.isBinary = false; // stream is binary?
-	this.isVirtual = local.virtualOnly || undefined; // request going to virtual host?
+	this.isVirtual = localConfig.virtualOnly || undefined; // request going to virtual host?
 
 	// Behavior flags
-    this.isForcedLocal = local.localOnly; // forcing request to be local
+    this.isForcedLocal = localConfig.localOnly; // forcing request to be local
 	this.isBufferingResponse = true; // auto-buffering the response?
 	this.isAutoEnding = false; // auto-ending the request on next tick?
 
@@ -2902,7 +3199,7 @@ module.exports = Request;
 
 // Header setter
 Request.prototype.header = function(k, v) {
-	k = formatHeaderKey(k);
+	k = helpers.formatHeaderKey(k);
 	// Convert mime if needed
 	if (k == 'Accept' || k == 'ContentType') {
 		v = contentTypes.lookup(v);
@@ -2918,55 +3215,23 @@ Request.prototype.header = function(k, v) {
 	};
 });
 
-// helper to convert a given header value to our standard format - camel case, no dashes
-var headerKeyRegex = /(^|-)(.)/g;
-function formatHeaderKey(str) {
-	// strip any dashes, convert to camelcase
-	// eg 'foo-bar' -> 'FooBar'
-	return str.replace(headerKeyRegex, function(_0,_1,_2) { return _2.toUpperCase(); });
-}
-
-// Content-type sugars
-[ 'json', 'text', 'html', 'csv' ].forEach(function(k) {
-    Request.prototype[k] = function (v) {
-        this.ContentType(k);
-        this.write(v);
-        return this;
-    };
-    Request.prototype['to'+k] = function (v) {
-        this.Accept(k);
-        return this;
-    };
-});
-
 // Link-header construction helper
-Request.prototype.link = function(link) {
-	if (!this.headers.Link) { this.headers.Link = []; }
-	if (arguments.length > 1) {
-		if (Array.isArray(arguments[0])) {
-			// table form
-			this.link(util.table.apply(null, arguments));
-		} else {
-			// (href, rel, opts) form
-			var href = arguments[0];
-			var rel = arguments[1];
-			var opts = arguments[2];
-			if (rel && typeof rel == 'object') {
-				opts = rel;
-				rel = false;
-			}
-			if (!opts) opts = {};
-			opts.href = href;
-			if (rel) { opts.rel = (opts.rel) ? (opts.rel+' '+rel) : rel; }
-			this.link(opts);
-		}
-	} else if (Array.isArray(link)) {
-		// [{rel:,href:}...] form
-		this.headers.Link = this.headers.Link.concat(link);
-	} else {
-		// {rel:,href:} form
-		this.headers.Link.push(link);
+// - `href`: string/{.path}, the target of the link
+// - `attrs`: optional object, the attributes of the link
+// - alternatively, can pass a full link object, or an array of link objects
+Request.prototype.link = function(href, attrs) {
+	if (Array.isArray(href)) {
+		href.forEach(function(link) { this.link(link); }.bind(this));
+		return this;
 	}
+	if (!this.headers.Link) { this.headers.Link = []; }
+	if (href && typeof href == 'object') {
+		attrs = href;
+	} else {
+		if (!attrs) attrs = {};
+		attrs.href = (href.path) ? href.path : href;
+	}
+	this.headers.Link.push(attrs);
 	return this;
 };
 
@@ -3093,8 +3358,9 @@ Request.prototype.start = function() {
 
 	// Prep request
 	if (typeof this.isVirtual == 'undefined') {
-		// decide on whether this is virtual based on the presence of a hash
-		this.isVirtual = (this.headers.url.indexOf('#') !== -1);
+		// decide on whether this is virtual based on the presence of a .js and hash (outside the query params) or hash-prefix
+		var jshashIndex = this.headers.url.indexOf('.js#');
+		this.isVirtual = (this.headers.url.indexOf('#') === 0 || (jshashIndex !== -1 && this.headers.url.slice(0, jshashIndex).indexOf('?') === -1));
 	}
     if (this.isForcedLocal && this.headers.url.charAt(0) !== '#') {
         // if local only, force
@@ -3197,7 +3463,7 @@ function fulfillResponsePromise(req, res) {
         return;
 
     // log if logging
-    if (local.logTraffic) {
+    if (localConfig.logTraffic) {
         console.log(req.headers, res);
     }
 
@@ -3215,7 +3481,54 @@ function parseScheme(url) {
 	var schemeMatch = /^([^.^:]*):/.exec(url);
 	return (schemeMatch) ? schemeMatch[1] : 'http';
 }
-},{"../promises.js":4,"../util":8,"./content-types.js":11,"./helpers.js":12,"./incoming-response.js":16,"./response.js":19,"./schemes.js":20}],19:[function(require,module,exports){
+},{"../config.js":1,"../promises.js":4,"../util":8,"./content-types.js":11,"./helpers.js":13,"./incoming-response.js":17,"./response.js":21,"./schemes.js":22}],20:[function(require,module,exports){
+var helpers = require('./helpers');
+
+// Response template prototype
+function ResponseTemplate(opts) {
+	this.opts = opts || {};
+}
+
+// Populates response with data
+ResponseTemplate.prototype.writeout = function(ireq, ores) {
+	var opts = this.opts;
+	ores.status(opts.status, opts.reason);
+	for (var k in opts) {
+		if (helpers.isHeaderKey(k)) {
+			ores.header(k, opts[k]);
+		}
+	}
+	ores.end(opts.body);
+};
+
+var responses = {
+	// notices
+	'Ok': 200, 'Created': 201, 'No Content': 204,
+	// redirects
+	'PermanentRedirect': 301, 'TemporaryRedirect': 302,
+	// request errors
+	'Bad Request': 400, 'Unauthorized': 401, 'Forbidden': 403, 'Not Found': 404, 'Method Not Allowed': 405, 'Not Acceptable': 406, 'Request Timeout': 408, 'Conflict': 409,
+	'Unsupported Media Type': 415, 'Im A Teapot': 418, 'Unprocessable Entity': 422,
+	// internal errors
+	'Internal Server Error': 500, 'Not Implemented': 501, 'Bad Gateway': 502, 'Service Unavailable': 503, 'Gateway Timeout': 504
+};
+
+module.exports.ResponseTemplate = ResponseTemplate;
+for (var reason in responses) {
+	var name = reason.replace(/ /g, '');
+
+	// Define response template constructor
+	module.exports[name] = (function(reason) {
+		var status = responses[reason];
+		return function(opts) {
+			var tmpl = new ResponseTemplate(opts);
+			tmpl.opts.status = status;
+			tmpl.opts.reason = tmpl.opts.reason || reason;
+			return tmpl;
+		};
+	})(reason);
+}
+},{"./helpers":13}],21:[function(require,module,exports){
 var util = require('../util');
 var promise = require('../promises.js').promise;
 var helpers = require('./helpers.js');
@@ -3248,20 +3561,11 @@ Response.prototype.status = function(code, reason) {
 	return this;
 };
 
-// Status sugars
-for (var i=200; i <= 599; i++) {
-	(function(i) {
-		Response.prototype['s'+i] = function(reason) {
-			return this.status(i, reason);
-		};
-	})(i);
-}
-
 // Header setter
 Response.prototype.header = function(k, v) {
-	k = formatHeaderKey(k);
+	k = helpers.formatHeaderKey(k);
 	// Convert mime if needed
-	if (k == 'ContentType') {
+	if (k == 'Accept' || k == 'ContentType') {
 		v = contentTypes.lookup(v);
 	}
 	this.headers[k] = v;
@@ -3269,66 +3573,31 @@ Response.prototype.header = function(k, v) {
 };
 
 // Header sugars
-[ 'Allow', 'ContentType', 'Link', 'Location', 'Pragma' ].forEach(function(k) {
+[ 'Accept', 'Allow', 'ContentType', 'Location', 'Pragma' ].forEach(function(k) {
 	Response.prototype[k] = function(v) {
 		return this.header(k, v);
 	};
 });
 
-// Content-type sugars
-[ 'json', 'text', 'html', 'csv' ].forEach(function(k) {
-	Response.prototype[k] = function (v) {
-		this.ContentType(k);
-		this.write(v);
-		return this;
-	};
-});
-Response.prototype.event = function(event, data) {
-	this.ContentType('event-stream');
-	this.write({ event: event, data: data });
-	return this;
-};
-
 // Link-header construction helper
-Response.prototype.link = function(link) {
-	if (!this.headers.Link) { this.headers.Link = []; }
-	if (arguments.length > 1) {
-		if (Array.isArray(arguments[0])) {
-			// table form
-			this.link(util.table.apply(null, arguments));
-		} else {
-			// (href, rel, opts) form
-			var href = arguments[0];
-			var rel = arguments[1];
-			var opts = arguments[2];
-			if (rel && typeof rel == 'object') {
-				opts = rel;
-				rel = false;
-			}
-			if (!opts) opts = {};
-			opts.href = href;
-			if (rel) { opts.rel = (opts.rel) ? (opts.rel+' '+rel) : rel; }
-			this.link(opts);
-		}
-	} else if (Array.isArray(link)) {
-		// [{rel:,href:}...] form
-		this.headers.Link = this.headers.Link.concat(link);
-	} else {
-		// {rel:,href:} form
-		this.headers.Link.push(link);
+// - `href`: string/{.path}, the target of the link
+// - `attrs`: optional object, the attributes of the link
+// - alternatively, can pass a full link object, or an array of link objects
+Response.prototype.link = function(href, attrs) {
+	if (Array.isArray(href)) {
+		href.forEach(function(link) { this.link(link); }.bind(this));
+		return this;
 	}
+	if (!this.headers.Link) { this.headers.Link = []; }
+	if (href && typeof href == 'object') {
+		attrs = href;
+	} else {
+		if (!attrs) attrs = {};
+		attrs.href = (href.path) ? href.path : href;
+	}
+	this.headers.Link.push(attrs);
 	return this;
 };
-
-// helper to convert a given header value to our standard format - camel case, no dashes
-var headerKeyRegex = /(^|-)(.)/g;
-function formatHeaderKey(str) {
-	// strip any dashes, convert to camelcase
-	// eg 'foo-bar' -> 'FooBar'
-	return str.replace(headerKeyRegex, function(_0,_1,_2) { return _2.toUpperCase(); });
-}
-
-//
 
 // Event connection helper
 // connects events from this stream to the target (event proxying)
@@ -3393,7 +3662,7 @@ Response.prototype.close = function() {
 	this.clearEvents();
 	return this;
 };
-},{"../promises.js":4,"../util":8,"./content-types.js":11,"./helpers.js":12}],20:[function(require,module,exports){
+},{"../promises.js":4,"../util":8,"./content-types.js":11,"./helpers.js":13}],22:[function(require,module,exports){
 var util = require('../util');
 var helpers = require('./helpers.js');
 var contentTypes = require('./content-types.js');
@@ -3632,10 +3901,10 @@ schemes.register('data', function(oreq, ires) {
 	// respond
 	var ores = new Response();
 	ores.wireUp(ires);
-	ores.s200().ContentType(contentType);
+	ores.status(200, 'OK').ContentType(contentType);
 	ores.end(data);
 });
-},{"../util":8,"./content-types.js":11,"./helpers.js":12,"./http-headers.js":13,"./response.js":19}],21:[function(require,module,exports){
+},{"../util":8,"./content-types.js":11,"./helpers.js":13,"./http-headers.js":14,"./response.js":21}],23:[function(require,module,exports){
 // Events
 // ======
 var util = require('../util');
@@ -3839,7 +4108,7 @@ module.exports = {
 	EventStream: EventStream,
 	EventHost: EventHost
 };
-},{"../util":8,"./content-types.js":11,"./request.js":18,"./response.js":19}],22:[function(require,module,exports){
+},{"../util":8,"./content-types.js":11,"./request.js":19,"./response.js":21}],24:[function(require,module,exports){
 /*
  UriTemplate Copyright (c) 2012-2013 Franz Antesberger. All Rights Reserved.
  Available via the MIT license.
@@ -4712,9 +4981,11 @@ var UriTemplate = (function () {
 }(function (UriTemplate) {
     module.exports = UriTemplate;
 }));
-},{}],23:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
+var localConfig = require('../config.js');
 var helpers = require('./helpers.js');
 var promise = require('../promises.js').promise;
+var Request = require('./request');
 var Bridge = require('./bridge.js');
 
 module.exports = {
@@ -4741,11 +5012,11 @@ function get(urld) {
 		var dir = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
 		var dirurl = window.location.origin + dir;
 		var url = helpers.joinRelPath(dirurl, urld.source);
-		urld = local.parseUri(url);
+		urld = helpers.parseUri(url);
 	}
 
 	// Lookup from existing children
-    var id = urld.authority+urld.path;
+	var id = urld.authority+urld.path;
 	var bridge = _bridges[id];
 	if (bridge) {
 		return bridge.onRequest.bind(bridge);
@@ -4755,7 +5026,7 @@ function get(urld) {
 	if (urld.path.slice(-3) == '.js') {
 		// Try to autoload temp worker
 		spawnTempWorker(urld);
-        var bridge = _bridges[id];
+		var bridge = _bridges[id];
 		return bridge.onRequest.bind(bridge);
 	}
 
@@ -4782,50 +5053,52 @@ function spawnWorker(urld) {
 		var dir = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
 		var dirurl = window.location.protocol + '//' + window.location.hostname + dir;
 		var url = helpers.joinRelPath(dirurl, urld.source);
-		urld = local.parseUri(url);
+		urld = helpers.parseUri(url);
 	}
 
 	// Eject a temp server if needed
-	if (Object.keys(_workers).length >= local.maxActiveWorkers) {
-        var eject = null;
-	    for (var d in _workers) {
-		    if ( _workers[d].isTemp && !_bridges[d].isInTransaction()) {
-                eject = d;
-                break;
-            }
-	    }
-		console.log('Closing temporary worker', eject);
-		_workers[eject].terminate();
-        delete _workers[eject];
-        delete _bridges[eject];
+	if (Object.keys(_workers).length >= localConfig.maxActiveWorkers) {
+		var eject = null;
+		for (var d in _workers) {
+			if ( _workers[d].isTemp && !_bridges[d].isInTransaction()) {
+				eject = d;
+				break;
+			}
+		}
+		if (eject && (eject in _workers)) {
+			console.log('Closing temporary worker', eject);
+			_workers[eject].terminate();
+			delete _workers[eject];
+			delete _bridges[eject];
+		}
 	}
 
-    var id = urld.authority+urld.path;
+	var id = urld.authority+urld.path;
 	var worker = new WorkerWrapper(id);
 	_workers[id] = worker;
-    _bridges[id] = new Bridge(worker);
+	_bridges[id] = new Bridge(worker);
 	worker.load(urld);
 	return worker;
 }
 
 function closeWorker(url) {
-	var urld = local.parseUri(url);
+	var urld = helpers.parseUri(url);
 
 	// Relative to current host? Construct full URL
 	if (!urld.authority || urld.authority == '.' || urld.authority.indexOf('.') === -1) {
 		var dir = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
 		var dirurl = window.location.protocol + '//' + window.location.hostname + dir;
 		url = helpers.joinRelPath(dirurl, urld.source);
-		urld = local.parseUri(url);
+		urld = helpers.parseUri(url);
 	}
 
 	// Find and terminate
 	var id = urld.authority + urld.path;
 	if (id in _workers) {
 		_workers[id].terminate();
-        delete _workers[id];
-        delete _bridges[id];
-        return true;
+		delete _workers[id];
+		delete _bridges[id];
+		return true;
 	}
 	return false;
 }
@@ -4834,7 +5107,7 @@ function WorkerWrapper(id) {
 	this.isReady = false;
 	this.isTemp = false;
 
-    this.id = id;
+	this.id = id;
 	this.worker = null;
 
 	this.script_blob = null;
@@ -4853,22 +5126,22 @@ WorkerWrapper.prototype.load = function(urld) {
 
 	// If no scheme was given, check our cache to see if we can save ourselves some trouble
 	var full_url = url;
-    if (!urld.protocol) {
-        var scheme = _domainSchemes[urld.authority];
-        if (!scheme) {
-            scheme = _domainSchemes[urld.authority] = 'https://';
-        }
-        full_url = scheme + url;
-    }
+	if (!urld.protocol) {
+		var scheme = _domainSchemes[urld.authority];
+		if (!scheme) {
+			scheme = _domainSchemes[urld.authority] = 'https://';
+		}
+		full_url = scheme + url;
+	}
 
-    // Try to fetch the script
-	GET(full_url)
-		.Accept('application/javascript, text/javascript, text/plain, */*')
+	// Try to fetch the script
+	var req = new Request({ method: 'GET', url: full_url });
+	req.Accept('application/javascript, text/javascript, text/plain, */*').end()
 		.fail(function(res) {
 			if (!urld.protocol && res.status === 0) {
 				// Domain error? Try again without ssl
-                full_url = 'http://'+url;
-                _domainSchemes[urld.authority] = 'http://'; // we know it isn't https at least
+				full_url = 'http://'+url;
+				_domainSchemes[urld.authority] = 'http://'; // we know it isn't https at least
 				return GET(full_url);
 			}
 			throw res;
@@ -4878,7 +5151,7 @@ WorkerWrapper.prototype.load = function(urld) {
 
 			// Construct final script
 			var bootstrap_src = require('../config.js').workerBootstrapScript;
-			var src = bootstrap_src+'local.at(\'(.*)\', function($req, $res){'+res.body+'});';
+			var src = bootstrap_src+'\n(function(){\n\n'+res.body+'\n\n})();';
 
 			// Create worker
 			this2.script_blob = new Blob([src], { type: "text/javascript" });
@@ -4918,6 +5191,8 @@ WorkerWrapper.prototype.setup = function() {
 				break;
 		}
 	});
+
+	// this.worker.onerror = function() { console.error('Worker Error!', arguments); };
 
 	// :TOOD: set terminate timeout for if no ready received
 };
@@ -4961,7 +5236,7 @@ WorkerWrapper.prototype.onWorkerLog = function(message) {
 			break;
 	}
 };
-},{"../config.js":1,"../promises.js":4,"./bridge.js":9,"./helpers.js":12}],24:[function(require,module,exports){
+},{"../config.js":1,"../promises.js":4,"./bridge.js":9,"./helpers.js":13,"./request":19}],26:[function(require,module,exports){
 if (typeof self != 'undefined' && typeof self.window == 'undefined') { (function() {
 	// GLOBAL
 	// custom console.*

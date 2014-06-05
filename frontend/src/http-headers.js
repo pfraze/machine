@@ -1,6 +1,6 @@
 module.exports = { setup: setup };
 function setup() {
-	local.httpHeaders.register('pragma',
+	web.httpHeaders.register('pragma',
 		function serialize_pragma(obj) {
 			var str, strs = [];
 			for (var k in obj) {

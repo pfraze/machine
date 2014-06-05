@@ -27,7 +27,7 @@ function addIndex(indexLink) {
 	if (!_cfg.curIndex) {
 		_cfg.curIndex = indexLink.href;
 	}
-	return HEAD(indexLink.href).then(function(res) {
+	return web.HEAD(indexLink.href).then(function(res) {
 		_cfg.indexes[indexLink.href] = res.links;
 		_cfg.renderers[indexLink.href] = res.links.query('layer1.io/renderer');
 		return res;
@@ -74,7 +74,7 @@ function findRenderers(targetLink, maxMatches) {
 	for (var i=0; i < renderers.length; i++) {
 		var g = renderers[i];
 		if (!g.for) continue;
-		if (local.queryLink(targetLink, g.for)) {
+		if (web.queryLink(targetLink, g.for)) {
 			matches.push(g);
 			if (matches.length >= maxMatches)
 				return matches;

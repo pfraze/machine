@@ -88,19 +88,19 @@ function fetch(url, useHead) {
 	}
 
 	var method = (useHead) ? 'HEAD' : 'GET';
-	var p = local.promise();
-	var urld = local.parseUri(url);
+	var p = web.promise();
+	var urld = web.parseUri(url);
 	if (!urld || !urld.authority) {
 		p.fulfill(false); // bad url, dont even try it!
 		return p;
 	}
 
 	var triedProxy = false;
-	var attempts = lookupAttempts = [new local.Request({ method: method, url: url, binary: true })]; // first attempt, as given
+	var attempts = lookupAttempts = [new web.Request({ method: method, url: url, binary: true })]; // first attempt, as given
 	if (!urld.protocol) {
 		// No protocol? Two more attempts - 1 with https, then one with plain http
-		attempts.push(new local.Request({ method: method, url: 'https://'+urld.authority+urld.relative, binary: true }));
-		attempts.push(new local.Request({ method: method, url: 'http://'+urld.authority+urld.relative, binary: true }));
+		attempts.push(new web.Request({ method: method, url: 'https://'+urld.authority+urld.relative, binary: true }));
+		attempts.push(new web.Request({ method: method, url: 'http://'+urld.authority+urld.relative, binary: true }));
 	}
 
 	function makeAttempt() {
@@ -123,20 +123,20 @@ function fetch(url, useHead) {
 			globals.fetchProxyClient.resolve({ nohead: true }).always(function(proxyUrl) {
 				if (!urld.protocol) {
 					if (useHead) {
-						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, params: { url: 'https://'+urld.authority+urld.relative } }));
-						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, params: { url: 'http://'+urld.authority+urld.relative } }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new web.Request({ method: 'HEAD', url: proxyUrl, params: { url: 'https://'+urld.authority+urld.relative } }));
+						attempts.push(new web.Request({ method: 'HEAD', url: proxyUrl, params: { url: 'http://'+urld.authority+urld.relative } }));
+						attempts.push(new web.Request({ method: 'GET', url: proxyUrl, params: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new web.Request({ method: 'GET', url: proxyUrl, params: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
 					} else {
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new web.Request({ method: 'GET', url: proxyUrl, params: { url: 'https://'+urld.authority+urld.relative }, binary: true }));
+						attempts.push(new web.Request({ method: 'GET', url: proxyUrl, params: { url: 'http://'+urld.authority+urld.relative }, binary: true }));
 					}
 				} else {
 					if (useHead) {
-						attempts.push(new local.Request({ method: 'HEAD', url: proxyUrl, params: { url: url } }));
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: url }, binary: true }));
+						attempts.push(new web.Request({ method: 'HEAD', url: proxyUrl, params: { url: url } }));
+						attempts.push(new web.Request({ method: 'GET', url: proxyUrl, params: { url: url }, binary: true }));
 					} else {
-						attempts.push(new local.Request({ method: 'GET', url: proxyUrl, params: { url: url }, binary: true }));
+						attempts.push(new web.Request({ method: 'GET', url: proxyUrl, params: { url: url }, binary: true }));
 					}
 				}
 				makeAttempt();

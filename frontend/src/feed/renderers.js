@@ -1,5 +1,5 @@
 var util = require('../util');
-
+/*
 // Thing renderer
 local.at('#thing-renderer', function(req, res) {
 	GET(req.params.target).always(function(targetRes) {
@@ -124,4 +124,4 @@ local.at('#hn-renderer', function(req, res) {
 
 			res.end();
 		});
-});
+});*/

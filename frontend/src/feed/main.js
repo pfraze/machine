@@ -1,12 +1,12 @@
 var globals = require('../globals');
 var util = require('../util');
 var gui = require('./gui');
-var mediaLinks = local.queryLinks(document, 'stdrel.com/media');
-var indexLinks = local.queryLinks(document, 'layer1.io/index');
+var mediaLinks = web.queryLinks(document, 'stdrel.com/media');
+var indexLinks = web.queryLinks(document, 'layer1.io/index');
 
 // Environment Setup
 // =================
-local.logAllExceptions = true;
+web.logAllExceptions = true;
 require('../auth').setup();
 require('../http-headers').setup();
 require('./feedcfg').setup(indexLinks);
@@ -19,30 +19,31 @@ require('./feedcfg').addIndex({ href: '#', rel: 'layer1.io/index', title: 'Built
 });
 
 
-local.bindRequestEvents(document);
+web.bindRequestEvents(document);
 $(document).on('request', function(e) {
 	// dispatch and log
-	var req = new local.Request(e.originalEvent.detail);
+	var req = new web.Request(e.originalEvent.detail);
 	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
 	req.end(e.originalEvent.detail.body);
 	return false;
 });
 
-// :TEMP:
-local.at('#todo', function(req, res) { alert('Todo'); res.s204().end(); });
+// :TEMP: links to #todo will just alert Todo on click
+web.export(todo);
+function todo() { alert('Todo'); }
 
 // server starting-point
 function auth(req, res, worker) {
 	// check action id
 	req.actid = extractActId(req);
 	if (req.actid === false) {
-		res.s401('must reuse Authorization header in incoming request for all outgoing requests').end();
+		res.status(401, 'must reuse Authorization header in incoming request for all outgoing requests').end();
 		return false;
 	}
 	// :TODO:
 	req.act = null;// executor.get(worker ? worker.getUrl() : true, req.actid); // worker DNE, req came from page so allow
 	if (!req.act) {
-		res.s403('invalid actid - expired or not assigned to this worker').end();
+		res.status(403, 'invalid actid - expired or not assigned to this worker').end();
 		return false;
 	}
 	return true;
@@ -51,14 +52,15 @@ function auth(req, res, worker) {
 // toplevel
 function getSelf(res) { return res.links.get('self'); }
 var indexLinks = [
-	HEAD('/files/column-layouts.js#3col').always(getSelf),
-	HEAD('/files/column-layouts.js#2col').always(getSelf),
-	HEAD('/files/image-viewer.js#').always(getSelf),
-	HEAD('/files/list-view.js#').always(getSelf),
-	HEAD('/files/media-summaries.js#').always(getSelf),
-	HEAD('/files/thumbnail-view.js#').always(getSelf)
+	web.HEAD('/column-layouts.js#col3').always(getSelf),
+	web.HEAD('/column-layouts.js#col2').always(getSelf),
+	web.HEAD('/image-viewer.js#').always(getSelf),
+	web.HEAD('/list-view.js#').always(getSelf),
+	web.HEAD('/media-summaries.js#').always(getSelf),
+	web.HEAD('/thumbnail-view.js#').always(getSelf)
 ];
-local.at('#', function (req, res, worker) {
+web.export(main);
+function main(req, res) {
 	/*res.link(
 		['href',    'id',      'rel',                          'title'],
 		'#',        undefined, 'self service layer1.io/index', 'Host Page',
@@ -73,25 +75,28 @@ local.at('#', function (req, res, worker) {
 		'#test-render',    'layer1.io/renderer', 'Test2',       'stdrel.com/media',
 		'#hn-renderer',    'layer1.io/renderer', 'HN Renderer', 'stdrel.com/media text/html news.ycombinator.com'
 	);*/
-	indexLinks.always(function(links) {
+	return indexLinks.always(function(links) {
 		links = links.filter(function(link) { return !!link; });
-		res.link(links);
-		res.s204().end();
+		res.link(links.concat([
+			{ href: 'http://i.imgur.com/kijXP0K.jpg', rel: 'layer1.io/media', type: 'image/jpg', title: 'Image 1' },
+			{ href: 'http://i.imgur.com/6pETKay.jpg', rel: 'layer1.io/media', type: 'image/jpg', title: 'Image 2' },
+			{ href: 'http://i.imgur.com/yurJqpe.jpg', rel: 'layer1.io/media', type: 'image/jpg', title: 'Image 3' },
+		]));
 	});
-});
+}
 
 // public web servers
 require('./publicweb.js');
 
 // feed items
-local.at('#feed/?(.*)', function (req, res, worker) {
+/*web.at('#feed/?(.*)', function (req, res, worker) {
 	// :TODO:
 	// if (!auth(req, res, worker)) return;
 	var itemid = req.pathd[1];
 
 	if (itemid) {
 		if (!mediaLinks[itemid]) { return res.s404().end(); }
-		var link = local.util.deepClone(mediaLinks[itemid]);
+		var link = web.util.deepClone(mediaLinks[itemid]);
 		res.link(
 			['href', 'id',      'rel',                       'title'],
 			'/',     undefined, 'service via',               'Host Page',
@@ -100,7 +105,7 @@ local.at('#feed/?(.*)', function (req, res, worker) {
 		serveItem(req, res, worker, link);
 	}
 	else {
-		var links = local.util.deepClone(mediaLinks);
+		var links = web.util.deepClone(mediaLinks);
 		res.link(
 			['href', 'id',      'rel',                         'title'],
 			'/',     undefined, 'up service via',              'Host Page',
@@ -108,13 +113,6 @@ local.at('#feed/?(.*)', function (req, res, worker) {
 		);
 		serveCollection(req, res, worker, links);
 	}
-});
-
-// service proxy
-local.at('#service', function (req, res, worker) {
-	if (!auth(req, res, worker)) return;
-	// :TODO:
-	res.s501().end();
 });
 
 // collection behavior
@@ -172,4 +170,4 @@ function extractActId(req) {
 	if (parts[0] != 'Action' || !parts[1]) return false;
 
 	return +parts[1] || false;
-}
+}*/

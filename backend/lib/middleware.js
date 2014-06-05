@@ -1,10 +1,13 @@
 // Common Middleware
 // =================
-var html    = require('./html.js');
-var config  = require('./config');
-var util    = require('./util');
-var winston = require('winston');
-var Buffer  = require('buffer').Buffer;
+var html      = require('./html.js');
+var config    = require('./config');
+var util      = require('./util');
+var mimetypes = require('../../shared/mimetypes');
+var winston   = require('winston');
+var Buffer    = require('buffer').Buffer;
+var path      = require('path');
+var fs        = require('fs');
 
 module.exports.setCorsHeaders = function(req, res, next) {
 	res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -19,7 +22,7 @@ module.exports.setCorsHeaders = function(req, res, next) {
 module.exports.setCspHeaders = function(req, res, next) {
 	res.setHeader('Content-Security-Policy', [
 		"default-src 'none'",
-		"img-src 'self'",
+		"img-src *", // SHOULD BE SELF
 		"font-src 'self'",
 		"script-src 'self' blob:",
 		"style-src 'self' 'unsafe-inline'",
@@ -42,3 +45,53 @@ module.exports.bodyCollector = function(req, res, next) {
 		next();
 	});
 };
+
+module.exports.linkFileSystem = function(req, res, next) {
+	var links = [];
+	if (req.path[0] == '.') {
+		// A service, will link itself
+		next();
+	}
+	else if (req.path[req.path.length - 1] == '/') {
+		// A directory
+		if (req.path != '/') { links.push(parentDirectoryLink(req.path)); }
+		if (req.path == '/') {
+			links.push({ rel: 'self layer1.io/server layer1.io/directory', href: req.path });
+		} else {
+			links.push({ rel: 'self layer1.io/directory', id: path.basename(req.path), href: req.path });
+		}
+		fs.readdir(path.join('./files', req.path), function(err, files) {
+			if (err) {
+				console.log('error reading directory', path.join('./files', req.path), err);
+			}
+			if (files && files.length) {
+				for (var i=0; i < files.length; i++) {
+					var filename = files[i];
+					var mimetype = mimetypes.lookup(filename);
+					links.push({ rel: 'layer1.io/file', id: filename, href: req.path + filename, type: mimetype });
+				}
+			}
+			res.header('Link', links.map(util.serializeLinkObject).join(', '));
+			next();
+		});
+	}
+	else {
+		// A file
+		var filename = path.basename(req.path);
+		var mimetype = mimetypes.lookup(filename);
+		links.push(parentDirectoryLink(req.path));
+		links.push({ rel: 'self layer1.io/file', id: filename, href: req.path, type: mimetype });
+		res.header('Link', links.map(util.serializeLinkObject).join(', '));
+		next();
+	}
+};
+
+function parentDirectoryLink(filepath) {
+	var parentpath = path.dirname(filepath);
+	var parentname = path.basename(parentpath);
+	if (!parentname) {
+		// Toplevel
+		return { rel: 'up layer1.io/server layer1.io/directory', href: parentpath };
+	}
+	return { rel: 'up layer1.io/directory', id: parentname, href: parentpath };
+}

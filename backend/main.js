@@ -108,6 +108,7 @@ if (config.ssl) {
 }
 server.all('*', middleware.setCorsHeaders);
 server.all('*', middleware.setCspHeaders);
+server.all('*', middleware.linkFileSystem);
 server.options('*', function(req, res) {
 	res.writeHead(204);
 	res.end();
@@ -142,12 +143,12 @@ server.use('/js', express.static(__dirname + '/../frontend/js', { maxAge: 1000*6
 server.use('/css', express.static(__dirname + '/../frontend/css', { maxAge: 1000*60*60*24 }));
 server.use('/img', express.static(__dirname + '/../frontend/img', { maxAge: 1000*60*60*24 }));
 server.use('/fonts', express.static(__dirname + '/../frontend/fonts', { maxAge: 1000*60*60*24 }));
-server.use('/files', express.static(__dirname + '/../files'));
 // Program routes
-require('./routes/auth')(server);
-require('./routes/me')(server);
+// require('./routes/auth')(server);
+// require('./routes/me')(server);
 require('./routes/fetchProxy')(server);
-require('./routes/feed')(server);
+require('./routes/main')(server);
+server.use('/', express.static(__dirname + '/../files'));
 
 // Reload signal
 // =============
@@ -156,6 +157,10 @@ process.on('SIGHUP', function() {
 	refreshConfig();
 	html.load(config);
 });
+
+// Indexer
+// =======
+require('./indexer');
 
 // Server Start
 // ============

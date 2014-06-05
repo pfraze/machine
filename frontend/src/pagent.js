@@ -5,7 +5,7 @@ var util = require('./util');
 
 function setup() {
 	// Request events
-	try { local.bindRequestEvents(document.body); }
+	try { web.bindRequestEvents(document.body); }
 	catch (e) { console.error('Failed to bind body request events.', e); }
 	document.body.addEventListener('request', function(e) {
 		console.log('toplevel request event', e); // :TODO:
@@ -16,16 +16,16 @@ function setup() {
 function dispatchRequest(req, $region, $target) {
 	var body = req.body; delete req.body;
 
-	req = new local.Request(req);
+	req = new web.Request(req);
 	if (!req.headers.Accept) { req.Accept('text/html, */*'); }
 
 	// Relative link? Make absolute
-	if (!local.isAbsUri(req.headers.url)) {
+	if (!web.isAbsUri(req.headers.url)) {
 		var baseurl = (window.location.protocol + '//' + window.location.host);
-		req.headers.url = local.joinUri(baseurl, req.headers.url);
+		req.headers.url = web.joinUri(baseurl, req.headers.url);
 	}
 
-	return local.dispatch(req).end(body);
+	return web.dispatch(req).end(body);
 }
 
 

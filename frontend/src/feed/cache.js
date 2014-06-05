@@ -16,20 +16,18 @@ function respond(url, res, isHEAD) {
 	return true;
 }
 
-local.at('#cache/(.*)', function(req, res, worker) {
+web.export(cache$);
+cache$.opts({ stream: true });
+function cache$(req, res, worker) {
 	// :TODO: perms
 
     // add query params back onto url if parsed out
     if (Object.keys(req.params).length) {
-        req.pathd[1] += '?'+local.contentTypes.serialize('form', req.params);
+        req.pathd[1] += '?'+web.contentTypes.serialize('form', req.params);
     }
 
-	if (req.HEAD || req.GET) {
-		if (respond(req.pathd[1], res, req.HEAD)) {
-			return;
-		}
-		res.s404().end();
-	} else {
-		res.s405().Allow('HEAD, GET').end();
+	if (respond(req.pathd[1], res, req.HEAD)) {
+		return;
 	}
-});
+	res.status(404, 'Not Found').end();
+}
