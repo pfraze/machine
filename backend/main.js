@@ -2,11 +2,10 @@ var http    = require('http');
 var https   = require('https');
 var express = require('express');
 var winston = require('winston');
-var toobusy = require('toobusy');
 var limiter = require('connect-ratelimit');
 var fs      = require('fs');
 
-var db         = require('./lib/db');
+var db         = require('./lib/db.js');
 var middleware = require('./lib/middleware.js');
 var html       = require('./lib/html.js');
 var frontendjs = require('./lib/frontendjs.js');
@@ -76,13 +75,6 @@ db.setup(config.dbpath);
 server.use(limiter({
 	whitelist: ['127.0.0.1']
 }));
-server.use(function(req, res, next) {
-	if (toobusy()) {
-		res.send(503, "We are under heavy load! Please try again later.");
-	} else {
-		next();
-	}
-});
 // server.use(express.bodyParser()); using middleware.bodyCollector instead
 server.use(middleware.bodyCollector);
 server.use(express.cookieParser());
@@ -116,23 +108,6 @@ server.options('*', function(req, res) {
 
 // Routes
 // ======
-// Status page
-server.all('/.status', function(req, res, next) {
-	res.setHeader('Link', [
-		'</>; rel="up via service"; title="'+config.hostname+'"',
-		'</.status>; rel="self service"; id="status"; title="Network Host Stats"'
-	].join(', '));
-	next();
-});
-server.head('/.status', function(req, res) { res.send(204); });
-server.get('/.status', function(req, res) {
-	var uptime = (new Date() - server.startTime);
-	var stats = require('./lib/metrics').toJSON();
-	stats.started_at = server.startTime.toLocaleString();
-	stats.uptime_hours = uptime/(60*60*1000);
-	stats.uptime_days = uptime/(24*60*60*1000);
-	res.json(stats);
-});
 // Security test route
 server.get('/sec-test', function(req, res) {
 	res.setHeader('Content-Security-Policy', ''); // turn off CSP for the test

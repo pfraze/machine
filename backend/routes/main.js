@@ -20,8 +20,7 @@ module.exports = function(server) {
 	function addLinks(req, res, next) {
 		var links = [
 			res.getHeader('Link'),
-			'</.fetch>; rel="service layer1.io/proxy"; id=".fetch"; title="Resource-Fetching Proxy"',
-			'</.status>; rel="service"; id="status"; title="Network Host Stats"',
+			'</.fetch>; rel="service layer1.io/proxy"; id=".fetch"; title="Resource-Fetching Proxy"'
 		];
 		res.header('Link', links.join(', '));
 		next();

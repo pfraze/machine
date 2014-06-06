@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-var argv = require('./backend/node_modules/optimist/index.js').argv;
+var argv = require('optimist').argv;
 var fs = require('fs'), path = require('path');
 var pid;
 try {
