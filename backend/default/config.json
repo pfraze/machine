@@ -2,5 +2,5 @@
 	"hostname": "localhost",
     "port": 8000,
     "public": false,
-	"dbpath": "./backend/db"
+	"dbpath": "./backend/db/search_index.sqlite"
 }

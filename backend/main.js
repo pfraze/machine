@@ -113,14 +113,18 @@ server.get('/sec-test', function(req, res) {
 	res.setHeader('Content-Security-Policy', ''); // turn off CSP for the test
 	res.send(html.render('secTest'));
 });
+server.get('/.index', function(req, res) {
+	db.get().all('SELECT anchor, href, rel, type, attributes FROM links', function(err, rows) {
+		if (err) { res.json(err); }
+		else { res.json(rows); }
+	});
+});
 // Static content
 server.use('/js', express.static(__dirname + '/../frontend/js', { maxAge: 1000*60*60*24 }));
 server.use('/css', express.static(__dirname + '/../frontend/css', { maxAge: 1000*60*60*24 }));
 server.use('/img', express.static(__dirname + '/../frontend/img', { maxAge: 1000*60*60*24 }));
 server.use('/fonts', express.static(__dirname + '/../frontend/fonts', { maxAge: 1000*60*60*24 }));
 // Program routes
-// require('./routes/auth')(server);
-// require('./routes/me')(server);
 require('./routes/fetchProxy')(server);
 require('./routes/main')(server);
 server.use('/', express.static(__dirname + '/../files'));

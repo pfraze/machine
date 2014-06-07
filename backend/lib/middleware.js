@@ -8,6 +8,7 @@ var winston   = require('winston');
 var Buffer    = require('buffer').Buffer;
 var path      = require('path');
 var fs        = require('fs');
+var db        = require('./db');
 
 module.exports.setCorsHeaders = function(req, res, next) {
 	res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -60,6 +61,8 @@ module.exports.linkFileSystem = function(req, res, next) {
 		} else {
 			links.push({ rel: 'self layer1.io/directory', id: path.basename(req.path), href: req.path });
 		}
+
+		// Get files listing
 		fs.readdir(path.join('./files', req.path), function(err, files) {
 			if (err) {
 				console.log('error reading directory', path.join('./files', req.path), err);
@@ -71,8 +74,22 @@ module.exports.linkFileSystem = function(req, res, next) {
 					links.push({ rel: 'layer1.io/file', id: filename, href: req.path + filename, type: mimetype });
 				}
 			}
-			res.header('Link', links.map(util.serializeLinkObject).join(', '));
-			next();
+			links = links.map(util.serializeLinkObject);
+
+			// Get any saved links
+			db.get().all('SELECT attributes FROM links WHERE anchor = ?', [req.path+'index.html'], function(err, rows) {
+				if (err) {
+					console.log('error finding directory links', req.path+'index.html', err);
+				}
+				if (rows && rows.length) {
+					for (var i=0; i < rows.length; i++) {
+						links.push(rows[i].attributes);
+					}
+				}
+
+				res.header('Link', links.join(', '));
+				next();
+			});
 		});
 	}
 	else {
@@ -81,8 +98,22 @@ module.exports.linkFileSystem = function(req, res, next) {
 		var mimetype = mimetypes.lookup(filename);
 		links.push(parentDirectoryLink(req.path));
 		links.push({ rel: 'self layer1.io/file', id: filename, href: req.path, type: mimetype });
-		res.header('Link', links.map(util.serializeLinkObject).join(', '));
-		next();
+		links = links.map(util.serializeLinkObject);
+
+		// Get any saved links
+		db.get().all('SELECT attributes FROM links WHERE anchor = ?', [req.path], function(err, rows) {
+			if (err) {
+				console.log('error finding directory links', req.path, err);
+			}
+			if (rows && rows.length) {
+				for (var i=0; i < rows.length; i++) {
+					links.push(rows[i].attributes);
+				}
+			}
+
+			res.header('Link', links.join(', '));
+			next();
+		});
 	}
 };
 

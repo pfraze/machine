@@ -2,6 +2,8 @@ var watch = require('watch');
 var path = require('path');
 var fs = require('fs');
 var htmlparser = require("htmlparser2");
+var db = require('./lib/db').get();
+var util = require('./lib/util');
 
 // Files Watcher
 // =============
@@ -61,16 +63,37 @@ function indexHtml(name) {
 		parser.end();
 
 		// Store links and mark file as indexed
-		// :TODO:
+		var anchor = makeAnchor(name);
+		links.forEach(function(link) {
+			if (!link.href) return;
+			if (!link.rel) return;
+			var attributes = util.serializeLinkObject(link);
+			var values = [anchor, link.href, link.rel, link.type||'', attributes];
+			db.run('INSERT INTO links (anchor, href, rel, type, attributes) VALUES(?, ?, ?, ?, ?)', values, function(err) {
+				if (err) {
+					console.error('Failed to insert link during indexing', err);
+				}
+			});
+		});
 	});
 }
 
-function deindexHtml(name) {
+function deindexHtml(name, cb) {
 	// Remove from database and mark file as not indexed
-	// :TODO:
+	var anchor = makeAnchor(name);
+	db.run('DELETE FROM links WHERE anchor = ?', [anchor], function(err) {
+		if (err) {
+			console.error('Failed to delete link during indexing', err);
+			return;
+		}
+		cb();
+	});
 }
 
 function reindexHtml(name) {
-	deindexHtml(name);
-	indexHtml(name);
+	deindexHtml(name, indexHtml.bind(null, name));
+}
+
+function makeAnchor(name) {
+	return name.replace(/(\\)|\//g, '/').replace(/^files/, '');
 }
