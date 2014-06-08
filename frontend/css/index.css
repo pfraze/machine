@@ -1,0 +1,10 @@
+.container { max-width: 100%; }
+h1 { color: #808080; }
+
+.nav { margin: 10px 0; }
+#program-editor { margin: 10px 0; }
+#program-view iframe { width: 100%; }
+
+/***IMPORTANT FOR SECURITY***/
+/* These styles must be preserved for security reasons */
+.view { overflow: hidden; } /* dont let untrusted content render outside its container div */

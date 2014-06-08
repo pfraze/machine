@@ -4,4 +4,8 @@ backend/server.log
 backend/config.json
 backend/db
 backend/testdb
+*.key
+*.csr
+*.crt
+*.pem
 *~

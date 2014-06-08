@@ -30,11 +30,7 @@ module.exports = function(server) {
 		res.format({
 			html: function() {
 				// Render page HTML
-				var page = tmpl.render('feed', {
-					user:          'user', //:TODO: req.session.user||'',
-					user_is_admin: true, //:TODO: dir.owner && (req.session.user == dir.owner),
-					links_html:    ''
-				});
+				var page = tmpl.render('index', {});
 				res.send(page);
 			}
 		});

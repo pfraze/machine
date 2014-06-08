@@ -92,11 +92,11 @@ switch (process.argv[2]) {
 		}
 		require('child_process').spawn('browserify',
 			[
-				path.normalize('./frontend/src/feed/main.js'),
-				'-o', path.normalize('./frontend/js/feed.js')
+				path.normalize('./frontend/src/index/main.js'),
+				'-o', path.normalize('./frontend/js/index.js')
 			],
 			{ stdio: 'inherit' })
-			.on('close', report('frontend/js/feed.js'));
+			.on('close', report('frontend/js/index.js'));
 		require('child_process').spawn('browserify',
 			[
 				path.normalize('./frontend/src/sec-test/main.js'),

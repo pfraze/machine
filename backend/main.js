@@ -72,32 +72,11 @@ db.setup(config.dbpath);
 
 // Common Handlers
 // ===============
-server.use(limiter({
-	whitelist: ['127.0.0.1']
-}));
 // server.use(express.bodyParser()); using middleware.bodyCollector instead
 server.use(middleware.bodyCollector);
 server.use(express.cookieParser());
 server.use(express.compress());
-server.use(express.session({ secret: "TODO-- come up with secret" }));
-if (config.debug_auth) {
-	server.all('*', function(req, res, next) {
-		req.session.user = config.debug_auth;
-		next();
-	});
-} else {
-	// :TODO: replace with real auth
-	server.all('*', function(req, res, next) {
-		req.session.user = 'user';
-		next();
-	});
-}
-if (config.ssl) {
-	server.use(function(req, res, next) {
-		res.setHeader('Strict-Transport-Security', 'max-age=8640000; includeSubDomains');
-		next();
-	});
-}
+// server.use(express.session({ secret: "TODO-- come up with secret" }));
 server.all('*', middleware.setCorsHeaders);
 server.all('*', middleware.setCspHeaders);
 server.all('*', middleware.linkFileSystem);
@@ -145,8 +124,8 @@ require('./indexer');
 // ============
 if (config.ssl && !config.is_upstream) {
 	var sslOpts = {
-		key: require('fs').readFileSync('ssl-key.pem'),
-		cert: require('fs').readFileSync('ssl-cert.pem')
+		key: require('fs').readFileSync('server.key'),
+		cert: require('fs').readFileSync('server.crt')
 	};
 	https.createServer(sslOpts, server).listen(config.port, (config['public'] ? undefined : 'localhost'));
 } else {
@@ -173,7 +152,7 @@ if (config['public']) {
 fs.writeFileSync('./pid', process.pid);
 process.on('SIGINT', process.exit.bind(process, 0));
 process.on('uncaughtException', function(e) {
-    console.error(e);
-    process.exit(0);
+	console.error(e);
+	process.exit(0);
 });
 process.on('exit', function() { fs.unlinkSync('./pid'); });

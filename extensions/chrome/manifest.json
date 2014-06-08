@@ -1,0 +1,26 @@
+{
+	"manifest_version": 2,
+	"name": "Layer 1",
+	"version": "0.0.0",
+	"author": "Clumsy Robot",
+	// "default_locale": "en",
+	"description": "Recreate the Web with contextual plugins",
+	"homepage_url": "http://layer1.io",
+
+
+	"background": {
+		"persistant": true,
+		"scripts": ["local.js", "layer1.background.js"]
+	},
+	"content_scripts": [
+		{ "matches": ["<all_urls>"], "js": ["local.js", "layer1.content.js"], "run_at": "document_end" }
+	],
+	"web_accessible_resources": [
+		"local.js",
+		"layer1.overlay.html",
+		"layer1.overlay.css",
+		"layer1.content.css"
+	],
+	"content_security_policy": "script-src 'self'; object-src 'none'",
+	"permissions": ["<all_urls>", "background"]
+}

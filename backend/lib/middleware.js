@@ -21,14 +21,38 @@ module.exports.setCorsHeaders = function(req, res, next) {
 };
 
 module.exports.setCspHeaders = function(req, res, next) {
-	res.setHeader('Content-Security-Policy', [
-		"default-src 'none'",
-		"img-src *", // SHOULD BE SELF
-		"font-src 'self'",
-		"script-src 'self' blob:",
-		"style-src 'self' 'unsafe-inline'",
-		"connect-src *"
-	].join('; '));
+	if (req.path == '/') {
+		// Root page
+		res.setHeader('Content-Security-Policy', [
+			"default-src 'none'",
+			"img-src *", // SHOULD BE SELF
+			"font-src 'self'",
+			"frame-src 'self'",
+			"script-src 'self' blob:",
+			"style-src 'self' 'unsafe-inline'",
+			"connect-src *"
+		].join('; '));
+	} else if (req.path[0] == '.') {
+		// Special service
+		res.setHeader('Content-Security-Policy', "default-src 'none'");
+	} else {
+		var localhost = 'http' + ((config.ssl) ? 's' : '') + '://localhost';
+		// Hosted content
+		// loaded in an iframe with a "unique" origin, 'self' doesnt work
+		if (true /* cache-only */) {
+			res.setHeader('Content-Security-Policy', [
+				"default-src 'none'",
+				"img-src *", // SHOULD BE SELF
+				"font-src "+localhost,
+				"frame-src "+localhost,
+				"script-src blob: "+localhost,
+				"style-src 'unsafe-inline' "+localhost,
+				"connect-src *"
+			].join('; '));
+		} else {
+
+		}
+	}
 	next();
 };
 
