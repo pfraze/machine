@@ -8,3 +8,11 @@
 	opacity: 0.98;
 	display: none;
 }
+#layer1-overlay.left {
+	width: 40%;
+}
+#layer1-overlay.right {
+	width: 40%;
+	left: 60%;
+	right: 0;
+}

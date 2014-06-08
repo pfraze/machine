@@ -9,9 +9,6 @@ var views = document.querySelector('#layer1-views');
 function focusInput() {
 	searchform.querySelector('input').focus();
 }
-function blurInput() {
-	searchform.querySelector('input').blur();
-}
 
 // Keyboard shortcuts
 // ==================
@@ -21,8 +18,13 @@ document.addEventListener('keydown', function(e) {
 			focusInput();
 		}
 		else if (e.keyIdentifier == 'Up') {
-			blurInput();
-			msgCloseOverlay();
+			sendMessage({ close: true });
+		}
+		else if (e.keyIdentifier == 'Right') {
+			sendMessage({ right: true });
+		}
+		else if (e.keyIdentifier == 'Left') {
+			sendMessage({ left: true });
 		}
 	}
 });
@@ -34,9 +36,6 @@ window.addEventListener('message', function(e) {
 		focusInput();
 	}
 });
-function msgCloseOverlay() {
-	sendMessage({ close: true });
-}
 function sendMessage(msg) {
 	parent.postMessage(msg, '*');
 }

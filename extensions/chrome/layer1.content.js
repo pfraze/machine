@@ -46,6 +46,20 @@ window.addEventListener('message', function(e) {
 	if (e.data.close) {
 		closeOverlay();
 	}
+	if (e.data.left) {
+		if (_overlay.iframe.classList.contains('right')) {
+			_overlay.iframe.classList.remove('right');
+		} else {
+			_overlay.iframe.classList.add('left');
+		}
+	}
+	if (e.data.right) {
+		if (_overlay.iframe.classList.contains('left')) {
+			_overlay.iframe.classList.remove('left');
+		} else {
+			_overlay.iframe.classList.add('right');
+		}
+	}
 });
 function sendMessage(msg) {
 	_overlay.iframe.contentWindow.postMessage(msg, _origin);
