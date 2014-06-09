@@ -1,1 +1,1 @@
-console.log('layer1 background process todo')
+console.log('layer1 background process loaded and doing nothing');

@@ -1,0 +1,87 @@
+body {
+	margin: 0;
+	width: 800px;
+	height: 600px;
+}
+h3 {
+	font-family: arial;
+	color: #666;
+	margin: 15px;
+}
+p, h4 {
+	margin: 0;
+}
+a {
+	color: #408FCE;
+	text-decoration: none;
+}
+a:hover {
+	text-decoration: underline;
+}
+hr {
+	border: 1px solid #e2e2e2;
+	width: 90%;
+}
+
+
+
+#searchform {
+	padding: 14px 14px 0;
+	margin: 0;
+	/*background: rgb(241, 241, 241);*/
+}
+#searchform input {
+	width: 100%;
+	padding: 5px 5px;
+	border: 1px solid #aaa;
+}
+
+
+
+.links {
+	font-family: consolas;
+}
+
+.link {
+	margin: 0 15px 1px;
+	padding: 15px;
+}
+.link.removed {
+	background: #eee;
+}
+.link.expanded .details {
+	display: block;
+}
+.link.expanded .details p {
+	color: #999;
+	margin-bottom: 4px;
+}
+
+
+.link p {
+	color: #777;
+	font-size: 13px;
+	line-height: 17px;
+}
+.link .details {
+	display: none;
+	padding: 15px 15px 0;
+}
+
+
+.link h4::after {
+	content: '+';
+	color: #ccc;
+	margin-left: 4px;
+}
+.link.expanded h4::after {
+	content: '\2014';
+}
+
+
+#page-links a[data-remove], .link.removed a[data-remove], .link a[data-restore] {
+	display: none;
+}
+.link.removed a[data-restore] {
+	display: block;
+}

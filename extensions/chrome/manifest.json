@@ -4,23 +4,32 @@
 	"version": "0.0.0",
 	"author": "Clumsy Robot",
 	// "default_locale": "en",
-	"description": "Recreate the Web with contextual plugins",
+	"description": "A user software environment for the Web",
 	"homepage_url": "http://layer1.io",
 
-
+	"browser_action": {
+		"default_popup": "layer1.popup.html"
+	},
+	"commands": {
+		"_execute_browser_action": {
+			"suggested_key": {
+				"windows": "Ctrl+Shift+Down",
+				"mac": "Command+Shift+Down"
+			}
+		}
+	},
 	"background": {
 		"persistant": true,
 		"scripts": ["local.js", "layer1.background.js"]
 	},
 	"content_scripts": [
-		{ "matches": ["<all_urls>"], "js": ["local.js", "layer1.content.js"], "run_at": "document_end" }
+		{ "matches": ["<all_urls>"], "js": ["layer1.content.js"], "run_at": "document_start" }
 	],
 	"web_accessible_resources": [
-		"local.js",
-		"layer1.overlay.html",
-		"layer1.overlay.css",
-		"layer1.content.css"
+		"layer1.popup.html",
+		"layer1.popup.css",
+		"layer1.popup.js"
 	],
 	"content_security_policy": "script-src 'self'; object-src 'none'",
-	"permissions": ["<all_urls>", "background"]
+	"permissions": ["<all_urls>", "background", "tabs"]
 }
