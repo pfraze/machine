@@ -37,6 +37,35 @@ hr {
 }
 
 
+#searchresults {
+	display: none;
+	position: absolute;
+	width: 770px;
+	background: #fff;
+	border: 1px solid #aaa;
+	padding-bottom: 5px;
+	font-family: consolas;
+}
+body.searching {
+	background: #ccc;
+}
+body.searching #searchresults {
+	display: block;
+}
+#searchresults .link {
+	margin: 0;
+	padding: 10px;
+}
+#searchresults .link:hover {
+	background: #eee;
+}
+#searchresults .link h4::after {
+	content: '';
+}
+#searchresults .link .details {
+	display: block;
+}
+
 
 .links {
 	font-family: consolas;
@@ -62,6 +91,9 @@ hr {
 	color: #777;
 	font-size: 13px;
 	line-height: 17px;
+}
+.link p b {
+	color: #333;
 }
 .link .details {
 	display: none;

@@ -2,8 +2,6 @@ console.log('Layer 1 extension loaded');
 var _pageLinks;
 var _userLinks = [
 	// :DEBUG:
-	{ href: 'https://layer1.io', rel: 'service', title: 'First name greatest. Last name ever.', query: 'greatest ever' },
-	{ href: 'https://layer1.io', rel: 'service', title: 'First name greatest. Last name ever.', query: 'greatest ever' },
 	{ href: 'https://layer1.io', rel: 'service', title: 'First name greatest. Last name ever.', query: 'greatest ever' }
 ];
 
