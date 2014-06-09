@@ -29,18 +29,20 @@ _searchformEl.addEventListener('submit', function(e) {
 _userLinksEl.addEventListener('click', function(e) { onLinkClick(e, _userLinks); });
 _pageLinksEl.addEventListener('click', function(e) { onLinkClick(e, _pageLinks); });
 function onLinkClick(e, links) {
-	e.preventDefault();
 	var expandLink = links[e.target.dataset.expand];
-	if (expandLink) {
+	if (expandLink && e.button === 0) {
+		e.preventDefault();
 		e.target.findParentNode('link').classList.toggle('expanded');
 	}
 	var removeLink = links[e.target.dataset.remove];
 	if (removeLink) {
+		e.preventDefault();
 		e.target.findParentNode('link').classList.add('removed');
 		// :TODO: disable in list
 	}
 	var restoreLink = links[e.target.dataset.restore];
 	if (restoreLink) {
+		e.preventDefault();
 		e.target.findParentNode('link').classList.remove('removed');
 		// :TODO: enable in list
 	}
@@ -75,7 +77,7 @@ function renderLink(link, i) {
 	var attribs = escapeHTML(renderAttribs(link));
 	return [
 		'<div class="link">',
-			'<h4><a href="#" data-expand="'+i+'">'+title+'</a></h4>',
+			'<h4><a href="'+href+'" data-expand="'+i+'">'+title+'</a></h4>',
 			((query) ? '<p><em>'+query+'</em></p>' : ''),
 			'<div class="details">',
 				'<p>'+attribs+'</p>',
