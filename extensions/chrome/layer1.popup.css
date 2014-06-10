@@ -56,7 +56,7 @@ body.searching #searchresults {
 	margin: 0;
 	padding: 10px;
 }
-#searchresults .link:hover {
+#searchresults .link:hover, #searchresults .link.selected {
 	background: #eee;
 }
 #searchresults .link h4::after {
