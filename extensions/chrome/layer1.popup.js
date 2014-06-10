@@ -2,13 +2,11 @@
 // =========
 self.pageLinks = [];
 self.userLinks = [];
-self.searchLinks = [];
-self.searchResults = [];
+self.searchLinkSet = [];
+self.searchResultSet = [];
 self.selectedResult = false;
 self.searchformEl = document.querySelector('#searchform');
-self.searchresultsEl = document.querySelector('#searchresults');
-self.pageLinksEl = document.querySelector('#page-links');
-self.userLinksEl = document.querySelector('#user-links');
+self.linksEl = document.querySelector('#links');
 
 // Prototype mods
 // ==============
@@ -46,27 +44,18 @@ function escapeHTML(str) {
 	});
 }
 
-// :DEBUG:
-// =======
-self.searchLinks = [
-	{ href: 'https://layer1.io', rel: 'service', title: 'First name greatest. Last name ever.', query: 'greatest ever' }
-].concat(JSON.parse('[{"rel":"search","type":"application/opensearchdescription+xml","href":"https://github.com/opensearch.xml","title":"GitHub"},{"rel":"fluid-icon","href":"https://github.com/fluidicon.png","title":"GitHub"},{"rel":"apple-touch-icon","sizes":"57x57","href":"https://github.com/apple-touch-icon-114.png"},{"rel":"apple-touch-icon","sizes":"114x114","href":"https://github.com/apple-touch-icon-114.png"},{"rel":"apple-touch-icon","sizes":"72x72","href":"https://github.com/apple-touch-icon-144.png"},{"rel":"apple-touch-icon","sizes":"144x144","href":"https://github.com/apple-touch-icon-144.png"},{"rel":"assets","href":"https://assets-cdn.github.com/"},{"rel":"conduit-xhr","href":"https://ghconduit.com:25035/"},{"rel":"xhr-socket","href":"https://github.com/_sockets"},{"rel":"icon","type":"image/x-icon","href":"https://assets-cdn.github.com/favicon.ico"},{"href":"https://assets-cdn.github.com/assets/github-1aeb426322c64c12b92d56bda5b110fc1093f75e.css","media":"all","rel":"stylesheet","type":"text/css"},{"href":"https://assets-cdn.github.com/assets/github2-b2cccfcac1a522b6ce675606f61388d36bf2c080.css","media":"all","rel":"stylesheet","type":"text/css"},{"href":"https://github.com/pfraze/machine/commits/master.atom?token=1270099__eyJzY2…LCJleHBpcmVzIjoyOTgwMjczODIxfQ==--e35b1db938b5551dee46d2ad30f15bdd93d8b2c2","rel":"alternate","title":"Recent Commits to machine:master","type":"application/atom+xml"}]'));
-self.searchLinks.forEach(function(link) {
-	Object.defineProperty(link, 'ATTRSTRING', { value: escapeHTML(renderAttribs(link)) });
-});
-
 // Business Logic
 // ==============
 var isUrlRegex = /\B\.\B/; // a dot in a word, like twitter.com or profile.png
 function selectResult(i) {
 	self.selectedResult = i;
 
-	try { self.searchresultsEl.querySelector('.selected').classList.remove('selected'); }
+	try { self.linksEl.querySelector('.selected').classList.remove('selected'); }
 	catch (e) {}
 
 	if (selectedResult !== false) {
 		try {
-			var linkEls = self.searchresultsEl.querySelectorAll('.link');
+			var linkEls = self.linksEl.querySelectorAll('.link');
 			linkEls[self.selectedResult].classList.add('selected');
 		} catch (e) {}
 	}
@@ -79,7 +68,9 @@ function doSearch(e) {
 	// Get query
 	var input = self.searchformEl.querySelector('input');
 	if (!input.value) {
-		document.body.classList.remove('searching');
+		// Reset, render all links
+		self.searchResultSet = self.searchLinkSet;
+		self.linksEl.innerHTML = self.searchResultSet.map(renderLink).join('');
 		return;
 	}
 	var tokens = RegExp.quote(input.value||'').split(' ').filter(function(str) { return str.trim().length; });
@@ -87,47 +78,44 @@ function doSearch(e) {
 
 	// Run query
 	var hit;
-	self.searchResults = [];
-	// var query = new RegExp('(^|\\b)(' + tokens.join('|') + ')(?=[^A-z0-9\\:]|$)', 'gi');
+	self.searchResultSet = [];
 	var query = new RegExp('(' + tokens.join('|') + ')', 'gi');
-	for (var i=0; i < self.searchLinks.length; i++) {
-		var numMatchingChars = 0;
+	for (var i=0; i < self.searchLinkSet.length; i++) {
+		var score = 0;
 		var hitTokens = {};
-		var newStr = self.searchLinks[i].ATTRSTRING.replace(query, function(matchingTerm) {
+
+		// Score matching terms and wrap them in <b>s for newStr
+		var newStr = self.searchLinkSet[i].ATTRSTRING.replace(query, function(matchingTerm) {
+			// First hit in the link?
 			if (!hitTokens[matchingTerm]) {
-				numMatchingChars += matchingTerm.length;
+				// Score the match
+				score += matchingTerm.length; // number of characters in the term
 				if (isUrlRegex.test(matchingTerm)) {
-					numMatchingChars += matchingTerm.length; // urls and filenames count double
+					score += matchingTerm.length; // urls and filenames count double
 				}
 				hitTokens[matchingTerm] = true;
 			}
 			return '<b>'+matchingTerm+'</b>';
 		});
-		if (numMatchingChars) {
-			console.log(numMatchingChars, self.searchLinks[i].ATTRSTRING);
-			self.searchResults.push({
-				link: self.searchLinks[i],
-				numMatchingChars: numMatchingChars,
+		if (score) {
+			// Store in results
+			self.searchResultSet.push({
+				index: i,
+				link: self.searchLinkSet[i],
+				score: score,
 				str: newStr
 			});
 		}
 	}
 
-	document.body.classList.add('searching');
-	if (self.searchResults.length) {
+	if (self.searchResultSet.length) {
 		// Rank and render
-		self.searchResults.sort(function(a, b) { return b.numMatchingChars - a.numMatchingChars; });
-		self.searchresultsEl.innerHTML = self.searchResults.map(function(hit) {
-			var link = hit.link;
-			var href = escapeHTML(link.href||'');
-			var title = escapeHTML(link.title||link.href||'');
-			return '<div class="link">' +
-				'<h4><a href="'+href+'" data-expand="'+i+'">'+title+'</a></h4>' +
-				'<div class="details"><p>'+hit.str+'</p></div>' +
-			'</div>';
+		self.searchResultSet.sort(function(a, b) { return b.score - a.score; });
+		self.linksEl.innerHTML = self.searchResultSet.map(function(hit) {
+			return renderLink(hit.link, hit.index, hit.str);
 		}).join('');
 	} else {
-		self.searchresultsEl.innerHTML = '<p>No matches</p>';
+		self.linksEl.innerHTML = '<p>No matches</p>';
 	}
 }
 
@@ -150,7 +138,7 @@ self.searchformEl.querySelector('input').addEventListener('keydown', function(e)
 	}
 });
 document.body.addEventListener('click', function(e) {
-	if (e.target.findParentNode('#searchresults') === null) { document.body.classList.remove('searching'); }
+	if (e.target.findParentNode('#searchresultSet') === null) { document.body.classList.remove('searching'); }
 });
 document.body.addEventListener('keydown', function(e) {
 	if (self.selectedResult !== false) {
@@ -160,12 +148,12 @@ document.body.addEventListener('keydown', function(e) {
 		var inputEl = self.searchformEl.querySelector('input');
 		switch (e.keyIdentifier) {
 			case 'Down':
-				if (self.searchResults[self.selectedResult + 1]) {
+				if (self.searchResultSet[self.selectedResult + 1]) {
 					selectResult(self.selectedResult + 1);
 				}
 				break;
 			case 'Up':
-				if (self.searchResults[self.selectedResult - 1]) {
+				if (self.searchResultSet[self.selectedResult - 1]) {
 					selectResult(self.selectedResult - 1);
 				} else {
 					// Moving cursor back to search input
@@ -186,33 +174,40 @@ document.body.addEventListener('keydown', function(e) {
 		}
 	}
 });
-self.userLinksEl.addEventListener('click', function(e) { onLinkClick(e, self.userLinks); });
-self.pageLinksEl.addEventListener('click', function(e) { onLinkClick(e, self.pageLinks); });
-function onLinkClick(e, links) {
-	var expandLink = links[e.target.dataset.expand];
-	if (expandLink && e.button === 0) {
-		e.preventDefault();
-		e.target.findParentNode('link').classList.toggle('expanded');
-	}
-	var removeLink = links[e.target.dataset.remove];
+self.linksEl.addEventListener('click', function(e) {
+	var removeLink = self.searchResultSet[e.target.dataset.remove];
 	if (removeLink) {
 		e.preventDefault();
 		e.target.findParentNode('link').classList.add('removed');
 		// :TODO: disable in list
 	}
-	var restoreLink = links[e.target.dataset.restore];
+	var restoreLink = self.searchResultSet[e.target.dataset.restore];
 	if (restoreLink) {
 		e.preventDefault();
 		e.target.findParentNode('link').classList.remove('removed');
 		// :TODO: enable in list
 	}
-}
+});
 
 // Messaging
 // =========
 function postContentScript(msg) {
 	chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
 		chrome.tabs.sendMessage(tabs[0].id, msg, function(response) {
+			console.log('got response', response);
+
+			// :DEBUG:
+			if (response.pageLinks) {
+				// Searching links from the page (for now)
+				self.searchLinkSet = response.pageLinks;
+				self.searchLinkSet.forEach(function(link) {
+					// Pre-create attributes string
+					Object.defineProperty(link, 'ATTRSTRING', { value: escapeHTML(renderAttribs(link)) });
+				});
+				// Render all links
+				self.searchResultSet = response.pageLinks;
+				self.linksEl.innerHTML = self.searchResultSet.map(renderLink).join('');
+			}
 			if (response.pageLinks) self.pageLinks = response.pageLinks;
 			if (response.userLinks) self.userLinks = response.userLinks;
 			if (response.pageLinks || response.userLinks) render();
@@ -230,14 +225,14 @@ function render() {
 	self.userLinksEl.innerHTML = self.userLinks.map(renderLink).join('');
 	self.pageLinksEl.innerHTML = self.pageLinks.map(renderLink).join('');
 }
-function renderLink(link, i) {
+function renderLink(link, i, attrstring) {
 	var href    = escapeHTML(link.href);
 	var title   = escapeHTML(link.title||link.href);
 	var query   = escapeHTML(link.query||'');
-	var attribs = escapeHTML(renderAttribs(link));
+	var attribs = (typeof attrstring == 'string' && attrstring) ? attrstring : escapeHTML(renderAttribs(link));
 	return [
 		'<div class="link">',
-			'<h4><a href="'+href+'" data-expand="'+i+'">'+title+'</a></h4>',
+			'<h4><a href="'+href+'" data-select="'+i+'">'+title+'</a></h4>',
 			((query) ? '<p><em>'+query+'</em></p>' : ''),
 			'<div class="details">',
 				'<p>'+attribs+'</p>',

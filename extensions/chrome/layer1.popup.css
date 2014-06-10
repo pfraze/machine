@@ -37,53 +37,18 @@ hr {
 }
 
 
-#searchresults {
-	display: none;
-	position: absolute;
-	width: 770px;
-	background: #fff;
-	border: 1px solid #aaa;
-	padding-bottom: 5px;
-	font-family: consolas;
-}
-body.searching {
-	background: #ccc;
-}
-body.searching #searchresults {
-	display: block;
-}
-#searchresults .link {
-	margin: 0;
-	padding: 10px;
-}
-#searchresults .link:hover, #searchresults .link.selected {
-	background: #eee;
-}
-#searchresults .link h4::after {
-	content: '';
-}
-#searchresults .link .details {
-	display: block;
-}
-
-
-.links {
+#links {
 	font-family: consolas;
 }
 
 .link {
-	margin: 0 15px 1px;
-	padding: 15px;
+	padding: 10px;
+}
+.link:hover, .link.selected {
+	background: #eee;
 }
 .link.removed {
 	background: #eee;
-}
-.link.expanded .details {
-	display: block;
-}
-.link.expanded .details p {
-	color: #999;
-	margin-bottom: 4px;
 }
 
 
@@ -96,22 +61,15 @@ body.searching #searchresults {
 	color: #333;
 }
 .link .details {
-	display: none;
 	padding: 15px 15px 0;
 }
-
-
-.link h4::after {
-	content: '+';
-	color: #ccc;
-	margin-left: 4px;
-}
-.link.expanded h4::after {
-	content: '\2014';
+.link .details p {
+	color: #999;
+	margin-bottom: 4px;
 }
 
 
-#page-links a[data-remove], .link.removed a[data-remove], .link a[data-restore] {
+#links a[data-remove], .link.removed a[data-remove], .link a[data-restore] {
 	display: none;
 }
 .link.removed a[data-restore] {
