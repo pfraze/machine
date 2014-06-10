@@ -82,7 +82,7 @@ function doSearch(e) {
 		document.body.classList.remove('searching');
 		return;
 	}
-	var tokens = RegExp.quote(input.value||'').split(' ');
+	var tokens = RegExp.quote(input.value||'').split(' ').filter(function(str) { return str.trim().length; });
 	tokens.sort(function(a,b) { return b.length - a.length; }); // put longest first so substrings dont outperform them
 
 	// Run query
